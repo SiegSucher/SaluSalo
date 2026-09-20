@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "648966058795",
+    "project_id": "salusalo",
+    "storage_bucket": "salusalo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:648966058795:android:41f671a0a3aac0f909cb6e",
+        "android_client_info": {
+          "package_name": "com.example.salusalo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYEwggSLs3ohJSYTSEgvYs8Y546xXyHT0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

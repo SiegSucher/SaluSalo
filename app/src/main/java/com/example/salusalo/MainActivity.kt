@@ -1,6 +1,14 @@
 package com.example.salusalo
 
 import android.os.Bundle
+import android.util.Patterns
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.horizontalScroll
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -12,6 +20,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +50,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.userProfileChangeRequest
+import kotlinx.coroutines.launch
 
 private val Green = Color(0xFF47782E)
 private val DarkGreen = Color(0xFF263C29)
@@ -85,6 +101,8 @@ class MainActivity : ComponentActivity() {
 private fun SaluSaloApp() {
     var screen by rememberSaveable { mutableStateOf("welcome") }
     var message by rememberSaveable { mutableStateOf("") }
+    var isAuthenticating by remember { mutableStateOf(false) }
+    val firebaseAuth = remember { FirebaseAuth.getInstance() }
 
     BackHandler(enabled = screen != "welcome") {
         screen = when (screen) {
@@ -103,8 +121,32 @@ private fun SaluSaloApp() {
                 .safeDrawingPadding()
                 .imePadding()
         ) {
-            key(screen) {
-                when (screen) {
+            AnimatedContent(
+                targetState = screen,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Cream),
+                transitionSpec = {
+                    if (
+                        initialState == "welcome" &&
+                        targetState == "signup"
+                    ) {
+                        // Get Started: welcome page swipes away and the
+                        // sign-up page slides in from the right.
+                        (slideInHorizontally(
+                            animationSpec = tween(400)
+                        ) { fullWidth -> fullWidth }) togetherWith
+                                (slideOutHorizontally(
+                                    animationSpec = tween(400)
+                                ) { fullWidth -> -fullWidth })
+                    } else {
+                        // Every other screen change stays instant.
+                        EnterTransition.None togetherWith ExitTransition.None
+                    }
+                },
+                label = "screenTransition"
+            ) { currentScreen ->
+                when (currentScreen) {
                     "welcome" -> WelcomeScreen(
                         onStart = { screen = "signup" },
                         onSignIn = { screen = "signin" }
@@ -115,14 +157,86 @@ private fun SaluSaloApp() {
                     )
 
                     else -> SignInScreen(
-                        mode = screen,
+                        mode = currentScreen,
                         onNavigate = { screen = it },
-                        onContinue = {
-                            if (screen == "forgot") {
-                                message =
-                                    "Reset link preview. No email has been sent."
-                            } else {
-                                screen = "home"
+                        isAuthenticating = isAuthenticating,
+                        onContinue = { email, password, confirmPassword, name ->
+                            val cleanEmail = email.trim()
+
+                            when {
+                                !Patterns.EMAIL_ADDRESS.matcher(cleanEmail).matches() -> {
+                                    message = "Enter a valid email address."
+                                }
+
+                                currentScreen == "signup" && name.trim().isEmpty() -> {
+                                    message = "Enter your full name."
+                                }
+
+                                currentScreen != "forgot" && password.length < 6 -> {
+                                    message = "Your password must be at least 6 characters."
+                                }
+
+                                currentScreen == "signup" && password != confirmPassword -> {
+                                    message = "Your passwords do not match."
+                                }
+
+                                else -> {
+                                    isAuthenticating = true
+
+                                    when (currentScreen) {
+                                        "signup" -> firebaseAuth
+                                            .createUserWithEmailAndPassword(
+                                                cleanEmail,
+                                                password
+                                            )
+                                            .addOnCompleteListener { task ->
+                                                isAuthenticating = false
+                                                if (task.isSuccessful) {
+                                                    task.result.user?.updateProfile(
+                                                        userProfileChangeRequest {
+                                                            displayName = name.trim()
+                                                        }
+                                                    )
+                                                    screen = "home"
+                                                } else {
+                                                    message = authErrorMessage(
+                                                        task.exception
+                                                    )
+                                                }
+                                            }
+
+                                        "forgot" -> firebaseAuth
+                                            .sendPasswordResetEmail(cleanEmail)
+                                            .addOnCompleteListener { task ->
+                                                isAuthenticating = false
+                                                if (task.isSuccessful) {
+                                                    message =
+                                                        "A password-reset link was sent to $cleanEmail."
+                                                    screen = "signin"
+                                                } else {
+                                                    message = authErrorMessage(
+                                                        task.exception
+                                                    )
+                                                }
+                                            }
+
+                                        else -> firebaseAuth
+                                            .signInWithEmailAndPassword(
+                                                cleanEmail,
+                                                password
+                                            )
+                                            .addOnCompleteListener { task ->
+                                                isAuthenticating = false
+                                                if (task.isSuccessful) {
+                                                    screen = "home"
+                                                } else {
+                                                    message = authErrorMessage(
+                                                        task.exception
+                                                    )
+                                                }
+                                            }
+                                    }
+                                }
                             }
                         },
                         onSocial = {
@@ -150,120 +264,212 @@ private fun SaluSaloApp() {
     }
 }
 
+private fun authErrorMessage(exception: Exception?): String = when (exception) {
+    is FirebaseAuthUserCollisionException ->
+        "An account already exists for this email address."
+    is FirebaseAuthInvalidUserException ->
+        "No account was found for this email address."
+    is FirebaseAuthInvalidCredentialsException ->
+        "The email address or password is incorrect."
+    else -> "Authentication failed. Please try again."
+}
+
 /* WELCOME SCREEN */
+
+// One entry = one welcome screen. Edit the text, icons, and image here.
+private data class WelcomePage(
+    val image: Int,
+    val imageDescription: String,
+    val title: String,
+    val body: String,
+    val leftTitle: String,
+    val leftDescription: String,
+    val leftIcon: ImageVector,
+    val rightTitle: String,
+    val rightDescription: String,
+    val rightIcon: ImageVector
+)
+
+private val welcomePages = listOf(
+    // WELCOME SCREEN 1
+    WelcomePage(
+        image = R.drawable.welcome_reference,
+        imageDescription = "People sharing a box of food",
+        title = "Rescue surplus food,\nreduce waste",
+        body = "Donate, sell, reserve, buy, or claim food " +
+                "before it expires. Together, we can build " +
+                "a more sustainable community.",
+        leftTitle = "Find nearby\nfood fast",
+        leftDescription = "Discover surplus food\nnear you in real time.",
+        leftIcon = Icons.Outlined.LocationOn,
+        rightTitle = "Support your\ncommunity",
+        rightDescription = "Help reduce waste\nand feed more lives.",
+        rightIcon = Icons.Outlined.Groups
+    ),
+
+    // WELCOME SCREEN 2  (TODO: replace image and text)
+    WelcomePage(
+        image = R.drawable.welcome_reference,
+        imageDescription = "Welcome screen 2 image",
+        title = "Share what you have,\nhelp who needs it",
+        body = "Post extra food in seconds and let neighbors " +
+                "donate, buy, or claim it before it goes to waste.",
+        leftTitle = "Post food\nin seconds",
+        leftDescription = "Add a photo, quantity,\nand pickup time.",
+        leftIcon = Icons.Outlined.CardGiftcard,
+        rightTitle = "Donate\nor sell",
+        rightDescription = "You choose whether\nit is free or priced.",
+        rightIcon = Icons.Outlined.LocalOffer
+    ),
+
+    // WELCOME SCREEN 3  (TODO: replace image and text)
+    WelcomePage(
+        image = R.drawable.welcome_reference,
+        imageDescription = "Welcome screen 3 image",
+        title = "Reserve, pick up,\nand enjoy",
+        body = "Hold food for pickup, message the provider, " +
+                "and collect it safely from people you can trust.",
+        leftTitle = "Reserve\nahead",
+        leftDescription = "Hold food until\nyou arrive to pick up.",
+        leftIcon = Icons.Outlined.Schedule,
+        rightTitle = "Safe and\nverified",
+        rightDescription = "Profiles are checked\nto keep sharing safe.",
+        rightIcon = Icons.Outlined.VerifiedUser
+    )
+)
 
 @Composable
 private fun WelcomeScreen(
     onStart: () -> Unit,
     onSignIn: () -> Unit
 ) {
+    val pagerState = rememberPagerState(pageCount = { welcomePages.size })
+    val scope = rememberCoroutineScope()
+    val lastPage = pagerState.currentPage == welcomePages.lastIndex
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val availableHeight = maxHeight
-        val imageHeight = availableHeight * 0.40f
-        val panelHeight = availableHeight * 0.60f
+        val imageHeight = maxHeight * 0.36f
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-        ) {
-            Image(
-                painter = painterResource(R.drawable.welcome_reference),
-                contentDescription = "People sharing a box of food",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(imageHeight)
-            )
+        Column(Modifier.fillMaxSize()) {
+            // Swipeable welcome pages
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f)
+            ) { index ->
+                val page = welcomePages[index]
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = panelHeight)
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = 32.dp,
-                            topEnd = 32.dp
-                        )
-                    )
-                    .background(Cream)
-                    .padding(horizontal = 26.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(
-                        text = "Rescue surplus food,\nreduce waste",
-                        color = DarkGreen,
-                        fontSize = 25.sp,
-                        lineHeight = 31.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Text(
-                        text = "Donate, sell, reserve, buy, or claim food " +
-                                "before it expires. Together, we can build " +
-                                "a more sustainable community.",
-                        color = Gray,
-                        fontSize = 13.sp,
-                        lineHeight = 19.sp
-                    )
-
-                    Spacer(Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        FeatureCard(
-                            title = "Find nearby\nfood fast",
-                            description = "Discover surplus food\nnear you in real time.",
-                            icon = Icons.Outlined.LocationOn,
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        FeatureCard(
-                            title = "Support your\ncommunity",
-                            description = "Help reduce waste\nand feed more lives.",
-                            icon = Icons.Outlined.Groups,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                Column {
-                    Row(
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Image(
+                        painter = painterResource(page.image),
+                        contentDescription = page.imageDescription,
+                        contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(
-                            9.dp,
-                            Alignment.CenterHorizontally
-                        )
+                            .height(imageHeight)
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(
+                                RoundedCornerShape(
+                                    topStart = 32.dp,
+                                    topEnd = 32.dp
+                                )
+                            )
+                            .background(Cream)
+                            .padding(horizontal = 26.dp, vertical = 16.dp)
                     ) {
-                        repeat(3) { index ->
-                            Box(
-                                Modifier
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (index == 0) Green
-                                        else Color(0xFFDDDEDA)
-                                    )
+                        Text(
+                            text = page.title,
+                            color = DarkGreen,
+                            fontSize = 25.sp,
+                            lineHeight = 31.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Text(
+                            text = page.body,
+                            color = Gray,
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            FeatureCard(
+                                title = page.leftTitle,
+                                description = page.leftDescription,
+                                icon = page.leftIcon,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            FeatureCard(
+                                title = page.rightTitle,
+                                description = page.rightDescription,
+                                icon = page.rightIcon,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
-
-                    PrimaryButton(
-                        title = "Get Started",
-                        onClick = onStart
-                    )
-
-                    Spacer(Modifier.height(10.dp))
-
-
                 }
+            }
+
+            // Fixed bottom area: page dots + button
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Cream)
+                    .padding(horizontal = 26.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(
+                        9.dp,
+                        Alignment.CenterHorizontally
+                    )
+                ) {
+                    repeat(welcomePages.size) { index ->
+                        Box(
+                            Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (index == pagerState.currentPage) Green
+                                    else Color(0xFFDDDEDA)
+                                )
+                        )
+                    }
+                }
+
+                PrimaryButton(
+                    title = if (lastPage) "Get Started" else "Next",
+                    onClick = {
+                        if (lastPage) {
+                            onStart()
+                        } else {
+                            scope.launch {
+                                pagerState.animateScrollToPage(
+                                    pagerState.currentPage + 1
+                                )
+                            }
+                        }
+                    }
+                )
+
+                Spacer(Modifier.height(10.dp))
             }
         }
     }
@@ -327,7 +533,13 @@ private fun FeatureCard(
 private fun SignInScreen(
     mode: String,
     onNavigate: (String) -> Unit,
-    onContinue: () -> Unit,
+    isAuthenticating: Boolean,
+    onContinue: (
+        email: String,
+        password: String,
+        confirmPassword: String,
+        name: String
+    ) -> Unit,
     onSocial: (String) -> Unit
 ) {
     val creatingAccount = mode == "signup"
@@ -508,8 +720,22 @@ private fun SignInScreen(
                         creatingAccount -> "Create Account"
                         else -> "Continue"
                     },
-                    onClick = onContinue
+                    enabled = !isAuthenticating,
+                    onClick = {
+                        onContinue(email, password, confirmPassword, name)
+                    }
                 )
+
+                if (isAuthenticating) {
+                    Spacer(Modifier.height(12.dp))
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .align(Alignment.CenterHorizontally),
+                        color = Green,
+                        strokeWidth = 2.dp
+                    )
+                }
 
                 if (resettingPassword) {
                     TextButton(
@@ -720,10 +946,12 @@ private fun InputField(
 @Composable
 private fun PrimaryButton(
     title: String,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp),
