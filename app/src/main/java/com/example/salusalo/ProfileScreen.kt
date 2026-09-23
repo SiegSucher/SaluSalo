@@ -1,6 +1,7 @@
 package com.example.salusalo
 
 import android.content.Intent
+import com.example.salusalo.model.UserProfile
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -45,7 +46,9 @@ private data class ProfileReview(
 @Composable
 fun ProfileScreen(
     onAlerts: () -> Unit,
-    onOpenFood: (String) -> Unit
+    onLogout: () -> Unit,
+    onOpenFood: (String) -> Unit,
+    remoteProfile: UserProfile? = null
 ) {
     val context = LocalContext.current
 
@@ -64,6 +67,15 @@ fun ProfileScreen(
     }
     var photo by rememberSaveable {
         mutableStateOf(preferences.getString("photo", "") ?: "")
+    }
+
+    LaunchedEffect(remoteProfile) {
+        remoteProfile?.let { profile ->
+            displayName = profile.name
+            if (!profile.profileImageUrl.isNullOrBlank()) {
+                photo = profile.profileImageUrl
+            }
+        }
     }
 
     var page by rememberSaveable { mutableStateOf("") }
@@ -528,6 +540,16 @@ fun ProfileScreen(
                 "Manage your account details and security"
             ) {
                 openAccount()
+            }
+
+            HorizontalDivider(color = PLine)
+
+            ProfileMenuRow(
+                Icons.Outlined.Logout,
+                "Log out",
+                "Sign out of your Salu-Salo account"
+            ) {
+                onLogout()
             }
         }
 

@@ -1,6 +1,9 @@
 package com.example.salusalo
 
 import android.os.Bundle
+import com.example.salusalo.data.UserRepository
+import com.example.salusalo.data.profileErrorMessage
+import com.example.salusalo.model.UserProfile
 import android.util.Patterns
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
@@ -42,6 +45,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -56,6 +60,7 @@ import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.userProfileChangeRequest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 private val Green = Color(0xFF47782E)
 private val DarkGreen = Color(0xFF263C29)
@@ -103,11 +108,58 @@ private fun SaluSaloApp() {
     var message by rememberSaveable { mutableStateOf("") }
     var isAuthenticating by remember { mutableStateOf(false) }
     val firebaseAuth = remember { FirebaseAuth.getInstance() }
+    val context = LocalContext.current
+    val profileRepository = remember { UserRepository() }
+    val appScope = rememberCoroutineScope()
+    var currentProfile by remember { mutableStateOf<UserProfile?>(null) }
+
+    fun logOut() {
+        firebaseAuth.signOut()
+        currentProfile = null
+
+        // Remove local, account-specific placeholder data before another user
+        // can sign in on this device.
+        context.getSharedPreferences("salusalo_profile", 0).edit().clear().apply()
+        context.getSharedPreferences("salusalo_local_posts", 0).edit().clear().apply()
+        screen = "signin"
+    }
+    fun openAuthenticatedHome(
+        displayNameOverride: String? = null,
+        refreshFirebaseToken: Boolean = false
+    ) {
+        isAuthenticating = true
+        appScope.launch {
+            runCatching {
+                // A newly created Firebase user may receive its required
+                // Supabase role claim asynchronously from a Cloud Function.
+                if (refreshFirebaseToken) {
+                    firebaseAuth.currentUser?.getIdToken(true)?.await()
+                }
+                profileRepository.loadOrCreateCurrentProfile(displayNameOverride)
+            }.onSuccess { profile ->
+                currentProfile = profile
+                screen = "home"
+            }.onFailure { error ->
+                message = profileErrorMessage(error)
+            }
+            isAuthenticating = false
+        }
+    }
+
+    LaunchedEffect(firebaseAuth.currentUser?.uid) {
+        if (firebaseAuth.currentUser != null && currentProfile == null) {
+            openAuthenticatedHome()
+        }
+    }
 
     BackHandler(enabled = screen != "welcome") {
-        screen = when (screen) {
-            "signup", "forgot", "home" -> "signin"
-            else -> "welcome"
+        if (screen == "home") {
+            logOut()
+        } else {
+            screen = when (screen) {
+                "signup", "forgot" -> "signin"
+                else -> "welcome"
+            }
         }
     }
 
@@ -153,7 +205,8 @@ private fun SaluSaloApp() {
                     )
 
                     "home" -> HomeScreen(
-                        onBack = { screen = "signin" }
+                        onLogout = { logOut() },
+                        currentProfile = currentProfile
                     )
 
                     else -> SignInScreen(
@@ -197,7 +250,7 @@ private fun SaluSaloApp() {
                                                             displayName = name.trim()
                                                         }
                                                     )
-                                                    screen = "home"
+                                                    openAuthenticatedHome(name.trim(), refreshFirebaseToken = true)
                                                 } else {
                                                     message = authErrorMessage(
                                                         task.exception
@@ -228,7 +281,7 @@ private fun SaluSaloApp() {
                                             .addOnCompleteListener { task ->
                                                 isAuthenticating = false
                                                 if (task.isSuccessful) {
-                                                    screen = "home"
+                                                    openAuthenticatedHome()
                                                 } else {
                                                     message = authErrorMessage(
                                                         task.exception
@@ -1188,7 +1241,10 @@ private fun AppleMark() {
 /* HOMEPAGE */
 
 @Composable
-private fun HomeScreen(onBack: () -> Unit) {
+private fun HomeScreen(
+    onLogout: () -> Unit,
+    currentProfile: UserProfile?
+) {
     var search by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("All") }
     var page by rememberSaveable { mutableStateOf("home") }
@@ -1396,6 +1452,8 @@ private fun HomeScreen(onBack: () -> Unit) {
             } else if (page == "profile") {
                 ProfileScreen(
                     onAlerts = { page = "alerts" },
+                    onLogout = onLogout,
+                    remoteProfile = currentProfile,
                     onOpenFood = { title ->
                         selectedFood = foods.firstOrNull {
                             it.title == title
