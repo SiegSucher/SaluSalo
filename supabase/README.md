@@ -26,3 +26,16 @@ Before the Android app can read or create user profiles:
    or refresh their ID token.
 
 Never put a Firebase Admin credential or Supabase service-role key in this app.
+## Phase 2: food listings
+
+Run `migrations/20260923_phase2_food_posts.sql` in the Supabase SQL Editor after
+Phase 1. It creates `food_posts`, enables RLS, limits writes to the logged-in
+Firebase user's matching profile, and updates the existing private `food-images`
+bucket policies. Images remain private; the app creates short-lived signed URLs
+for authenticated users to view listing images.
+
+## Phase 3: reservations
+
+Run `migrations/20260924_phase3_reservations.sql` after Phases 1 and 2. It creates the `reservations` table and the `create_reservation`, `cancel_reservation`, and `claim_reservation` RPCs. Do not create reservations by inserting rows from the client: the RPCs lock the food post and change quantity atomically.
+
+Run migrations/20260924_phase3_donor_recipient_names.sql after Phase 3 if Phase 3 was already applied. It securely exposes the recipient name only to the donor of that reservation's food post.

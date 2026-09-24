@@ -19,18 +19,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
+import com.example.salusalo.model.FoodPost
+import com.example.salusalo.viewmodel.FoodViewModel
+import com.example.salusalo.viewmodel.ReservationViewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -57,15 +60,28 @@ private data class ActivityRecord(
     val photo: Int? = null,
     val uri: String? = null,
     val details: String = "",
-    val sample: Boolean = true
+    val sample: Boolean = true,
+    val ownedPost: FoodPost? = null,
+    val reservationId: String? = null,
+    val donorCanClaim: Boolean = false
 )
 
 @Composable
 fun ActivityScreen(
     onPost: () -> Unit,
-    onAlerts: () -> Unit
+    onAlerts: () -> Unit,
+    foodViewModel: FoodViewModel,
+    reservationViewModel: ReservationViewModel
 ) {
-    val context = LocalContext.current
+    val myPosts by foodViewModel.myPosts.collectAsStateWithLifecycle()
+    val myReservations by reservationViewModel.myReservations.collectAsStateWithLifecycle()
+    val donorReservations by reservationViewModel.donorReservations.collectAsStateWithLifecycle()
+    var pendingDelete by remember { mutableStateOf<FoodPost?>(null) }
+
+    LaunchedEffect(Unit) {
+        foodViewModel.loadMyPosts()
+        reservationViewModel.refresh()
+    }
 
     var tab by rememberSaveable { mutableStateOf("My Listings") }
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -228,50 +244,74 @@ fun ActivityScreen(
         )
     }
 
-    val localRecords = remember {
-        val prefs = context.getSharedPreferences("salusalo_local_posts", 0)
-        val array = JSONArray(prefs.getString("listings", "[]") ?: "[]")
-        val now = System.currentTimeMillis()
-
-        (0 until array.length()).map { index ->
-            val post = array.getJSONObject(index)
-            val expired = post.optLong("expiry") <= now
-
+    // Food posts are the real Phase 2 records. The other tabs are still
+    // demonstration data until reservations, purchases, and claims are built.
+    val myListingRecords = myPosts
+        .sortedByDescending { it.createdAt.orEmpty() }
+        .map { post ->
             ActivityRecord(
-                id = "local-${post.getString("id")}",
+                id = post.id,
                 tab = "My Listings",
-                title = post.optString("name"),
-                quantity = "${post.optInt("quantity")} ${post.optString("unit")}",
-                distance = post.optString("location"),
-                posted = "Saved ${activityDate(post.optLong("createdAt"))}",
-                status = if (expired) "Expired" else "Saved locally",
-                timeLabel = if (expired) "Expired on" else "Expires on",
-                timeValue = activityDate(post.optLong("expiry")),
-                uri = post.optJSONArray("photos")?.optString(0),
+                title = post.name,
+                quantity = "${post.quantity} ${post.unit}",
+                distance = post.pickupLocation,
+                posted = post.createdAt?.let { "Posted ${formatActivityTimestamp(it)}" }
+                    ?: "Posted recently",
+                status = post.status.name.lowercase()
+                    .replaceFirstChar { it.uppercase() },
+                timeLabel = "Expires",
+                timeValue = formatActivityTimestamp(post.expirationDate),
+                uri = post.displayImageUrl,
+                details = buildString {
+                    append("Category: ${post.category}")
+                    post.description?.takeIf { it.isNotBlank() }?.let {
+                        append("\nDescription: $it")
+                    }
+                },
                 sample = false,
-                details =
-                    "Category: ${post.optString("category")}\n" +
-                            "Price: ${if (post.optBoolean("donation")) "Free" else "₱${post.optString("price")} per unit"}\n" +
-                            "Description: ${post.optString("description").ifBlank { "Not provided" }}\n" +
-                            "Pickup: ${post.optString("location")}\n" +
-                            "Starts: ${activityDate(post.optLong("pickupStart"))}\n" +
-                            "Ends: ${activityDate(post.optLong("pickupEnd"))}\n" +
-                            "Distribution: ${post.optString("distribution")}\n" +
-                            "Partial claims: ${post.optBoolean("partial")}\n" +
-                            "Maximum: ${post.optString("maximum").ifBlank { "No additional limit" }}\n" +
-                            "Allergens: ${post.optString("allergens").ifBlank { "Not provided" }}\n" +
-                            "Storage: ${post.optString("storage").ifBlank { "Not provided" }}"
+                ownedPost = post
             )
-        }.reversed()
+        }
+
+    // Recipient-facing records: only reservations created by this signed-in user.
+    val myReservationRecords = myReservations.map { entry ->
+        val reservation = entry.reservation
+        val post = entry.foodPost
+        ActivityRecord(
+            id = "my-reservation-${reservation.id}", tab = "My Reservations",
+            title = post.name, quantity = "${reservation.quantity} ${post.unit}",
+            distance = post.pickupLocation,
+            posted = reservation.createdAt?.let { "Reserved ${formatActivityTimestamp(it)}" } ?: "Reserved recently",
+            status = reservation.status.name.lowercase().replaceFirstChar { it.uppercase() },
+            timeLabel = "Pickup", timeValue = post.pickupLocation,
+            uri = post.displayImageUrl, details = "Your reservation.",
+            sample = false, reservationId = reservation.id, donorCanClaim = false
+        )
     }
 
-    val allRecords = sampleRecords + localRecords
+    // Donor-facing records: only reservations made on this user's food posts.
+    val donorReservationRecords = donorReservations.map { entry ->
+        val reservation = entry.reservation
+        val post = entry.foodPost
+        ActivityRecord(
+            id = "donor-reservation-${reservation.id}", tab = "My Donations",
+            title = post.name, quantity = "${reservation.quantity} ${post.unit}",
+            distance = post.pickupLocation,
+            posted = reservation.createdAt?.let { "Reserved ${formatActivityTimestamp(it)}" } ?: "Reserved recently",
+            status = reservation.status.name.lowercase().replaceFirstChar { it.uppercase() },
+            timeLabel = "Pickup", timeValue = post.pickupLocation,
+            uri = post.displayImageUrl,
+            details = "Recipient: ${entry.recipientName ?: "Unknown"}\nReservation for your listing.",
+            sample = false, reservationId = reservation.id, donorCanClaim = true
+        )
+    }
 
+    // Keep live listings and recipient/donor reservation destinations separate.
+    val allRecords = sampleRecords.filter {
+        it.tab != "My Listings" && it.tab != "Reservations"
+    } + myListingRecords + myReservationRecords + donorReservationRecords
     val filtered = if (activeOnly) {
-        sampleRecords.filter {
-            it.tab == "My Listings" &&
-                    it.status in listOf("Pending", "Confirmed")
-        }
+        myListingRecords.filter { it.status == "Available" }
     } else {
         allRecords.filter { it.tab == tab }
     }
@@ -440,7 +480,7 @@ fun ActivityScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             ActivityMetric(
-                                "Active Listings", "3", "listings",
+                                "Active Listings", myListingRecords.count { it.status == "Available" }.toString(), "listings",
                                 Modifier.weight(1f)
                             ) {
                                 tab = "My Listings"
@@ -464,7 +504,8 @@ fun ActivityScreen(
             item {
                 val tabs = listOf(
                     "My Listings" to Icons.Outlined.FormatListBulleted,
-                    "Reservations" to Icons.Outlined.BookmarkBorder,
+                    "My Reservations" to Icons.Outlined.BookmarkBorder,
+                    "My Donations" to Icons.Outlined.VolunteerActivism,
                     "Purchases" to Icons.Outlined.ShoppingBag,
                     "Claims" to Icons.Outlined.Spa
                 )
@@ -637,17 +678,12 @@ fun ActivityScreen(
                     Text(record.distance)
                     Text(record.posted)
                     Text("${record.timeLabel}: ${record.timeValue}")
-
-                    if (record.details.isNotBlank()) {
-                        Text(record.details, fontSize = 12.sp)
-                    }
-
+                    if (record.details.isNotBlank()) Text(record.details, fontSize = 12.sp)
                     Text(
                         if (record.sample) {
-                            "Demonstration record. Dates, distances, and statuses " +
-                                    "are sample values; no actual transaction exists."
+                            "Demonstration record. Dates, distances, and statuses are sample values."
                         } else {
-                            "Your locally saved listing. It has not been published online."
+                            "This is your live Supabase listing."
                         },
                         fontSize = 11.sp,
                         color = AGray
@@ -655,13 +691,35 @@ fun ActivityScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { selectedId = null }) {
-                    Text("Close")
+                when {
+                    record.ownedPost != null -> TextButton(onClick = { pendingDelete = record.ownedPost }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    record.reservationId != null && record.status == "Reserved" && record.donorCanClaim ->
+                        TextButton(onClick = { reservationViewModel.claim(record.reservationId); selectedId = null }) { Text("Mark claimed") }
+                    record.reservationId != null && record.status == "Reserved" ->
+                        TextButton(onClick = { reservationViewModel.cancel(record.reservationId); selectedId = null }) { Text("Cancel", color = MaterialTheme.colorScheme.error) }
                 }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedId = null }) { Text("Close") }
             }
         )
     }
 
+    pendingDelete?.let { post ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete listing?") },
+            text = { Text("This permanently removes this listing and its uploaded image.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    foodViewModel.deletePost(post)
+                    pendingDelete = null
+                    selectedId = null
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
+        )
+    }
     if (notice.isNotBlank()) {
         AlertDialog(
             onDismissRequest = { notice = "" },
@@ -726,6 +784,17 @@ private fun ReferenceActivityCard(
                 )
 
                 Text(record.quantity, fontSize = 10.sp, color = AGray)
+
+                // Donor records keep the recipient's display name visible without
+                // loading or exposing any additional profile fields.
+                if (record.donorCanClaim && record.details.startsWith("Recipient:")) {
+                    Text(
+                        record.details.substringBefore('\n'),
+                        fontSize = 10.sp,
+                        color = AGreen,
+                        maxLines = 1
+                    )
+                }
 
                 SmallActivityLine(
                     Icons.Outlined.LocationOn,
@@ -838,7 +907,22 @@ private fun RecordPhoto(
         val photo = record.photo
 
         if (!uri.isNullOrBlank()) {
-            PostPhoto(uri)
+            var failed by remember(uri) { mutableStateOf(false) }
+            if (!failed) {
+                AsyncImage(
+                    model = uri,
+                    contentDescription = record.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    onError = { failed = true }
+                )
+            }
+            if (failed) {
+                Box(
+                    modifier = Modifier.fillMaxSize().background(APale),
+                    contentAlignment = Alignment.Center
+                ) { Text("Image unavailable", fontSize = 9.sp, color = AGray) }
+            }
         } else if (photo != null) {
             Image(
                 painter = painterResource(photo),
@@ -915,11 +999,7 @@ private fun ActivityMetric(
     }
 }
 
-private fun activityDate(value: Long): String {
-    if (value <= 0L) return "Not provided"
-
-    return SimpleDateFormat(
-        "MMM d, yyyy • h:mm a",
-        Locale.getDefault()
-    ).format(Date(value))
-}
+private fun formatActivityTimestamp(value: String): String =
+    runCatching { java.time.Instant.parse(value) }
+        .map { java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy • h:mm a", Locale.getDefault()).withZone(java.time.ZoneId.systemDefault()).format(it) }
+        .getOrElse { value }

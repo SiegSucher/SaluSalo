@@ -33,13 +33,14 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.salusalo.model.FoodPostDraft
+import com.example.salusalo.viewmodel.FoodViewModel
+import java.time.Instant
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
 
 private val PostGreen = Color(0xFF3F792B)
 private val PostCream = Color(0xFFFAF8F1)
@@ -47,12 +48,15 @@ private val PostPale = Color(0xFFEDF3E1)
 private val PostDark = Color(0xFF213420)
 
 @Composable
-fun PostScreen(onBack: () -> Unit) {
+fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val preferences = remember {
-        context.getSharedPreferences("salusalo_local_posts", 0)
-    }
+    val myPosts by foodViewModel.myPosts.collectAsStateWithLifecycle()
+    val createdPost by foodViewModel.createdPost.collectAsStateWithLifecycle()
+    val backendError by foodViewModel.error.collectAsStateWithLifecycle()
+    val backendLoading by foodViewModel.loading.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { foodViewModel.loadMyPosts() }
 
     var donation by rememberSaveable { mutableStateOf(true) }
     var name by rememberSaveable { mutableStateOf("") }
@@ -85,17 +89,7 @@ fun PostScreen(onBack: () -> Unit) {
     var savedId by rememberSaveable { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     var showLocal by rememberSaveable { mutableStateOf(false) }
-
-    var localJson by remember {
-        mutableStateOf(preferences.getString("listings", "[]") ?: "[]")
-    }
-
-    val localPosts = remember(localJson) {
-        val array = JSONArray(localJson)
-        (0 until array.length())
-            .map { array.getJSONObject(it) }
-            .reversed()
-    }
+    var pendingDelete by remember { mutableStateOf<com.example.salusalo.model.FoodPost?>(null) }
 
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
@@ -180,6 +174,19 @@ fun PostScreen(onBack: () -> Unit) {
         }
     }
 
+    LaunchedEffect(createdPost) {
+        createdPost?.let { post ->
+            savedId = post.id
+            saving = false
+            foodViewModel.clearCreatedPost()
+        }
+    }
+    LaunchedEffect(backendLoading) {
+        if (!backendLoading && createdPost == null && saving && backendError != null) {
+            saving = false
+            error = backendError ?: "Could not publish the listing."
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -223,7 +230,7 @@ fun PostScreen(onBack: () -> Unit) {
             if (savedId.isNotBlank()) {
                 PostPanel {
                     Text(
-                        "Listing saved on this device",
+                        "Listing published",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = PostGreen
@@ -233,8 +240,7 @@ fun PostScreen(onBack: () -> Unit) {
                     Text("Pickup: $location")
                     Text("Reference: ${savedId.take(8)}")
                     Text(
-                        "This is a local prototype listing. It has not " +
-                                "been published to the community feed.",
+                        "Your listing is now published to the community feed.",
                         fontSize = 12.sp
                     )
                     PostButton("Back to home", onClick = onBack)
@@ -662,62 +668,25 @@ fun PostScreen(onBack: () -> Unit) {
                 }
 
                 PostButton(
-                    text = if (saving) "Saving…" else "Post Listing — local demo",
+                    text = if (saving || backendLoading) "Posting…" else "Post Listing",
                     enabled = !saving,
                     onClick = {
                         error = validate()
 
                         if (error.isBlank()) {
-                            val id = UUID.randomUUID().toString()
-                            val post = JSONObject()
-                                .put("id", id)
-                                .put("name", name.trim())
-                                .put("category", category)
-                                .put("donation", donation)
-                                .put("price", if (donation) "0" else price)
-                                .put("quantity", quantity.toInt())
-                                .put("unit", unit)
-                                .put("description", description)
-                                .put("location", location.trim())
-                                .put("expiry", expiry)
-                                .put("pickupStart", pickupStart)
-                                .put("pickupEnd", pickupEnd)
-                                .put("distribution", distribution)
-                                .put("partial", partial)
-                                .put(
-                                    "maximum",
-                                    if (partial) maximum else quantity
-                                )
-                                .put("allergens", allergens)
-                                .put("storage", storage)
-                                .put("photos", JSONArray(photos))
-                                .put("createdAt", System.currentTimeMillis())
-
                             saving = true
-                            scope.launch {
-                                try {
-                                    val updated = withContext(Dispatchers.IO) {
-                                        val array = JSONArray(
-                                            preferences.getString("listings", "[]")
-                                        )
-                                        array.put(post)
-                                        val json = array.toString()
-
-                                        check(
-                                            preferences.edit()
-                                                .putString("listings", json)
-                                                .commit()
-                                        )
-                                        json
-                                    }
-                                    localJson = updated
-                                    savedId = id
-                                } catch (_: Exception) {
-                                    error = "Could not save the listing. Please try again."
-                                } finally {
-                                    saving = false
-                                }
-                            }
+                            foodViewModel.createPost(
+                                FoodPostDraft(
+                                    name = name,
+                                    description = description,
+                                    category = category,
+                                    quantity = quantity.toInt(),
+                                    unit = unit,
+                                    pickupLocation = location,
+                                    expirationDate = Instant.ofEpochMilli(expiry).toString()
+                                ),
+                                Uri.parse(photos.first())
+                            )
                         }
                     }
                 )
@@ -729,59 +698,45 @@ fun PostScreen(onBack: () -> Unit) {
             }
 
             TextButton(onClick = { showLocal = !showLocal }) {
-                Text(
-                    "My local listings (${localPosts.size})",
-                    color = PostGreen
-                )
+                Text("My posts (${myPosts.size})", color = PostGreen)
             }
 
             if (showLocal) {
-                if (localPosts.isEmpty()) {
-                    Text("You have no saved listings yet.")
+                if (myPosts.isEmpty()) {
+                    Text("You have no food posts yet.")
                 }
 
-                localPosts.forEach { post ->
+                myPosts.forEach { post ->
                     PostPanel {
-                        Text(
-                            post.getString("name"),
-                            fontWeight = FontWeight.Bold,
-                            color = PostDark
-                        )
-                        Text(
-                            "${post.getInt("quantity")} ${post.getString("unit")} • " +
-                                    if (post.getBoolean("donation")) {
-                                        "Free"
-                                    } else {
-                                        "₱${post.getString("price")} per unit"
-                                    }
-                        )
-                        Text(post.getString("location"), fontSize = 12.sp)
-                        Text(
-                            "Pickup: ${postTime(post.getLong("pickupStart"))} – " +
-                                    postTime(post.getLong("pickupEnd")),
-                            fontSize = 12.sp
-                        )
-                        TextButton(
-                            onClick = {
-                                info =
-                                    "Category: ${post.getString("category")}\n" +
-                                            "Description: ${post.optString("description").ifBlank { "Not provided" }}\n" +
-                                            "Expires: ${postTime(post.getLong("expiry"))}\n" +
-                                            "Distribution: ${post.getString("distribution")}\n" +
-                                            "Partial claims: ${if (post.getBoolean("partial")) "Allowed" else "Whole batch only"}\n" +
-                                            "Maximum: ${post.optString("maximum").ifBlank { "No additional limit" }}\n" +
-                                            "Allergens: ${post.optString("allergens").ifBlank { "Not provided" }}\n" +
-                                            "Storage: ${post.optString("storage").ifBlank { "Not provided" }}"
-                            }
-                        ) {
-                            Text("View saved details")
-                        }
+                        Text(post.name, fontWeight = FontWeight.Bold, color = PostDark)
+                        Text("${post.quantity} ${post.unit} • ${post.category}")
+                        Text(post.pickupLocation, fontSize = 12.sp)
+                        Text("Expires: ${post.expirationDate.replace("T", " ").take(16)}", fontSize = 12.sp)
+                        Text("Status: ${post.status}", fontSize = 12.sp, color = PostGreen)
+                        TextButton(onClick = {
+                            info = "${post.description ?: "No description provided."}\n\nEditing posts will be added to this existing form in a later small update."
+                        }) { Text("View details") }
+                        TextButton(onClick = { pendingDelete = post }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
                     }
                 }
             }
         }
     }
 
+    pendingDelete?.let { post ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete listing?") },
+            text = { Text("This removes the food post and its uploaded image.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    foodViewModel.deletePost(post)
+                    pendingDelete = null
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
+        )
+    }
     if (info.isNotBlank()) {
         AlertDialog(
             onDismissRequest = { info = "" },

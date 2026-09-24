@@ -1,6 +1,13 @@
 package com.example.salusalo
 
 import android.os.Bundle
+import coil3.compose.AsyncImage
+import com.example.salusalo.model.FoodPost
+import com.example.salusalo.viewmodel.FoodViewModel
+import com.example.salusalo.viewmodel.ReservationViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import java.time.Instant
 import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.profileErrorMessage
 import com.example.salusalo.model.UserProfile
@@ -1252,143 +1259,25 @@ private fun HomeScreen(
     var selectedFood by remember { mutableStateOf<HomeFood?>(null) }
     var sortMenu by remember { mutableStateOf(false) }
     var sort by rememberSaveable { mutableStateOf("Nearest") }
+    val sessionKey = currentProfile?.id ?: "signed-out"
+    val foodViewModel: FoodViewModel = viewModel(key = "food-$sessionKey")
+    val reservationViewModel: ReservationViewModel = viewModel(key = "reservation-$sessionKey")
+    val remotePosts by foodViewModel.availablePosts.collectAsStateWithLifecycle()
+    val feedLoading by foodViewModel.loading.collectAsStateWithLifecycle()
+    val feedError by foodViewModel.error.collectAsStateWithLifecycle()
 
-    val foods = remember {
-        listOf(
-            HomeFood(
-                title = "Bread Assortment",
-                quantity = "30 pcs",
-                price = "Free",
-                status = "Expires in 3 hrs",
-                distance = "1.2 km",
-                distanceValue = 1.2,
-                provider = "Local Bakery",
-                rating = "4.8 (56)",
-                photo = R.drawable.food_bread,
-                urgent = true
-            ),
-            HomeFood(
-                title = "Mixed Vegetables",
-                quantity = "5 kg",
-                price = "₱120",
-                status = "Best today",
-                distance = "2.5 km",
-                distanceValue = 2.5,
-                provider = "Vegetable Vendor",
-                rating = "4.6 (32)",
-                photo = R.drawable.food_vegetables,
-                urgent = false
-            ),
-            HomeFood(
-                title = "Packed Rice Meals",
-                quantity = "12 meals",
-                price = "Free",
-                status = "Pickup within 1 hr",
-                distance = "0.8 km",
-                distanceValue = 0.8,
-                provider = "Community Kitchen",
-                rating = "4.9 (78)",
-                photo = R.drawable.food_meals,
-                urgent = true
-            ),
-            HomeFood(
-                title = "Fresh Produce Box",
-                quantity = "3 boxes",
-                price = "Free",
-                status = "Expires in 2 hrs",
-                distance = "0.6 km",
-                distanceValue = 0.6,
-                provider = "Community Pantry",
-                rating = "4.8 (24)",
-                photo = R.drawable.food_produce,
-                urgent = true
-            ),
-            HomeFood(
-                title = "Pastries Assortment",
-                quantity = "8 packs",
-                price = "₱150",
-                status = "Best today",
-                distance = "1.1 km",
-                distanceValue = 1.1,
-                provider = "Neighborhood Bakery",
-                rating = "4.7 (41)",
-                photo = R.drawable.food_pastries,
-                urgent = false
-            ),
-            HomeFood(
-                title = "Extra Vegetable Packs",
-                quantity = "6 packs",
-                price = "Free",
-                status = "Pickup today",
-                distance = "3.2 km",
-                distanceValue = 3.2,
-                provider = "Household Donor",
-                rating = "4.8 (18)",
-                photo = R.drawable.food_vegetables,
-                urgent = false
-            ),
-            HomeFood(
-                title = "Discounted Bread Bundle",
-                quantity = "10 bundles",
-                price = "₱45",
-                status = "Expires in 2 hrs",
-                distance = "2.0 km",
-                distanceValue = 2.0,
-                provider = "Local Bake Shop",
-                rating = "4.6 (29)",
-                photo = R.drawable.food_bread,
-                urgent = true
-            ),
-            HomeFood(
-                title = "Rice Meal Packs",
-                quantity = "15 meals",
-                price = "₱60",
-                status = "Pickup today",
-                distance = "0.4 km",
-                distanceValue = 0.4,
-                provider = "Neighborhood Eatery",
-                rating = "4.9 (35)",
-                photo = R.drawable.food_meals,
-                urgent = false
-            ),
-            HomeFood(
-                title = "Surplus Pastry Packs",
-                quantity = "5 packs",
-                price = "Free",
-                status = "Pickup within 1 hr",
-                distance = "4.0 km",
-                distanceValue = 4.0,
-                provider = "Community Donor",
-                rating = "4.7 (16)",
-                photo = R.drawable.food_pastries,
-                urgent = true
-            ),
-            HomeFood(
-                title = "Farm Produce Bundle",
-                quantity = "7 bundles",
-                price = "₱85",
-                status = "Best tomorrow",
-                distance = "3.5 km",
-                distanceValue = 3.5,
-                provider = "Local Grower",
-                rating = "4.8 (22)",
-                photo = R.drawable.food_produce,
-                urgent = false
-            )
-        )
+    LaunchedEffect(currentProfile?.id) { foodViewModel.loadAvailablePosts() }
+    DisposableEffect(currentProfile?.id) {
+        onDispose {
+            foodViewModel.clearSession()
+            reservationViewModel.clearSession()
+        }
     }
+
+    val foods = remotePosts.map { it.toHomeFood() }
 
     // A fixed sample recommendation order; no recommendation algorithm yet.
-    val recommendedFoods = remember(foods) {
-        listOf(
-            foods[3],
-            foods[4],
-            foods[2],
-            foods[7],
-            foods[0],
-            foods[9]
-        )
-    }
+    val recommendedFoods = foods
 
     val source = if (page == "recommended") {
         recommendedFoods
@@ -1442,12 +1331,18 @@ private fun HomeScreen(
                 )
             } else if (page == "post") {
                 PostScreen(
-                    onBack = { page = "home" }
+                    onBack = {
+                        foodViewModel.loadAvailablePosts()
+                        page = "home"
+                    },
+                    foodViewModel = foodViewModel
                 )
             } else if (page == "activity") {
                 ActivityScreen(
                     onPost = { page = "post" },
-                    onAlerts = { page = "alerts" }
+                    onAlerts = { page = "alerts" },
+                    foodViewModel = foodViewModel,
+                    reservationViewModel = reservationViewModel
                 )
             } else if (page == "profile") {
                 ProfileScreen(
@@ -1838,7 +1733,7 @@ private fun HomeScreen(
 
                     if (visibleFoods.isEmpty()) {
                         Text(
-                            "No listings match your search and category.",
+                            if (feedLoading) "Loading listings…" else if (feedError != null) "Could not load listings. Try again." else "No available food listings yet.",
                             modifier = Modifier.padding(vertical = 20.dp),
                             fontSize = 13.sp,
                             color = Gray
@@ -2060,13 +1955,40 @@ private fun HomeScreen(
         ) {
             FoodDetailsScreen(
                 food = food,
+                isOwnFood = currentProfile?.id != null && food.donorId == currentProfile.id,
+                reservationViewModel = reservationViewModel,
+                onReserved = {
+                    foodViewModel.loadAvailablePosts()
+                    selectedFood = null
+                },
                 onBack = { selectedFood = null }
             )
         }
     }
 }
 
+private fun FoodPost.toHomeFood(): HomeFood {
+    val expiration = runCatching { Instant.parse(expirationDate) }.getOrNull()
+    val urgent = expiration?.isBefore(Instant.now().plusSeconds(3 * 60 * 60)) == true
+    return HomeFood(
+        id = id,
+        donorId = donorId,
+        title = name,
+        quantity = "$quantity $unit",
+        price = "Free",
+        status = if (urgent) "Expires soon" else "Available",
+        distance = pickupLocation,
+        distanceValue = 0.0,
+        provider = "Food donor",
+        rating = "New",
+        photo = R.drawable.food_produce,
+        imageUrl = displayImageUrl,
+        urgent = urgent
+    )
+}
 private data class HomeFood(
+    val id: String,
+    val donorId: String,
     val title: String,
     val quantity: String,
     val price: String,
@@ -2076,6 +1998,7 @@ private data class HomeFood(
     val provider: String,
     val rating: String,
     val photo: Int,
+    val imageUrl: String? = null,
     val urgent: Boolean
 )
 
@@ -2179,15 +2102,28 @@ private fun AvailableFoodCard(
             modifier = Modifier.heightIn(min = 116.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Image(
-                painter = painterResource(food.photo),
-                contentDescription = food.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .width(92.dp)
-                    .height(116.dp)
-                    .clip(RoundedCornerShape(14.dp))
-            )
+            var imageFailed by remember(food.id, food.imageUrl) { mutableStateOf(false) }
+            if (food.imageUrl != null && !imageFailed) {
+                AsyncImage(
+                    model = food.imageUrl,
+                    contentDescription = food.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp)),
+                    onError = { imageFailed = true }
+                )
+            } else if (food.imageUrl == null) {
+                Image(
+                    painter = painterResource(food.photo),
+                    contentDescription = food.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp))
+                )
+            } else {
+                Box(
+                    modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFFF2F6E6)),
+                    contentAlignment = Alignment.Center
+                ) { Text("Image unavailable", fontSize = 10.sp, color = Gray) }
+            }
 
             Column(
                 modifier = Modifier
@@ -2291,6 +2227,9 @@ private fun AvailableFoodCard(
 @Composable
 private fun FoodDetailsScreen(
     food: HomeFood,
+    isOwnFood: Boolean,
+    reservationViewModel: ReservationViewModel,
+    onReserved: () -> Unit,
     onBack: () -> Unit
 ) {
     val available = food.quantity
@@ -2337,6 +2276,15 @@ private fun FoodDetailsScreen(
         )
     }
 
+    val reservationMessage by reservationViewModel.message.collectAsStateWithLifecycle()
+    LaunchedEffect(reservationMessage) {
+        reservationMessage?.let { result ->
+            noticeTitle = if (result.startsWith("Reservation created")) "Reserved" else "Reservation"
+            notice = result
+            reservationViewModel.clearMessage()
+            if (result.startsWith("Reservation created")) onReserved()
+        }
+    }
     val description = when (food.photo) {
         R.drawable.food_bread ->
             "Assorted bread including baguettes, whole wheat, " +
@@ -2750,12 +2698,19 @@ private fun FoodDetailsScreen(
                     )
 
                     FoodActionButton(
-                        title = "Reserve",
-                        subtitle = "Hold for pickup",
+                        title = if (isOwnFood) "Your listing" else "Reserve",
+                        subtitle = if (isOwnFood) "You cannot reserve it" else "Hold for pickup",
                         background = PaleGreen,
                         foreground = Green,
                         modifier = Modifier.weight(1f),
-                        onClick = { foodAction = "reserve" }
+                        onClick = {
+                            if (isOwnFood) {
+                                noticeTitle = "Your listing"
+                                notice = "You cannot reserve your own food post."
+                            } else {
+                                reservationViewModel.reserve(food.id, quantity)
+                            }
+                        }
                     )
 
                     FoodActionButton(
@@ -2923,3 +2878,11 @@ private fun FoodActionButton(
         }
     }
 }
+
+
+
+
+
+
+
+
