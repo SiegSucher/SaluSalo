@@ -46,6 +46,16 @@ Run `migrations/20260926_phase4_messaging_notifications.sql` after Phases 1–3 
 
 Clients can only read conversations, messages and alerts. Messages are sent only through `send_message`, and alerts are created only by the database (`notify_user` is not callable by clients). Participants see each other's display name only, through `get_my_conversations`; `users` RLS is unchanged. Deleting a listing also deletes its conversations, messages and alerts. The migration is safe to run again.
 
+## Listing prices, Purchases and Claims
+
+Run `migrations/20260927_activity_prices.sql` by hand in the SQL Editor after Phases 1–4, **before installing the app build that uses it** (Create Listing sends `price` and fails until the column exists). It adds:
+
+- `food_posts.price` (per unit, `numeric(10,2)`, 0–99,999.99; 0 = free donation, so existing listings become free);
+- `reservations.unit_price`, set only by the `reservations_set_unit_price` trigger from the listing's price when the reservation is created. A later price change does not affect existing reservations. The Phase 3 RPCs are unchanged and remain the only way to write reservations;
+- `unit_price` in `get_donor_reservations()` (recreated; still recipient names only).
+
+The migration is safe to run again. **Do not run `20260924_phase3_reservations.sql` or `20260924_phase3_donor_recipient_names.sql` again after it:** they recreate `get_donor_reservations()` with the old return type and fail ("cannot change return type of existing function"). If you ever need to, drop the function first, run them, then run this migration again.
+
 ## Safety checks (`tests/`)
 
 The files in `tests/` are not migrations and change nothing. `tests/phase4_live_safety_check.sql` checks that the live Phase 4 rules still refuse what they should. Paste it into the SQL Editor (role `postgres`) and run it. It pretends to be the two participants of the most recent chat and the newest other account, tries forbidden actions, and reports each check as PASS, FAIL or SKIP. It always ends with an error on purpose (`SAFETY CHECK FINISHED: …`); the error rolls back everything the check did. It needs at least one chat with messages, and a third account for the outsider checks.

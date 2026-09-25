@@ -19,6 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Phase 2 — Food Listings: complete.
 - Phase 3 — Reservations: complete.
 - Phase 4 — Messaging and Notifications: complete (signed off 2026-09-25). Chat per listing, in-app alerts, Realtime, preferences in Supabase. Built, migration applied, and tested on two phones, including the two preference fixes and live alerts after more than 1 hour; the live safety check passed. The password-reset email was not tested (`PROJECT_STATUS.md` §8).
+- Activity Purchases, Claims and listing prices (between Phases 4 and 5, not part of Phase 5): **in code on branch `claude/activity-purchases-claims`, not built, migration `20260927_activity_prices.sql` not applied, not tested** (`PROJECT_STATUS.md` §9).
 - Phase 5 — Maps, Reviews, Reports: not started.
 - Phase 6 — Admin and Final Release: not started.
 - Read `docs/PROJECT_STATUS.md` first. It has the detailed status, the test results and the two-account manual test.
@@ -63,7 +64,7 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
   - `MessageRepository` (conversation RPCs, messages) and `NotificationRepository` (alerts, preferences). `realtimeInserts()` in `data/RealtimeInserts.kt` streams inserted rows through a Realtime channel.
   - `StorageRepository` builds storage paths.
 - `model/`: `@Serializable` DTOs, with `@SerialName` for snake_case columns.
-  - `FoodPost`: its `displayImageUrl` is `@Transient` (a signed URL, never stored).
+  - `FoodPost`: its `displayImageUrl` is `@Transient` (a signed URL, never stored). `price` is per unit, 0 = free. `formatPeso()` and `reservationTotal()` (same file) format money with `BigDecimal.valueOf`; never use `BigDecimal(double)`.
   - `Reservation`, `ReservationDisplay`, `DonorReservationRow`.
   - `UserProfile`.
   - `Conversation`, `ConversationSummary`, `ChatMessage` (`model/Conversation.kt`, with `parseTimestamp()`); `AppNotification`, `NotificationType`, `NotificationPreferences`.
@@ -76,7 +77,7 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
   - `NotificationViewModel`: alerts, `unreadCount`, preferences. `start(profileId)` keeps alerts live for the session and re-sends the Realtime token every 5 minutes (Realtime does not refresh the Firebase token itself).
 - UI: large files in the root package.
   - `MainActivity.kt`: auth screens, Home feed, `RecommendationCard`, `AvailableFoodCard`, `FoodDetailsScreen` with Reserve.
-  - `ActivityScreen.kt`: tabs My Listings, My Reservations, My Donations, Purchases, Claims. It shows reservation results and errors in a "Reservation" dialog, and reloads the reservation lists when their tab is tapped.
+  - `ActivityScreen.kt`: tabs My Listings, My Reservations (open and cancelled), My Donations, Purchases (claimed, priced), Claims (claimed, free), and totals computed from claimed reservations. It shows reservation results and errors in a "Reservation" dialog, and reloads the reservation lists when their tab is tapped.
   - `PostScreen.kt`: Create Listing.
   - `ProfileScreen.kt` and `ProfileSections.kt`: profile.
   - `AlertScreen.kt`: real alerts (Phase 4).
@@ -92,7 +93,8 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
 **Supabase objects** (in `supabase/migrations/`)
 - Tables `users`, `food_posts` and `reservations`, each with RLS enabled and `anon` revoked.
 - Helper functions: `is_salusalo_firebase_jwt()`, `current_salusalo_profile_id()`, `is_reservation_recipient()`.
-- SECURITY DEFINER RPCs: `create_reservation`, `cancel_reservation`, `claim_reservation`, `get_donor_reservations`.
+- SECURITY DEFINER RPCs: `create_reservation`, `cancel_reservation`, `claim_reservation`, `get_donor_reservations` (returns `unit_price` since `20260927_activity_prices.sql`; do not re-run the Phase 3 files after it).
+- Prices: `food_posts.price` and `reservations.unit_price`. `unit_price` is set only by the `reservations_set_unit_price` trigger from the listing's price; never send or adjust it from the app. Pay at pickup only, no online payments.
 - Phase 4: tables `conversations`, `messages`, `notifications`, `notification_preferences`; RPCs `start_listing_conversation`, `open_reservation_conversation`, `send_message`, `mark_conversation_read`, `mark_notifications_read`, `get_my_conversations`; internal `notify_user()` and the `reservations_notify` trigger; `messages` and `notifications` in the `supabase_realtime` publication.
 - `food-images` object path: `<firebaseUid>/<postId>/image.<ext>`. `food_posts.image_url` stores this **path**, so the UI must use `displayImageUrl`.
 
@@ -160,3 +162,4 @@ Details, test results and line references are in `docs/PROJECT_STATUS.md`.
      1. A notification preference switched back on was never saved. supabase-kt's `Json` leaves out values equal to their default, so `true` was missing from the upsert. The fix puts `@EncodeDefault` on the four booleans in `NotificationPreferences`.
      2. The switches showed on before the saved settings loaded. They now show "Loading your alert settings…" and Save stays disabled until then.
    - Not fixed: the unused `FoodRepository.updateFoodPost()` has the same problem with dropped defaults. Do not turn on `encodeDefaults` globally; that would change the inserts of other models.
+6. **Activity Purchases, Claims and listing prices** (`PROJECT_STATUS.md` §9), implemented in code on 2026-09-25 on branch `claude/activity-purchases-claims`. The SQL was tested on a local Postgres and the Kotlin was type-checked. Not built with AGP, the migration was not applied to the live project, nothing tested on a device. Run the migration **before** installing the build (Create Listing sends `price`). My Reservations no longer lists claimed reservations; they are in Purchases or Claims.
