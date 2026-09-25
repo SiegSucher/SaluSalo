@@ -91,6 +91,8 @@ fun ActivityScreen(
         reservationMessage?.let {
             reservationNotice = it
             reservationViewModel.clearMessage()
+            // A cancel returns quantity to the listing, so refresh the Home feed.
+            if (it.startsWith("Reservation cancelled")) foodViewModel.loadAvailablePosts()
         }
     }
 
@@ -696,10 +698,12 @@ fun ActivityScreen(
                     Text("${record.timeLabel}: ${record.timeValue}")
                     if (record.details.isNotBlank()) Text(record.details, fontSize = 12.sp)
                     Text(
-                        if (record.sample) {
-                            "Demonstration record. Dates, distances, and statuses are sample values."
-                        } else {
-                            "This is your live Supabase listing."
+                        when {
+                            record.sample ->
+                                "Demonstration record. Dates, distances, and statuses are sample values."
+                            record.ownedPost != null -> "This is your live Supabase listing."
+                            record.donorCanClaim -> "This is a live reservation on your listing."
+                            else -> "This is your live reservation."
                         },
                         fontSize = 11.sp,
                         color = AGray

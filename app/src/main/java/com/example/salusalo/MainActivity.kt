@@ -1984,7 +1984,8 @@ private fun FoodPost.toHomeFood(): HomeFood {
         rating = "New",
         photo = R.drawable.food_produce,
         imageUrl = displayImageUrl,
-        urgent = urgent
+        urgent = urgent,
+        description = description?.takeIf { it.isNotBlank() }
     )
 }
 private data class HomeFood(
@@ -2000,7 +2001,8 @@ private data class HomeFood(
     val rating: String,
     val photo: Int,
     val imageUrl: String? = null,
-    val urgent: Boolean
+    val urgent: Boolean,
+    val description: String? = null
 )
 
 @Composable
@@ -2308,27 +2310,7 @@ private fun FoodDetailsScreen(
             if (result.startsWith("Reservation created")) onReserved()
         }
     }
-    val description = when (food.photo) {
-        R.drawable.food_bread ->
-            "Assorted bread including baguettes, whole wheat, " +
-                    "and multigrain loaves."
-
-        R.drawable.food_vegetables ->
-            "A selection of mixed vegetables available for pickup " +
-                    "from a community provider."
-
-        R.drawable.food_meals ->
-            "Packed rice meals available for collection during " +
-                    "the listed pickup window."
-
-        R.drawable.food_produce ->
-            "A mixed produce box with vegetables for sharing " +
-                    "or preparing meals at home."
-
-        else ->
-            "An assortment of pastries available for pickup " +
-                    "from a local provider."
-    }
+    val description = food.description ?: "No description provided."
 
     val allergens = if (food.photo == R.drawable.food_bread) {
         "Wheat, gluten, sesame"
@@ -2353,12 +2335,28 @@ private fun FoodDetailsScreen(
                     .fillMaxWidth()
                     .height(210.dp)
             ) {
-                Image(
-                    painter = painterResource(food.photo),
-                    contentDescription = food.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                var imageFailed by remember(food.id, food.imageUrl) { mutableStateOf(false) }
+                if (food.imageUrl != null && !imageFailed) {
+                    AsyncImage(
+                        model = food.imageUrl,
+                        contentDescription = food.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                        onError = { imageFailed = true }
+                    )
+                } else if (food.imageUrl == null) {
+                    Image(
+                        painter = painterResource(food.photo),
+                        contentDescription = food.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(Color(0xFFF2F6E6)),
+                        contentAlignment = Alignment.Center
+                    ) { Text("Image unavailable", fontSize = 12.sp, color = Gray) }
+                }
 
                 FilledIconButton(
                     onClick = onBack,
@@ -2580,7 +2578,7 @@ private fun FoodDetailsScreen(
                         FoodInfoRow(
                             icon = Icons.Outlined.LocationOn,
                             title = "Pickup Address",
-                            value = "Del Rosarrio, Balilihan",
+                            value = food.distance,
                             onClick = { foodAction = "location" }
                         )
 

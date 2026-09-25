@@ -136,10 +136,10 @@ Details, test results and line references are in `docs/PROJECT_STATUS.md`.
    - the Phase 1/2 regression.
    - Checks with no test record are listed under the results log in `docs/PROJECT_STATUS.md` §4 (for example tab reload, the over-quantity error and reserving your own listing). Do not treat them as verified.
 2. **Committed.** The work since `d4f65fe` (the Recommended and reservation image changes and the load-failure fixes, `PROJECT_STATUS.md` §3.2–§3.4), `docs/` and this file were committed on 2026-09-25. Commit only when the user asks.
-3. **Known issues, not scheduled.** Leave them as they are unless the user asks:
-   - Reservation details dialogs end with "This is your live Supabase listing." (text meant for listings).
-   - The `FoodDetailsScreen` header uses the demo drawable and canned description/address text.
-   - The Home feed does not reload after cancel or claim, and nothing updates in real time across devices.
+3. **Known issues fixed in code on 2026-09-25, not yet built or tested** (`PROJECT_STATUS.md` §3.5):
+   - Reservation details dialogs no longer end with the listing text "This is your live Supabase listing."
+   - The `FoodDetailsScreen` header shows the uploaded image, and the screen shows the post's description and pickup location.
+   - The Home feed reloads after a cancel. Nothing updates in real time across devices (still open).
 4. **Images missing from Storage.** On 2026-09-25 two listings referenced image files that no longer existed in `food-images`; how they were lost is unknown. The app now loads such listings without an image (`PROJECT_STATUS.md` §3.4).
 5. **Phase 4 (Messaging and Notifications) has not started.** This area has demo-only UI with no backend:
    - sample alerts (`AlertScreen.kt`);
