@@ -501,25 +501,29 @@ fun ProfileSections(
 
                             "notifications" -> {
                                 SectionCard {
-                                    SectionToggle(
-                                        "New messages",
-                                        messageAlerts
-                                    ) { messageAlerts = it }
+                                    if (serverPreferences == null) {
+                                        Text("Loading your alert settings…", fontSize = 13.sp)
+                                    } else {
+                                        SectionToggle(
+                                            "New messages",
+                                            messageAlerts
+                                        ) { messageAlerts = it }
 
-                                    SectionToggle(
-                                        "Reservation updates",
-                                        reservationAlerts
-                                    ) { reservationAlerts = it }
+                                        SectionToggle(
+                                            "Reservation updates",
+                                            reservationAlerts
+                                        ) { reservationAlerts = it }
 
-                                    SectionToggle(
-                                        "Food recommendations",
-                                        recommendations
-                                    ) { recommendations = it }
+                                        SectionToggle(
+                                            "Food recommendations",
+                                            recommendations
+                                        ) { recommendations = it }
 
-                                    SectionToggle(
-                                        "Pickup reminders",
-                                        reminders
-                                    ) { reminders = it }
+                                        SectionToggle(
+                                            "Pickup reminders",
+                                            reminders
+                                        ) { reminders = it }
+                                    }
 
                                     SectionToggle(
                                         "Notification sound",
@@ -536,7 +540,10 @@ fun ProfileSections(
                                     fontSize = 12.sp
                                 )
 
-                                SectionButton("Save preferences") {
+                                SectionButton(
+                                    "Save preferences",
+                                    enabled = serverPreferences != null
+                                ) {
                                     savePreferences()
                                     val base = serverPreferences
                                     if (base == null) {
@@ -923,9 +930,10 @@ private fun SectionLink(
 }
 
 @Composable
-private fun SectionButton(text: String, onClick: () -> Unit) {
+private fun SectionButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp),

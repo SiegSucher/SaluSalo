@@ -1,5 +1,7 @@
 package com.example.salusalo.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -20,12 +22,17 @@ data class AppNotification(
 @Serializable
 enum class NotificationType { MESSAGE, RESERVATION_CREATED, RESERVATION_CANCELLED, RESERVATION_CLAIMED }
 
-/** A missing row on the server means every alert type is on, matching these defaults. */
+/**
+ * A missing row on the server means every alert type is on, matching these defaults.
+ * The switches are always encoded: supabase-kt's Json leaves out values equal to their
+ * default, so a switch turned back on would otherwise never reach the upsert.
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class NotificationPreferences(
     @SerialName("user_id") val userId: String,
-    @SerialName("message_alerts") val messageAlerts: Boolean = true,
-    @SerialName("reservation_alerts") val reservationAlerts: Boolean = true,
-    val recommendations: Boolean = true,
-    @SerialName("pickup_reminders") val pickupReminders: Boolean = true
+    @EncodeDefault @SerialName("message_alerts") val messageAlerts: Boolean = true,
+    @EncodeDefault @SerialName("reservation_alerts") val reservationAlerts: Boolean = true,
+    @EncodeDefault val recommendations: Boolean = true,
+    @EncodeDefault @SerialName("pickup_reminders") val pickupReminders: Boolean = true
 )

@@ -282,17 +282,21 @@ fun AlertsScreen(
 
                     Spacer(Modifier.height(12.dp))
 
-                    AlertSettingRow(
-                        title = "New messages",
-                        checked = messageAlerts,
-                        onCheckedChange = { messageAlerts = it }
-                    )
+                    if (preferences == null) {
+                        Text("Loading your alert settings…", fontSize = 13.sp)
+                    } else {
+                        AlertSettingRow(
+                            title = "New messages",
+                            checked = messageAlerts,
+                            onCheckedChange = { messageAlerts = it }
+                        )
 
-                    AlertSettingRow(
-                        title = "Reservation updates",
-                        checked = reservationAlerts,
-                        onCheckedChange = { reservationAlerts = it }
-                    )
+                        AlertSettingRow(
+                            title = "Reservation updates",
+                            checked = reservationAlerts,
+                            onCheckedChange = { reservationAlerts = it }
+                        )
+                    }
                 }
             },
             confirmButton = {
