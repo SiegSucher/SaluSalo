@@ -368,6 +368,7 @@ Phase 3 was signed off on 2026-09-25. These sections are kept as the record of t
   - "Pickup Address" shows the post's pickup location instead of "Del Rosarrio, Balilihan".
   - Unchanged: allergens ("Not provided — ask the provider", since allergens are not saved), Storage Note, Pickup Window, and the preview-only `FoodActionsDialog`, whose map view still has its own demo address (`FoodActions.kt`).
 - **Home feed after cancel** (`ActivityScreen.kt`): when the Activity screen receives the "Reservation cancelled" message, it also calls `foodViewModel.loadAvailablePosts()`, so Home shows the restored quantity. Claim changes neither quantity nor status, so it does not reload the feed. There is still no realtime update across devices.
+- **Home greeting** (`MainActivity.kt`, `HomeScreen`): "Good evening, Mika 👋" is replaced by "Good morning / Good afternoon / Good evening, <first name> 👋". The first name is the first word of the Supabase profile name (no name if it is blank). The period uses the device's local time (morning 05:00–11:59, afternoon 12:00–17:59, evening 18:00–04:59) and is re-read every minute while Home is open. The other demo "Mika" values (Profile screen default, preview-only "Requesting as") are unchanged.
 - No SQL, RLS, RPC, authentication or storage-policy changes.
 
 **Live-database checks** (read-only; run in the Supabase SQL Editor)
@@ -465,6 +466,7 @@ Run the §3.4 SQL checks first, then install a build that contains §3.4.
 2. **Missing image:** open one of the "lemon dou" listings (image missing from Storage). The header shows the demo produce photo.
 3. **Dialog text:** in Activity, open one record per tab. My Listings ends with "This is your live Supabase listing.", My Reservations with "This is your live reservation.", My Donations with "This is a live reservation on your listing."
 4. **Feed after cancel:** B reserves part of A's listing, cancels it in Activity → My Reservations, then goes to Home with the bottom bar. The listing shows the restored quantity (and is back on the feed if B had reserved all of it).
+5. **Greeting:** sign in as A: Home says "Good morning/afternoon/evening, <A's first name> 👋" matching the device time. Sign in as B: it shows B's first name.
 
 ### Results log
 
@@ -556,7 +558,7 @@ Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow; n
 - **Dropped requests.** Since §3.4, feed and My Listings loads requested during another `FoodViewModel` request are queued, not dropped. Still ignored while any request is running: `FoodViewModel.createPost()`/`deletePost()`, and every `ReservationViewModel` request (for example a tab-tap reload during a running refresh).
 - **No refresh after cancel or claim.** The Home feed does not reload after either action, and there is no realtime update across devices. **Reload after cancel added in code on 2026-09-25 (§3.5); not built or tested yet.** Claim does not change the feed; realtime updates are still missing.
 - **Placeholder or hard-coded UI values:**
-  - the greeting "Good evening, Mika";
+  - the greeting "Good evening, Mika". **Changed in code on 2026-09-25 (§3.5): it now uses the signed-in profile's first name and the time of day. Not built or tested yet.**
   - the location "Del Rosarrio, Balilihan";
   - "Browse all 10 food listings";
   - Activity metrics 48 / 128;

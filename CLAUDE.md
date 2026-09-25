@@ -140,6 +140,7 @@ Details, test results and line references are in `docs/PROJECT_STATUS.md`.
    - Reservation details dialogs no longer end with the listing text "This is your live Supabase listing."
    - The `FoodDetailsScreen` header shows the uploaded image, and the screen shows the post's description and pickup location.
    - The Home feed reloads after a cancel. Nothing updates in real time across devices (still open).
+   - The Home greeting uses the signed-in profile's first name and the time of day instead of "Good evening, Mika".
 4. **Images missing from Storage.** On 2026-09-25 two listings referenced image files that no longer existed in `food-images`; how they were lost is unknown. The app now loads such listings without an image (`PROJECT_STATUS.md` §3.4).
 5. **Phase 4 (Messaging and Notifications) has not started.** This area has demo-only UI with no backend:
    - sample alerts (`AlertScreen.kt`);

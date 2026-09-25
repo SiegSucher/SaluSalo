@@ -8,6 +8,7 @@ import com.example.salusalo.viewmodel.ReservationViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.Instant
+import java.time.LocalTime
 import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.profileErrorMessage
 import com.example.salusalo.model.UserProfile
@@ -66,6 +67,7 @@ import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.userProfileChangeRequest
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -1267,6 +1269,23 @@ private fun HomeScreen(
     val feedError by foodViewModel.error.collectAsStateWithLifecycle()
 
     LaunchedEffect(currentProfile?.id) { foodViewModel.loadAvailablePosts() }
+
+    // Greeting follows the signed-in profile and the device's local time;
+    // the hour is re-read every minute so it changes while Home stays open.
+    var hour by remember { mutableIntStateOf(LocalTime.now().hour) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000)
+            hour = LocalTime.now().hour
+        }
+    }
+    val timeGreeting = when (hour) {
+        in 5..11 -> "Good morning"
+        in 12..17 -> "Good afternoon"
+        else -> "Good evening"
+    }
+    val firstName = currentProfile?.name?.trim()?.substringBefore(" ").orEmpty()
+    val greeting = if (firstName.isBlank()) "$timeGreeting 👋" else "$timeGreeting, $firstName 👋"
     DisposableEffect(currentProfile?.id) {
         onDispose {
             foodViewModel.clearSession()
@@ -1391,7 +1410,7 @@ private fun HomeScreen(
 
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "Good evening, Mika 👋",
+                                    greeting,
                                     fontSize = 19.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = DarkGreen
