@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-09-25 (Phase 4 in progress, §8). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25. Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
+_Last updated: 2026-09-25 (Phase 4 device test and preference fixes, §8). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -19,8 +19,8 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 |---|---|---|
 | Phase 1: Backend Foundation | Firebase email/password auth, Supabase client using Firebase tokens, `users` profiles, private Storage buckets | **Complete.** Do not redo. Authentication/profile regression passed on 2026-09-25 ([results log](#results-log)). |
 | Phase 2: Food Listings | `food_posts`, create listing with image upload to `food-images`, feed, My Listings, delete | **Complete.** Do not redo. Regression passed on 2026-09-25 for both accounts: Home/feed, create listing, delete listing ([results log](#results-log)). |
-| Phase 3: Reservations | Reserve, cancel and claim with atomic quantity; recipient and donor views | **Complete.** Signed off by the developer on 2026-09-25. The A/B reservation test, the missing-image fallback/feed check, and the cancel, claim and Recommended for You tests passed; the remaining checks without an individual test record are listed under the [results log](#results-log). The changes since `d4f65fe` were committed on 2026-09-25 (§6). |
-| Phase 4: Messaging and Notifications | Chat per listing (recipient ↔ donor), in-app alerts for messages and reservation changes, live updates through Supabase Realtime, notification preferences stored in Supabase (§8) | **In progress: implemented in code on 2026-09-25, not built with AGP, migration not applied, not tested on a device.** The SQL was run and tested on a local Postgres 16; the Kotlin was type-checked (§8.6). |
+| Phase 3: Reservations | Reserve, cancel and claim with atomic quantity; recipient and donor views | **Complete.** Signed off by the developer on 2026-09-25. The A/B reservation test, the missing-image fallback/feed check, and the cancel, claim and Recommended for You tests passed; the remaining checks without an individual test record are listed under the [results log](#results-log). The changes since `d4f65fe` were committed on 2026-09-25 (§6). The known-issue fixes made after sign-off (§3.5) were built and manually tested on 2026-09-25. |
+| Phase 4: Messaging and Notifications | Chat per listing (recipient ↔ donor), in-app alerts for messages and reservation changes, live updates through Supabase Realtime, notification preferences stored in Supabase (§8) | **In progress.** Built at `266325b`; migration applied to the live project; one-phone A/B test and regression passed on 2026-09-25, except saving a preference switched back on. Two preference bugs fixed in code, **not yet retested**; the live two-phone checks are partly done (§8). |
 | Phase 5: Maps, Reviews, Reports | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 | Phase 6: Admin and Final Release | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 
@@ -40,6 +40,10 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 - **After the §3.4 load-failure fixes:** `BUILD SUCCESSFUL in 16s` on 2026-09-25, same command.
   - `compileDebugKotlin` re-ran. Its only warning, a deprecated `Icons.Outlined.FormatListBulleted` in `ActivityScreen.kt`, was already present at `d4f65fe`; it appears because that file was recompiled.
   - No tests or lint were run, and the app was not installed or run.
+- **After the §3.5 known-issue fixes (commit `85c9263`):** `BUILD SUCCESSFUL in 29s` on 2026-09-25, same command.
+  - `compileDebugKotlin` re-ran. Its only warnings, the deprecated `Icons.Outlined.FormatListBulleted` (`ActivityScreen.kt`) and `Icons.Outlined.ArrowBack` (`MainActivity.kt`), were already present.
+  - No tests or lint were run. The developer then installed this code from Android Studio and ran the §3.5 checks ([results log](#results-log)).
+- **Phase 4 (commit `266325b`):** `gradlew :app:assembleDebug` passed locally on 2026-09-25. The only warnings were the deprecations already present (`FormatListBulleted`, `ArrowBack`, `Logout`). The preference fixes made after it (§8.7) have not been built.
 - **Automated tests:** only the Android Studio templates `ExampleUnitTest` and `ExampleInstrumentedTest` exist.
 
 ### Phase 1: what exists (summary)
@@ -224,16 +228,17 @@ Code involved:
 | Create reservation (RPC + Reserve button) | Yes | Passed 2026-09-25 (§4 A/B test) | — |
 | Quantity stepper + server quantity checks | Yes | Reserving the full quantity passed 2026-09-25 (§4 A/B test) | Over-quantity / stale-quantity error path |
 | Atomic quantity protection (row lock) | Yes (SQL) | None recorded | Concurrency test |
-| Cancellation | Yes | Passed 2026-09-25 (cancel test: Activity message, status Cancelled) | Restored quantity and the listing's return to the feed not reported separately |
+| Cancellation | Yes | Passed 2026-09-25 (cancel test: Activity message, status Cancelled). Restored quantity on Home after a partial cancel, and a fully reserved listing's return to Home after its cancel, 2026-09-25 (§3.5 check 4) | — |
 | Claiming | Yes | Passed 2026-09-25 (claim test: Activity message, both accounts see Claimed, B has no Cancel) | — |
 | My Reservations (recipient's own only) | Yes (separate tab) | Passed 2026-09-25 (§4 A/B test) | — |
 | My Donations (donor's posts only, recipient name) | Yes (separate tab) | Passed 2026-09-25 (§4 A/B test; the record showing the recipient's name was used in the claim test) | — |
 | My Listings (own posts) | Yes | Create and delete listing passed for both accounts, 2026-09-25 (Phase 2 regression) | — |
 | Server-side ownership rules | Yes (SQL) | None recorded | Negative tests (acting on another user's reservation) |
-| Listing quantity/status transitions | Yes (SQL) | None recorded | Observed in the app after reserve, cancel and claim |
+| Listing quantity/status transitions | Yes (SQL) | Seen on Home, 2026-09-25 (§3.5 check 4): the quantity after a partial reserve and after its cancel; a fully reserved listing left Home and came back with its full quantity after the cancel | The fully reserved listing in the donor's My Listings (quantity 0, "Reserved") |
 | Reservation images | Yes, in the 2026-09-25 change (§3.3); builds | Passed 2026-09-25 (§4 A/B test: image in both reservation views) | — |
 | Recommended for You real image | Yes, in the 2026-09-25 change (§3.2); builds | Passed 2026-09-25 (Recommended for You test) | — |
 | Load-failure fixes (per-post image signing, queued loads, independent reservation lists, Activity messages, tab reload) | Yes, in the 2026-09-25 change (§3.4); builds | Missing-image fallback/feed check passed 2026-09-25; the §4 A/B test also passed on this build; Activity messages passed 2026-09-25 (cancel and claim tests) | Tab reload (§4, §3.4 check 5) |
+| Known-issue fixes (food details data, reservation dialog text, feed reload after cancel) | Yes, in commit `85c9263` (§3.5); builds | Passed 2026-09-25 (§3.5 checks 1–4, including the "Image unavailable" header) | — |
 | Migrations applied to live Supabase | Partly confirmed: the §3.4 SQL checks (2026-09-25) show `food_posts`, `reservations` and `get_donor_reservations()` | n/a | The full list of applied migrations |
 
 ---
@@ -273,7 +278,7 @@ Phase 3 was signed off on 2026-09-25. These sections are kept as the record of t
 2. **Decide the tab label.** It is "My Donations" in code; it could become "Manage Reservations" or "My Donations / Manage Reservations". This is a label-only change.
 3. **Related issues seen in the same screen** (not fixed; fix only if in scope):
    - `ActivityScreen` never displays `reservationViewModel.message`, so success **and error** messages from Cancel and Mark claimed are not shown there. The message is not cleared either, so it pops up as a "Reservation" notice the next time any food details dialog opens (`MainActivity.kt` L2279–2287). **Changed in code on 2026-09-25 (§3.4): the Activity screen now shows and clears it. Verified on a device on 2026-09-25 (cancel and claim tests).**
-   - The details dialog for reservation records ends with "This is your live Supabase listing." (L686). That text was meant for listings. **Changed in code on 2026-09-25 (§3.5); not built or tested yet.**
+   - The details dialog for reservation records ends with "This is your live Supabase listing." (L686). That text was meant for listings. **Changed in code on 2026-09-25 (§3.5). Verified on a device on 2026-09-25.**
    - The reservation lists have no loading or error state.
 
 ### 3.2 Recommended for You image
@@ -359,7 +364,7 @@ Phase 3 was signed off on 2026-09-25. These sections are kept as the record of t
 
 ### 3.5 Known-issue fixes (after Phase 3 sign-off)
 
-**Status (2026-09-25): changed in code. Not built (the cloud session that made the change has no Android SDK) and not manually tested.** Run `assembleDebug` and the §4 "Checks for the §3.5 fixes" before treating any of it as done.
+**Status (2026-09-25): verified on a device.** The change was made in a Claude Code web session that had no Android SDK (commit `85c9263`, branch `claude/focused-dirac-oy16ck`). `assembleDebug` then passed locally, and the developer ran the §4 "Checks for the §3.5 fixes" on the phone: all four passed. No listing with a missing image was left on Home, so check 2 and the "Image unavailable" header were run with a staged test listing. Merged into `master` through pull request #1 on 2026-09-25.
 
 - **Reservation dialog text** (`ActivityScreen.kt`): the details dialog's closing line now depends on the record. My Listings keeps "This is your live Supabase listing."; My Donations shows "This is a live reservation on your listing."; My Reservations shows "This is your live reservation."
 - **Food details** (`MainActivity.kt`, `FoodDetailsScreen`):
@@ -368,7 +373,7 @@ Phase 3 was signed off on 2026-09-25. These sections are kept as the record of t
   - "Pickup Address" shows the post's pickup location instead of "Del Rosarrio, Balilihan".
   - Unchanged: allergens ("Not provided — ask the provider", since allergens are not saved), Storage Note, Pickup Window, and the preview-only `FoodActionsDialog`, whose map view still has its own demo address (`FoodActions.kt`).
 - **Home feed after cancel** (`ActivityScreen.kt`): when the Activity screen receives the "Reservation cancelled" message, it also calls `foodViewModel.loadAvailablePosts()`, so Home shows the restored quantity. Claim changes neither quantity nor status, so it does not reload the feed. There is still no realtime update across devices.
-- **Home greeting** (`MainActivity.kt`, `HomeScreen`): "Good evening, Mika 👋" is replaced by "Good morning / Good afternoon / Good evening, <first name> 👋". The first name is the first word of the Supabase profile name (no name if it is blank). The period uses the device's local time (morning 05:00–11:59, afternoon 12:00–17:59, evening 18:00–04:59) and is re-read every minute while Home is open. The other demo "Mika" values (Profile screen default, preview-only "Requesting as") are unchanged.
+- **Home greeting** (`MainActivity.kt`, `HomeScreen`): "Good evening, Mika 👋" is replaced by "Good morning / Good afternoon / Good evening, <first name> 👋". The first name is the first word of the Supabase profile name (no name if it is blank). The period uses the device's local time (morning 05:00–11:59, afternoon 12:00–17:59, evening 18:00–04:59) and is re-read every minute while Home is open. The other demo "Mika" values (Profile screen default, preview-only "Requesting as") are unchanged. This change came after pull request #1 (commit `851e8cb`), so it was not part of the §3.5 test. It was built at `266325b`, and the Phase 4 test on 2026-09-25 showed "Good evening, <first name> 👋". The morning and afternoon greetings were not checked.
 - No SQL, RLS, RPC, authentication or storage-policy changes.
 
 **Live-database checks** (read-only; run in the Supabase SQL Editor)
@@ -463,7 +468,22 @@ Run the §3.4 SQL checks first, then install a build that contains §3.4.
 ### Checks for the §3.5 fixes
 
 1. **Food details:** open a listing that has a photo and a description. The header shows the uploaded photo, the text is the listing's description, and "Pickup Address" is its pickup location. A listing without a description shows "No description provided."
-2. **Missing image:** open one of the "lemon dou" listings (image missing from Storage). The header shows the demo produce photo.
+2. **Missing image:** open one of the "lemon dou" listings (image missing from Storage). The header shows the demo produce photo. If no such listing is on Home, stage one; this also covers the "Image unavailable" header:
+   1. Account A posts a listing named `IMAGE TEST` with any photo.
+   2. Upload a text file named `broken.jpg` to the top level of `food-images` (dashboard → Storage). Then run `update public.food_posts set image_url = 'broken.jpg' where name = 'IMAGE TEST' returning id, name, image_url;`, which should return 1 row.
+   3. Reload Home (Post → **Back**). The card and the details header show "Image unavailable".
+   4. Delete `broken.jpg` in Storage and reload Home again. The card and the details header show the demo produce photo.
+   5. Clean up in this order: run the SQL below to point the listing back at its photo, open Activity (which reloads My Listings), then delete `IMAGE TEST` there. Deleting it also removes its photo.
+
+   ```sql
+   update public.food_posts p
+   set image_url = o.name
+   from storage.objects o
+   where p.name = 'IMAGE TEST'
+     and o.bucket_id = 'food-images'
+     and o.name like ('%/' || p.id::text || '/%')
+   returning p.id, p.name, p.image_url;
+   ```
 3. **Dialog text:** in Activity, open one record per tab. My Listings ends with "This is your live Supabase listing.", My Reservations with "This is your live reservation.", My Donations with "This is a live reservation on your listing."
 4. **Feed after cancel:** B reserves part of A's listing, cancels it in Activity → My Reservations, then goes to Home with the bottom bar. The listing shows the restored quantity (and is back on the feed if B had reserved all of it).
 5. **Greeting:** sign in as A: Home says "Good morning/afternoon/evening, <A's first name> 👋" matching the device time. Sign in as B: it shows B's first name.
@@ -478,7 +498,7 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 4. **Own listing:** A opens their own listing: the button reads "Your listing", and tapping it (or Allergens/Storage) shows "You cannot message yourself…".
 5. **Reservation alerts:** B reserves part of A's listing → A gets "New reservation" in Alerts. B cancels → A gets "Reservation cancelled". B reserves again and A marks it claimed → B gets "Reservation claimed". Tapping a reservation alert opens Activity on My Donations (A) or My Reservations (B).
 6. **Chat from Activity:** A → Activity → My Donations → record → "Message recipient", and B → My Reservations → record → "Message donor": both land in the same thread as step 1.
-7. **Preferences:** A → Profile → Preferences → Notifications → turns off "New messages" → Save ("Preferences saved to your account."). B sends a message: it arrives in A's chat, but A gets no new MESSAGE alert. Turn it back on afterwards. The same switches are in Alerts → settings icon.
+7. **Preferences:** A → Profile → Preferences → Notifications → turns off "New messages" → Save ("Preferences saved to your account."). B sends a message: it arrives in A's chat, but A gets no new MESSAGE alert. Turn it back on and Save, leave the page and reopen it: the switch is still on (§8.7 bug 1). While the page loads, it shows "Loading your alert settings…" rather than switches (§8.7 bug 2). Repeat both checks in Alerts → settings icon.
 8. **Mark read:** Alerts → "Mark shown as read": the unread count and the bell badge go to 0 and stay 0 after reopening the app.
 9. **Token refresh:** leave the app open on Home for more than an hour, then have the other account send a message: it still arrives live. (Realtime is re-authenticated every 5 minutes; §8.3.)
 10. **Regression:** because the Ktor engine changed to OkHttp, repeat the Phase 1/2 regression and the A/B reservation test above.
@@ -495,10 +515,17 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 | 2026-09-25 | same (no code changes since 10:04) | Developer | Passed | Phase 3: cancel (Account B). A "Reservation" dialog on Activity showed "Reservation cancelled. The quantity is available again."; the record then showed Cancelled with no Cancel button; no leftover popup on Home. |
 | 2026-09-25 | same | Developer | Passed | Phase 3: mark claimed (Account A). A "Reservation" dialog on Activity showed "Reservation marked as claimed."; the record then showed Claimed with no Mark claimed button; B saw Claimed with no Cancel button; no leftover popup on Home. |
 | 2026-09-25 | same | Developer | Passed | Phase 3: Recommended for You image. Each card showed its listing's uploaded photo, matching the "Available near you" list. |
+| 2026-09-25 | `85c9263` (branch `claude/focused-dirac-oy16ck`) | Developer | Passed | §3.5 checks 1, 3 and 4. Food details showed the listing's own photo, description and pickup location, and "No description provided." for a listing without one. The Activity dialogs ended with the new lines in My Reservations and My Donations; My Listings kept its line. After B cancelled a partial reservation, Home showed the full quantity again without a new sign-in. After B reserved a whole listing it left Home, and after the cancel it came back with its full quantity. |
+| 2026-09-25 | same | Developer | Passed | Regression on this build: switching accounts (sign-out, sign-in); create a listing with an image (shown on Home); delete a listing (gone from Home and My Listings); own listing shows "Your listing / You cannot reserve it"; reserve (Home quantity dropped); the cancel and Mark claimed messages. |
+| 2026-09-25 | same | Developer | Passed | §3.5 check 2 with a staged listing (`IMAGE TEST`, steps under check 2). While its photo path pointed at a file that is not an image, the Home card and the details header showed "Image unavailable". After that file was deleted, both showed the demo produce photo. |
+| 2026-09-25 | `266325b` (branch `claude/focused-dirac-oy16ck`), migration applied | Developer | Passed, with one failure | Phase 4 test on one phone, signing out between accounts. Passed: greeting "Good evening, <first name> 👋"; the chat icon and the Messages inbox; "Message Donor" chat; the prefilled Allergens question; "Your listing" on your own listing; "Message donor"/"Message recipient" from Activity; the New reservation, Reservation cancelled and Reservation claimed alerts, each opening the right Activity tab; turning "New messages" off suppressed message alerts; "Mark shown as read"; deleting the listing removed its thread. **Failed:** turning "New messages" back on did not save (§8.7 bug 1). |
+| 2026-09-25 | same | Developer | Passed | Regression on the Phase 4 build (OkHttp engine): feed, create a listing with a photo, reserve, cancel, claim, delete. |
+| 2026-09-25 | same | Developer | Partly checked | Phase 4 live test on two phones. Realtime connected ("Connected to realtime websocket!"). `realtime.subscription` held one `notifications` subscription per phone, with `claims_role` = authenticated and issuer `https://securetoken.google.com/salusalo`. Replaying the RLS check as account A passed: with `request.jwt.claims` set from the subscription and role authenticated, `is_salusalo_firebase_jwt()` was true, `current_salusalo_profile_id()` returned A's profile, and A's alerts were visible. The API logs show the sender's open chat receiving its own message live (`send_message`, then `mark_conversation_read` about 1 s later). The "live alert" step failed only because A's `message_alerts` was still false (bug 1). **Not yet confirmed:** live chat between the two phones, the live reservation alert, and the token refresh after more than 1 hour. |
 
 - **Build:** the test phone's app code was deployed on 2026-09-25 at 10:37 (+08:00), after the last source change (10:04), so it matches the working tree above. That same code was committed on 2026-09-25, with no source changes after 10:04. The build on any second device was not checked.
-- **Phase 3 sign-off:** on 2026-09-25 the developer declared Phases 1–3 complete and manually verified. The cancel, claim and Recommended for You tests were then run and passed (rows above). These checks still have no individual test record:
-  - from the optional follow-up checks above: the fully reserved listing in My Listings, a cancelled listing's return to the feed, over-quantity, and reserving your own listing;
+- **§3.5 test build:** the developer installed commit `85c9263` from Android Studio, with no local source changes, and followed a step-by-step script covering §3.5 checks 1, 3 and 4 (including a full reservation in check 4) plus the regression steps above. §3.5 check 2 could not be run as written: the "lemon dou" listings were no longer on Home; only the listings created during this test were. The reason was not checked; the feed hides expired and fully reserved listings. Check 2 was then run with a staged listing (row above).
+- **Phase 3 sign-off:** on 2026-09-25 the developer declared Phases 1–3 complete and manually verified. The cancel, claim and Recommended for You tests were then run and passed (rows above). Two optional follow-up checks passed later, in the §3.5 test: reserving your own listing ("Your listing / You cannot reserve it") and a cancelled listing's return to the feed. These checks still have no individual test record:
+  - from the optional follow-up checks above: the fully reserved listing in My Listings, and over-quantity;
   - §3.4 check 5 (tab reload) and the bottom-bar step in check 3;
   - the concurrency and negative ownership tests (§2.11).
 
@@ -555,15 +582,18 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
    - The tab label decision (§3.1).
    - How the two "lemon dou" images went missing (§3.4).
 8. **Commit the work since `d4f65fe`.** Done on 2026-09-25: the §3.2–§3.4 code changes, `docs/` and `CLAUDE.md`.
+9. **Known-issue fixes (§3.5).** Made after sign-off in a Claude Code web session (commit `85c9263`). Built and manually tested on 2026-09-25 (results log), then merged into `master` through pull request #1 on 2026-09-25 (merge commit `85e2bf4`).
 
 ### Phase 4 — Messaging and Notifications (in progress)
 
 Started on 2026-09-25 at the developer's request; scope and status are in §8. Remaining steps:
 
-1. Apply `supabase/migrations/20260926_phase4_messaging_notifications.sql` in the Supabase SQL Editor and check the Realtime publication.
-2. Build with `assembleDebug` (not possible in the cloud session that wrote the code).
-3. Run the Phase 4 test in §4 and the regression, and record the results in the results log.
-4. Sign off Phase 4.
+1. Apply `supabase/migrations/20260926_phase4_messaging_notifications.sql` in the Supabase SQL Editor and check the Realtime publication. **Done on 2026-09-25.**
+2. Build with `assembleDebug`. **Passed at `266325b` on 2026-09-25.**
+3. Run the Phase 4 test in §4 and the regression, and record the results in the results log. **Done on 2026-09-25 on one phone**, with one failure (§8.7 bug 1). The live two-phone checks are partly done.
+4. Fix the two preference bugs (§8.7). **Fixed in code on 2026-09-25, not built or retested.**
+5. Build again, retest the preference switches on both screens, and finish the live checks: chat between the two phones, a live reservation alert, and the token refresh after more than 1 hour.
+6. Sign off Phase 4.
 
 Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow; neither has started.
 
@@ -571,11 +601,11 @@ Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow; n
 
 ## 7. Other observations (not scheduled; verify before acting)
 
-- **Food details screen.** The `FoodDetailsScreen` header shows the demo drawable (`MainActivity.kt` L2333–2338), not the uploaded image. Its description, allergens and "Pickup Address" are canned text (L2288–2314, L2560) rather than the post's data. **Header image, description and pickup address changed in code on 2026-09-25 (§3.5); not built or tested yet.** Allergens stay generic because they are not saved.
+- **Food details screen.** Since §3.5 (verified on 2026-09-25) the header shows the uploaded image, and the description and "Pickup Address" come from the post. Still generic: allergens (not saved), Storage Note, Pickup Window (shows the listing status), and the map address in `FoodActions.kt`. The "Distance" box shows the pickup location, because `toHomeFood()` puts `pickupLocation` in `distance`.
 - **Dropped requests.** Since §3.4, feed and My Listings loads requested during another `FoodViewModel` request are queued, not dropped. Still ignored while any request is running: `FoodViewModel.createPost()`/`deletePost()`, and every `ReservationViewModel` request (for example a tab-tap reload during a running refresh).
-- **No refresh after cancel or claim.** The Home feed does not reload after either action, and there is no realtime update across devices. **Reload after cancel added in code on 2026-09-25 (§3.5); not built or tested yet.** Claim does not change the feed; realtime updates are still missing.
+- **No realtime updates.** Since §3.5 (verified on 2026-09-25) the Home feed reloads after a cancel. Claim does not change the feed. Nothing updates in real time across devices.
 - **Placeholder or hard-coded UI values:**
-  - the greeting "Good evening, Mika". **Changed in code on 2026-09-25 (§3.5): it now uses the signed-in profile's first name and the time of day. Not built or tested yet.**
+  - the greeting "Good evening, Mika". **Changed on 2026-09-25 (§3.5, commit `851e8cb`): it now uses the signed-in profile's first name and the time of day. Built; the evening greeting was seen in the Phase 4 test on 2026-09-25.**
   - the location "Del Rosarrio, Balilihan";
   - "Browse all 10 food listings";
   - Activity metrics 48 / 128;
@@ -589,7 +619,12 @@ Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow; n
 
 ## 8. Phase 4 — Messaging and Notifications
 
-**Status (2026-09-25): implemented in code, not built with AGP, migration not applied to the live project, not tested on a device.** Scope chosen by the developer: chat per listing; in-app alerts only (no push); live updates with Supabase Realtime; notification preferences stored in Supabase.
+**Status (2026-09-25): in progress.**
+- `assembleDebug` passed at `266325b`. The migration was applied to the live project, and `messages` and `notifications` are in the `supabase_realtime` publication.
+- The one-phone Phase 4 test and the regression passed, except saving a preference switched back on.
+- On two phones, Realtime connects and passes RLS with the Firebase token. The other live checks are still to do ([results log](#results-log)).
+- Two preference bugs are fixed in code but **not yet built or retested** (§8.7).
+ Scope chosen by the developer: chat per listing; in-app alerts only (no push); live updates with Supabase Realtime; notification preferences stored in Supabase.
 
 ### 8.1 Database (`supabase/migrations/20260926_phase4_messaging_notifications.sql`)
 
@@ -637,11 +672,13 @@ Before Phase 4, recipients never saw the donor's name. In a conversation, **both
 
 | Item | Implemented (code) | Verified | Not yet verified |
 |---|---|---|---|
-| Migration applies and re-runs | Yes | Local Postgres 16 with Supabase-like stubs (2026-09-25) | Live Supabase project |
-| RPCs, RLS denials, alerts, preferences | Yes (SQL) | Local three-account SQL test (§8.6) | Live project; Realtime delivery with RLS |
-| Kotlin data layer and ViewModels | Yes | Type-checked (§8.6) | AGP build; device run |
-| Chat, inbox, alerts, preferences UI | Yes | Type-checked (§8.6) | AGP build; §4 Phase 4 test |
-| Ktor engine change (OkHttp) | Yes | — | Phase 1–3 regression |
+| Migration applies and re-runs | Yes | Local Postgres 16 with Supabase-like stubs; applied to the live project (2026-09-25) | — |
+| RPCs, RLS denials, alerts, preferences | Yes (SQL) | Local three-account SQL test (§8.6); the one-phone Phase 4 test (2026-09-25) | Negative tests on the live project |
+| Realtime with Firebase Third-Party Auth | Yes | Connects; the subscriptions carry the Firebase claims; the RLS replay as account A passes; the sender's own message arrives live (2026-09-25) | Live chat between two phones; live reservation alert; token refresh after more than 1 hour |
+| Kotlin data layer and ViewModels | Yes | AGP build at `266325b`; device run (2026-09-25) | — |
+| Chat, inbox, alerts, preferences UI | Yes | The one-phone Phase 4 test (2026-09-25), except saving a switch turned back on | The retest of §8.7 |
+| Preference fixes (§8.7) | Yes (2026-09-25) | Type-checked; JSON encoding checked | AGP build; device retest |
+| Ktor engine change (OkHttp) | Yes | The regression on the Phase 4 build (2026-09-25) | Sign-up and the password-reset email were not reported |
 
 ### 8.6 How the Phase 4 code was checked (2026-09-25)
 
@@ -649,3 +686,19 @@ The cloud session that wrote Phase 4 has no Android SDK, and Google's Maven repo
 - **SQL:** all five migrations were run in order on a local PostgreSQL 16 with stand-ins for Supabase's `auth.jwt()`, roles, Storage tables and the `supabase_realtime` publication; the Phase 4 file was then re-run without errors. A test with three accounts (A donor, B recipient, C outsider) confirmed: starting a thread and messaging; unread counts and read marking; MESSAGE and reservation alerts (created, cancelled, claimed); the same thread from the listing and from the reservation; the preference switch suppressing message alerts; the preferences upsert; and the denials (messaging your own listing, direct inserts into `messages`/`notifications`, calling `notify_user`, a non-participant reading, sending or opening a thread, writing another user's preferences, calls without a valid token).
 - **Kotlin:** every app source file was compiled with kotlinc 2.2.10 plus the Compose and serialization compiler plugins, against the real supabase-kt 3.5.0 JVM jars and Compose Multiplatform desktop jars, with small stand-ins for Android, AndroidX Activity/Lifecycle and Firebase APIs. It compiled with no errors and no warnings in the new code. This checks types and API usage only; it is not an Android build.
 
+### 8.7 Bugs found in the device test (2026-09-25)
+
+**Status: fixed in code on 2026-09-25, not yet built or retested.** No SQL or migration change.
+
+1. **A preference switched back on is never saved.** In Profile → Preferences → Notifications (and in Alerts → settings), turning "New messages" off saved, but turning it back on reported "Preferences saved to your account." while `message_alerts` stayed false.
+   - **Cause.** supabase-kt 3.5.0's default serializer is `Json { ignoreUnknownKeys = true }`, without `encodeDefaults`. kotlinx.serialization therefore leaves out properties equal to their default. `NotificationPreferences` defaults all four booleans to `true`, so a `true` value was missing from the upsert body in `NotificationRepository.savePreferences()`. PostgREST's merge-duplicates updates only the columns it receives.
+   - This affected all four switches on both screens.
+   - **Fix** (`model/AppNotification.kt`): `@EncodeDefault` on `messageAlerts`, `reservationAlerts`, `recommendations` and `pickupReminders`. The defaults stay, for the all-on fallback in `getPreferences()`.
+   - Checked here: encoding `NotificationPreferences(userId = "x")` with that `Json` now gives all four keys.
+   - `encodeDefaults` was not turned on globally, because that would change the inserts of other models.
+2. **The switches show on before the saved settings load.**
+   - **Fix.** The Alerts settings dialog (`AlertScreen.kt`) and the Notifications page (`ProfileSections.kt`) show "Loading your alert settings…" instead of the account switches until the settings have loaded. Save stays disabled until then. "Notification sound" (on the device) is still shown.
+   - `SectionButton` gained an optional `enabled` parameter.
+   - If loading fails, the page keeps showing "Loading…" until it is reopened; the error is not shown there.
+
+**Not fixed (noted only).** The unused `FoodRepository.updateFoodPost()` sends a whole `FoodPost` through the same serializer. Any field equal to its default would be left out of the update. Fix it before anything calls it.

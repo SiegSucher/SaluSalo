@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Phase 1 — Backend Foundation: complete.
 - Phase 2 — Food Listings: complete.
 - Phase 3 — Reservations: complete.
-- Phase 4 — Messaging and Notifications: **in progress** (started 2026-09-25). Implemented in code: chat per listing, in-app alerts, Realtime, preferences in Supabase. Not built with AGP, migration not applied, not tested on a device (`PROJECT_STATUS.md` §8).
+- Phase 4 — Messaging and Notifications: **in progress** (started 2026-09-25). Implemented in code: chat per listing, in-app alerts, Realtime, preferences in Supabase. Built, migration applied, and partly tested on devices on 2026-09-25. Two preference bugs are fixed in code but not yet retested (`PROJECT_STATUS.md` §8).
 - Phase 5 — Maps, Reviews, Reports: not started.
 - Phase 6 — Admin and Final Release: not started.
 - Read `docs/PROJECT_STATUS.md` first. It has the detailed status, the test results and the two-account manual test.
@@ -141,12 +141,19 @@ Details, test results and line references are in `docs/PROJECT_STATUS.md`.
    - the Recommended for You image;
    - the missing-image fallback on the feed;
    - the Phase 1/2 regression.
-   - Checks with no test record are listed under the results log in `docs/PROJECT_STATUS.md` §4 (for example tab reload, the over-quantity error and reserving your own listing). Do not treat them as verified.
-2. **Committed.** The work since `d4f65fe` (the Recommended and reservation image changes and the load-failure fixes, `PROJECT_STATUS.md` §3.2–§3.4), `docs/` and this file were committed on 2026-09-25. Commit only when the user asks.
-3. **Known issues fixed in code on 2026-09-25, not yet built or tested** (`PROJECT_STATUS.md` §3.5):
+   - Checks with no test record are listed under the results log in `docs/PROJECT_STATUS.md` §4 (for example tab reload and the over-quantity error). Do not treat them as verified.
+2. **Committed.** The work since `d4f65fe` (the Recommended and reservation image changes and the load-failure fixes, `PROJECT_STATUS.md` §3.2–§3.4), `docs/` and this file were committed on 2026-09-25. The §3.5 fixes (commit `85c9263`) came from pull request #1, merged into `master` on 2026-09-25 (`85e2bf4`). Commit only when the user asks.
+3. **Known issues fixed on 2026-09-25 and verified on a device** (`PROJECT_STATUS.md` §3.5):
    - Reservation details dialogs no longer end with the listing text "This is your live Supabase listing."
    - The `FoodDetailsScreen` header shows the uploaded image, and the screen shows the post's description and pickup location.
    - The Home feed reloads after a cancel. Nothing updates in real time across devices (still open).
-   - The Home greeting uses the signed-in profile's first name and the time of day instead of "Good evening, Mika".
-4. **Images missing from Storage.** On 2026-09-25 two listings referenced image files that no longer existed in `food-images`; how they were lost is unknown. The app now loads such listings without an image (`PROJECT_STATUS.md` §3.4).
-5. **Phase 4 (Messaging and Notifications) is in progress.** Implemented in code on 2026-09-25 (`PROJECT_STATUS.md` §8). The SQL was tested on a local Postgres and the Kotlin was type-checked, but there has been no AGP build, the migration has not been applied to the live project, and nothing has been tested on a device. Remaining: apply the migration, build, run the Phase 4 test in `PROJECT_STATUS.md` §4 plus the regression (the Ktor engine changed).
+   - The Home greeting uses the signed-in profile's first name and the time of day instead of "Good evening, Mika". This came after pull request #1 (commit `851e8cb`). The Phase 4 test on 2026-09-25 showed "Good evening, <first name> 👋"; the morning and afternoon greetings were not checked.
+4. **Images missing from Storage.** On 2026-09-25 two listings referenced image files that no longer existed in `food-images`; how they were lost is unknown. The app now loads such listings without an image (`PROJECT_STATUS.md` §3.4). By the §3.5 test later that day they were no longer on Home; why was not checked.
+5. **Phase 4 (Messaging and Notifications) is in progress** (`PROJECT_STATUS.md` §8). Status on 2026-09-25:
+   - Built: `assembleDebug` passed at `266325b`. The migration was applied to the live project, and `messages` and `notifications` are in the `supabase_realtime` publication.
+   - The one-phone A/B Phase 4 test and the regression passed, except that a notification switch turned back on was not saved.
+   - On two phones, Realtime connects and passes the RLS check with the Firebase token. Not yet confirmed: live chat between the two phones, a live reservation alert, and the token refresh after more than 1 hour.
+   - **Two bugs, fixed in code and not yet retested** (`PROJECT_STATUS.md` §8.7):
+     1. A notification preference switched back on was never saved. supabase-kt's `Json` leaves out values equal to their default, so `true` was missing from the upsert. The fix puts `@EncodeDefault` on the four booleans in `NotificationPreferences`.
+     2. The switches showed on before the saved settings loaded. They now show "Loading your alert settings…" and Save stays disabled until then.
+   - Not fixed: the unused `FoodRepository.updateFoodPost()` has the same problem with dropped defaults. Do not turn on `encodeDefaults` globally; that would change the inserts of other models.

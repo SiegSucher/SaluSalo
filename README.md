@@ -2,7 +2,7 @@
 
 Salu-Salo is an Android app for sharing surplus food within a community to reduce food waste. Donors post surplus food with a photo, quantity, pickup location and expiry date. Recipients browse the available listings and reserve some or all of a listing for pickup. The UI uses Philippine pesos (₱) and Philippine sample locations.
 
-**Status (2026-09-25):** Phases 1–3 of 6 (backend foundation, food listings and reservations) are complete and were signed off after manual testing. Phase 4, Messaging and Notifications, is in progress: it is implemented in code but not yet built, deployed to Supabase or tested on a device. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
+**Status (2026-09-25):** Phases 1–3 of 6 (backend foundation, food listings and reservations) are complete and were signed off after manual testing. Phase 4, Messaging and Notifications, is in progress: it is built, its migration is applied, and it has been partly tested on devices. Fixes for two notification-preference bugs are not yet retested. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
 
 ## Features
 
@@ -12,8 +12,8 @@ Working against the live backend:
 - **Food listings:** post a listing with a name, photo, category, quantity, pickup location and expiry date. Browse the feed of available, unexpired listings, and view or delete your own.
 - **Reservations:** reserve part or all of another user's listing. The recipient can cancel until the donor marks the reservation claimed. The donor sees the recipient's display name, but not their email or phone number. The server updates the remaining quantity atomically.
 - **Activity:** the My Listings, My Reservations and My Donations tabs.
-- **Messages (Phase 4, not yet tested):** message a listing's donor from its details screen or from a reservation; live chat and a Messages inbox with unread counts. Participants see each other's display name only.
-- **Alerts (Phase 4, not yet tested):** in-app alerts for new messages and for reservations being made, cancelled or claimed, with unread badges and settings saved to your account.
+- **Messages (Phase 4, partly tested):** message a listing's donor from its details screen or from a reservation; live chat and a Messages inbox with unread counts. Participants see each other's display name only.
+- **Alerts (Phase 4, partly tested):** in-app alerts for new messages and for reservations being made, cancelled or claimed, with unread badges and settings saved to your account.
 
 Demo or preview-only, with no backend yet: the Claim Now / Buy Now dialogs, the Purchases and Claims tabs, reviews, and the Google, Apple and Facebook sign-in buttons. There are no push notifications yet. Profile edits and most settings are saved only on the device; the profile name and notification preferences come from Supabase.
 
