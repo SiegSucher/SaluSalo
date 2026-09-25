@@ -8,6 +8,7 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
+import io.github.jan.supabase.storage.storage
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -16,6 +17,7 @@ class ReservationRepository(
 ) {
     private val supabase = SupabaseClientProvider.client
     private val postgrest = supabase.postgrest
+    private val bucket = supabase.storage.from("food-images")
 
     suspend fun createReservation(foodPostId: String, quantity: Int): Reservation {
         require(quantity > 0) { "Choose a quantity greater than zero." }
@@ -37,7 +39,9 @@ class ReservationRepository(
         // donor's own food posts; it does not broaden profile-table RLS access.
         val rows = postgrest.rpc("get_donor_reservations").decodeList<DonorReservationRow>()
         if (rows.isEmpty()) return emptyList()
-        val posts = supabase.from("food_posts").select().decodeList<FoodPost>().associateBy { it.id }
+        val ids = rows.map { it.foodPostId }.toSet()
+        val posts = supabase.from("food_posts").select().decodeList<FoodPost>()
+            .filter { it.id in ids }.map { it.withSignedImageUrl(bucket) }.associateBy { it.id }
         return rows.mapNotNull { row ->
             posts[row.foodPostId]?.let { post ->
                 ReservationDisplay(row.toReservation(), post, row.recipientName)
@@ -52,7 +56,8 @@ class ReservationRepository(
     private suspend fun List<Reservation>.toDisplays(): List<ReservationDisplay> {
         if (isEmpty()) return emptyList()
         val ids = map { it.foodPostId }.toSet()
-        val posts = supabase.from("food_posts").select().decodeList<FoodPost>().associateBy { it.id }
+        val posts = supabase.from("food_posts").select().decodeList<FoodPost>()
+            .filter { it.id in ids }.map { it.withSignedImageUrl(bucket) }.associateBy { it.id }
         return mapNotNull { reservation -> posts[reservation.foodPostId]?.let { ReservationDisplay(reservation, it) } }
     }
 }

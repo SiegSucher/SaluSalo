@@ -1655,6 +1655,7 @@ private fun HomeScreen(
                                 RecommendationCard(
                                     title = food.title,
                                     photo = food.photo,
+                                    imageUrl = food.imageUrl,
                                     badge = if (food.distanceValue <= 1.0) {
                                         "Nearby"
                                     } else {
@@ -2006,6 +2007,7 @@ private data class HomeFood(
 private fun RecommendationCard(
     title: String,
     photo: Int,
+    imageUrl: String?,
     badge: String,
     price: String,
     distance: String,
@@ -2024,14 +2026,35 @@ private fun RecommendationCard(
     ) {
         Column {
             Box {
-                Image(
-                    painter = painterResource(photo),
-                    contentDescription = title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(94.dp)
-                )
+                var imageFailed by remember(imageUrl) { mutableStateOf(false) }
+                if (imageUrl != null && !imageFailed) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(94.dp),
+                        onError = { imageFailed = true }
+                    )
+                } else if (imageUrl == null) {
+                    Image(
+                        painter = painterResource(photo),
+                        contentDescription = title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(94.dp)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(94.dp)
+                            .background(Color(0xFFF2F6E6)),
+                        contentAlignment = Alignment.Center
+                    ) { Text("Image unavailable", fontSize = 10.sp, color = Gray) }
+                }
 
                 Text(
                     badge,

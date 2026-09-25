@@ -20,10 +20,7 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
 
-    fun refresh() = request {
-        _myReservations.value = repository.getMyReservations()
-        _donorReservations.value = repository.getReservationsForMyFoodPosts()
-    }
+    fun refresh() = request { refreshLists() }
 
     fun reserve(foodPostId: String, quantity: Int) = request {
         repository.createReservation(foodPostId, quantity)
@@ -51,9 +48,14 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
 
     fun clearMessage() { _message.value = null }
 
+    // Loads each list on its own, so a failure in one cannot stop the other from
+    // loading. The first failure is still reported through [message].
     private suspend fun refreshLists() {
-        _myReservations.value = repository.getMyReservations()
-        _donorReservations.value = repository.getReservationsForMyFoodPosts()
+        val mine = runCatching { repository.getMyReservations() }
+            .onSuccess { _myReservations.value = it }
+        val donor = runCatching { repository.getReservationsForMyFoodPosts() }
+            .onSuccess { _donorReservations.value = it }
+        (mine.exceptionOrNull() ?: donor.exceptionOrNull())?.let { throw it }
     }
 
     private fun request(block: suspend () -> Unit) {

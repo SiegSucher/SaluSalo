@@ -7,8 +7,10 @@ import com.example.salusalo.model.NewFoodPost
 import com.google.firebase.auth.FirebaseAuth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
+import io.github.jan.supabase.storage.BucketApi
 import io.github.jan.supabase.storage.storage
 import java.util.UUID
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.hours
 
 class FoodRepository(
@@ -27,7 +29,7 @@ class FoodRepository(
                 filter("expiration_date", FilterOperator.GT, now)
             }
         }.decodeList<FoodPost>()
-        return posts.map { post -> post.withSignedImageUrl() }
+        return posts.map { post -> post.withSignedImageUrl(bucket) }
     }
 
     suspend fun getUserFoodPosts(): List<FoodPost> {
@@ -35,7 +37,7 @@ class FoodRepository(
         val posts = supabase.from("food_posts").select {
             filter { filter("donor_id", FilterOperator.EQ, profile.id) }
         }.decodeList<FoodPost>()
-        return posts.map { post -> post.withSignedImageUrl() }
+        return posts.map { post -> post.withSignedImageUrl(bucket) }
     }
 
     suspend fun createFoodPost(
@@ -71,14 +73,16 @@ class FoodRepository(
             expirationDate = draft.expirationDate
         )
 
-        return try {
+        // Remove the uploaded image only when the insert itself fails. Once the
+        // row exists it references this image, so a later decode or signing
+        // problem must not delete it.
+        val inserted = try {
             supabase.from("food_posts").insert(newPost) { select() }
-                .decodeSingle<FoodPost>()
-                .withSignedImageUrl()
         } catch (error: Exception) {
             runCatching { bucket.delete(imagePath) }
             throw error
         }
+        return inserted.decodeSingle<FoodPost>().withSignedImageUrl(bucket)
     }
 
     suspend fun updateFoodPost(post: FoodPost): FoodPost {
@@ -87,7 +91,7 @@ class FoodRepository(
         return supabase.from("food_posts").update(post) {
             select()
             filter { filter("id", FilterOperator.EQ, post.id) }
-        }.decodeSingle<FoodPost>().withSignedImageUrl()
+        }.decodeSingle<FoodPost>().withSignedImageUrl(bucket)
     }
 
     suspend fun deleteFoodPost(post: FoodPost) {
@@ -98,9 +102,20 @@ class FoodRepository(
         }
         post.imageUrl?.let { path -> runCatching { bucket.delete(path) } }
     }
+}
 
-    private suspend fun FoodPost.withSignedImageUrl(): FoodPost =
-        imageUrl?.takeIf { it.isNotBlank() }?.let { path ->
-            copy(displayImageUrl = bucket.createSignedUrl(path, 1.hours))
-        } ?: this
+/**
+ * Adds a 1-hour signed URL for the post's private food-images path. If signing
+ * fails (for example the object is missing or the request times out), only this
+ * post is left without an image; the list it belongs to still loads.
+ */
+internal suspend fun FoodPost.withSignedImageUrl(bucket: BucketApi): FoodPost {
+    val path = imageUrl?.takeIf { it.isNotBlank() } ?: return this
+    return try {
+        copy(displayImageUrl = bucket.createSignedUrl(path, 1.hours))
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        this
+    }
 }

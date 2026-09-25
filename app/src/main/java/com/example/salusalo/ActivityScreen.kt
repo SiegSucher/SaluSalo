@@ -83,6 +83,17 @@ fun ActivityScreen(
         reservationViewModel.refresh()
     }
 
+    // Show reservation results (cancel, claim, or a failed load) on this screen,
+    // then clear them so they do not reappear later in the food details dialog.
+    val reservationMessage by reservationViewModel.message.collectAsStateWithLifecycle()
+    var reservationNotice by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(reservationMessage) {
+        reservationMessage?.let {
+            reservationNotice = it
+            reservationViewModel.clearMessage()
+        }
+    }
+
     var tab by rememberSaveable { mutableStateOf("My Listings") }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var activeOnly by rememberSaveable { mutableStateOf(false) }
@@ -524,6 +535,11 @@ fun ActivityScreen(
                                 tab = label
                                 activeOnly = false
                                 expanded = false
+                                // Reservations can change on another device while this
+                                // screen is open, so reload them when their tab is tapped.
+                                if (label == "My Reservations" || label == "My Donations") {
+                                    reservationViewModel.refresh()
+                                }
                             },
                             shape = RoundedCornerShape(15.dp),
                             color = Color.Transparent,
@@ -738,6 +754,18 @@ fun ActivityScreen(
                     }
                 ) {
                     Text("Post Food")
+                }
+            }
+        )
+    }
+    if (reservationNotice.isNotBlank()) {
+        AlertDialog(
+            onDismissRequest = { reservationNotice = "" },
+            title = { Text("Reservation") },
+            text = { Text(reservationNotice) },
+            confirmButton = {
+                TextButton(onClick = { reservationNotice = "" }) {
+                    Text("OK")
                 }
             }
         )
