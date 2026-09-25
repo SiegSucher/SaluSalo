@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-09-25. Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25. Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
+_Last updated: 2026-09-25. Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -19,7 +19,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 |---|---|---|
 | Phase 1: Backend Foundation | Firebase email/password auth, Supabase client using Firebase tokens, `users` profiles, private Storage buckets | **Complete.** Do not redo. Authentication/profile regression passed on 2026-09-25 ([results log](#results-log)). |
 | Phase 2: Food Listings | `food_posts`, create listing with image upload to `food-images`, feed, My Listings, delete | **Complete.** Do not redo. Regression passed on 2026-09-25 for both accounts: Home/feed, create listing, delete listing ([results log](#results-log)). |
-| Phase 3: Reservations | Reserve, cancel and claim with atomic quantity; recipient and donor views | **Complete.** Signed off by the developer on 2026-09-25. The A/B reservation test, the missing-image fallback/feed check, and the cancel, claim and Recommended for You tests passed; the remaining checks without an individual test record are listed under the [results log](#results-log). The changes since `d4f65fe` were committed on 2026-09-25 (§6). |
+| Phase 3: Reservations | Reserve, cancel and claim with atomic quantity; recipient and donor views | **Complete.** Signed off by the developer on 2026-09-25. The A/B reservation test, the missing-image fallback/feed check, and the cancel, claim and Recommended for You tests passed; the remaining checks without an individual test record are listed under the [results log](#results-log). The changes since `d4f65fe` were committed on 2026-09-25 (§6). The known-issue fixes made after sign-off (§3.5) were built and manually tested on 2026-09-25. |
 | Phase 4: Messaging and Notifications | Known only by its roadmap title; not yet specified in the repo | **Not started** (next phase). |
 | Phase 5: Maps, Reviews, Reports | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 | Phase 6: Admin and Final Release | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
@@ -40,6 +40,9 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 - **After the §3.4 load-failure fixes:** `BUILD SUCCESSFUL in 16s` on 2026-09-25, same command.
   - `compileDebugKotlin` re-ran. Its only warning, a deprecated `Icons.Outlined.FormatListBulleted` in `ActivityScreen.kt`, was already present at `d4f65fe`; it appears because that file was recompiled.
   - No tests or lint were run, and the app was not installed or run.
+- **After the §3.5 known-issue fixes (commit `85c9263`):** `BUILD SUCCESSFUL in 29s` on 2026-09-25, same command.
+  - `compileDebugKotlin` re-ran. Its only warnings, the deprecated `Icons.Outlined.FormatListBulleted` (`ActivityScreen.kt`) and `Icons.Outlined.ArrowBack` (`MainActivity.kt`), were already present.
+  - No tests or lint were run. The developer then installed this code from Android Studio and ran the §3.5 checks ([results log](#results-log)).
 - **Automated tests:** only the Android Studio templates `ExampleUnitTest` and `ExampleInstrumentedTest` exist.
 
 ### Phase 1: what exists (summary)
@@ -224,16 +227,17 @@ Code involved:
 | Create reservation (RPC + Reserve button) | Yes | Passed 2026-09-25 (§4 A/B test) | — |
 | Quantity stepper + server quantity checks | Yes | Reserving the full quantity passed 2026-09-25 (§4 A/B test) | Over-quantity / stale-quantity error path |
 | Atomic quantity protection (row lock) | Yes (SQL) | None recorded | Concurrency test |
-| Cancellation | Yes | Passed 2026-09-25 (cancel test: Activity message, status Cancelled) | Restored quantity and the listing's return to the feed not reported separately |
+| Cancellation | Yes | Passed 2026-09-25 (cancel test: Activity message, status Cancelled). Restored quantity on Home after a partial cancel, and a fully reserved listing's return to Home after its cancel, 2026-09-25 (§3.5 check 4) | — |
 | Claiming | Yes | Passed 2026-09-25 (claim test: Activity message, both accounts see Claimed, B has no Cancel) | — |
 | My Reservations (recipient's own only) | Yes (separate tab) | Passed 2026-09-25 (§4 A/B test) | — |
 | My Donations (donor's posts only, recipient name) | Yes (separate tab) | Passed 2026-09-25 (§4 A/B test; the record showing the recipient's name was used in the claim test) | — |
 | My Listings (own posts) | Yes | Create and delete listing passed for both accounts, 2026-09-25 (Phase 2 regression) | — |
 | Server-side ownership rules | Yes (SQL) | None recorded | Negative tests (acting on another user's reservation) |
-| Listing quantity/status transitions | Yes (SQL) | None recorded | Observed in the app after reserve, cancel and claim |
+| Listing quantity/status transitions | Yes (SQL) | Seen on Home, 2026-09-25 (§3.5 check 4): the quantity after a partial reserve and after its cancel; a fully reserved listing left Home and came back with its full quantity after the cancel | The fully reserved listing in the donor's My Listings (quantity 0, "Reserved") |
 | Reservation images | Yes, in the 2026-09-25 change (§3.3); builds | Passed 2026-09-25 (§4 A/B test: image in both reservation views) | — |
 | Recommended for You real image | Yes, in the 2026-09-25 change (§3.2); builds | Passed 2026-09-25 (Recommended for You test) | — |
 | Load-failure fixes (per-post image signing, queued loads, independent reservation lists, Activity messages, tab reload) | Yes, in the 2026-09-25 change (§3.4); builds | Missing-image fallback/feed check passed 2026-09-25; the §4 A/B test also passed on this build; Activity messages passed 2026-09-25 (cancel and claim tests) | Tab reload (§4, §3.4 check 5) |
+| Known-issue fixes (food details data, reservation dialog text, feed reload after cancel) | Yes, in commit `85c9263` (§3.5); builds | Passed 2026-09-25 (§3.5 checks 1–4, including the "Image unavailable" header) | — |
 | Migrations applied to live Supabase | Partly confirmed: the §3.4 SQL checks (2026-09-25) show `food_posts`, `reservations` and `get_donor_reservations()` | n/a | The full list of applied migrations |
 
 ---
@@ -273,7 +277,7 @@ Phase 3 was signed off on 2026-09-25. These sections are kept as the record of t
 2. **Decide the tab label.** It is "My Donations" in code; it could become "Manage Reservations" or "My Donations / Manage Reservations". This is a label-only change.
 3. **Related issues seen in the same screen** (not fixed; fix only if in scope):
    - `ActivityScreen` never displays `reservationViewModel.message`, so success **and error** messages from Cancel and Mark claimed are not shown there. The message is not cleared either, so it pops up as a "Reservation" notice the next time any food details dialog opens (`MainActivity.kt` L2279–2287). **Changed in code on 2026-09-25 (§3.4): the Activity screen now shows and clears it. Verified on a device on 2026-09-25 (cancel and claim tests).**
-   - The details dialog for reservation records ends with "This is your live Supabase listing." (L686). That text was meant for listings. **Changed in code on 2026-09-25 (§3.5); not built or tested yet.**
+   - The details dialog for reservation records ends with "This is your live Supabase listing." (L686). That text was meant for listings. **Changed in code on 2026-09-25 (§3.5). Verified on a device on 2026-09-25.**
    - The reservation lists have no loading or error state.
 
 ### 3.2 Recommended for You image
@@ -359,7 +363,7 @@ Phase 3 was signed off on 2026-09-25. These sections are kept as the record of t
 
 ### 3.5 Known-issue fixes (after Phase 3 sign-off)
 
-**Status (2026-09-25): changed in code. Not built (the cloud session that made the change has no Android SDK) and not manually tested.** Run `assembleDebug` and the §4 "Checks for the §3.5 fixes" before treating any of it as done.
+**Status (2026-09-25): verified on a device.** The change was made in a Claude Code web session that had no Android SDK (commit `85c9263`, branch `claude/focused-dirac-oy16ck`). `assembleDebug` then passed locally, and the developer ran the §4 "Checks for the §3.5 fixes" on the phone: all four passed. No listing with a missing image was left on Home, so check 2 and the "Image unavailable" header were run with a staged test listing. Merged into `master` through pull request #1 on 2026-09-25.
 
 - **Reservation dialog text** (`ActivityScreen.kt`): the details dialog's closing line now depends on the record. My Listings keeps "This is your live Supabase listing."; My Donations shows "This is a live reservation on your listing."; My Reservations shows "This is your live reservation."
 - **Food details** (`MainActivity.kt`, `FoodDetailsScreen`):
@@ -462,7 +466,22 @@ Run the §3.4 SQL checks first, then install a build that contains §3.4.
 ### Checks for the §3.5 fixes
 
 1. **Food details:** open a listing that has a photo and a description. The header shows the uploaded photo, the text is the listing's description, and "Pickup Address" is its pickup location. A listing without a description shows "No description provided."
-2. **Missing image:** open one of the "lemon dou" listings (image missing from Storage). The header shows the demo produce photo.
+2. **Missing image:** open one of the "lemon dou" listings (image missing from Storage). The header shows the demo produce photo. If no such listing is on Home, stage one; this also covers the "Image unavailable" header:
+   1. Account A posts a listing named `IMAGE TEST` with any photo.
+   2. Upload a text file named `broken.jpg` to the top level of `food-images` (dashboard → Storage). Then run `update public.food_posts set image_url = 'broken.jpg' where name = 'IMAGE TEST' returning id, name, image_url;`, which should return 1 row.
+   3. Reload Home (Post → **Back**). The card and the details header show "Image unavailable".
+   4. Delete `broken.jpg` in Storage and reload Home again. The card and the details header show the demo produce photo.
+   5. Clean up in this order: run the SQL below to point the listing back at its photo, open Activity (which reloads My Listings), then delete `IMAGE TEST` there. Deleting it also removes its photo.
+
+   ```sql
+   update public.food_posts p
+   set image_url = o.name
+   from storage.objects o
+   where p.name = 'IMAGE TEST'
+     and o.bucket_id = 'food-images'
+     and o.name like ('%/' || p.id::text || '/%')
+   returning p.id, p.name, p.image_url;
+   ```
 3. **Dialog text:** in Activity, open one record per tab. My Listings ends with "This is your live Supabase listing.", My Reservations with "This is your live reservation.", My Donations with "This is a live reservation on your listing."
 4. **Feed after cancel:** B reserves part of A's listing, cancels it in Activity → My Reservations, then goes to Home with the bottom bar. The listing shows the restored quantity (and is back on the feed if B had reserved all of it).
 
@@ -478,10 +497,14 @@ Run the §3.4 SQL checks first, then install a build that contains §3.4.
 | 2026-09-25 | same (no code changes since 10:04) | Developer | Passed | Phase 3: cancel (Account B). A "Reservation" dialog on Activity showed "Reservation cancelled. The quantity is available again."; the record then showed Cancelled with no Cancel button; no leftover popup on Home. |
 | 2026-09-25 | same | Developer | Passed | Phase 3: mark claimed (Account A). A "Reservation" dialog on Activity showed "Reservation marked as claimed."; the record then showed Claimed with no Mark claimed button; B saw Claimed with no Cancel button; no leftover popup on Home. |
 | 2026-09-25 | same | Developer | Passed | Phase 3: Recommended for You image. Each card showed its listing's uploaded photo, matching the "Available near you" list. |
+| 2026-09-25 | `85c9263` (branch `claude/focused-dirac-oy16ck`) | Developer | Passed | §3.5 checks 1, 3 and 4. Food details showed the listing's own photo, description and pickup location, and "No description provided." for a listing without one. The Activity dialogs ended with the new lines in My Reservations and My Donations; My Listings kept its line. After B cancelled a partial reservation, Home showed the full quantity again without a new sign-in. After B reserved a whole listing it left Home, and after the cancel it came back with its full quantity. |
+| 2026-09-25 | same | Developer | Passed | Regression on this build: switching accounts (sign-out, sign-in); create a listing with an image (shown on Home); delete a listing (gone from Home and My Listings); own listing shows "Your listing / You cannot reserve it"; reserve (Home quantity dropped); the cancel and Mark claimed messages. |
+| 2026-09-25 | same | Developer | Passed | §3.5 check 2 with a staged listing (`IMAGE TEST`, steps under check 2). While its photo path pointed at a file that is not an image, the Home card and the details header showed "Image unavailable". After that file was deleted, both showed the demo produce photo. |
 
 - **Build:** the test phone's app code was deployed on 2026-09-25 at 10:37 (+08:00), after the last source change (10:04), so it matches the working tree above. That same code was committed on 2026-09-25, with no source changes after 10:04. The build on any second device was not checked.
-- **Phase 3 sign-off:** on 2026-09-25 the developer declared Phases 1–3 complete and manually verified. The cancel, claim and Recommended for You tests were then run and passed (rows above). These checks still have no individual test record:
-  - from the optional follow-up checks above: the fully reserved listing in My Listings, a cancelled listing's return to the feed, over-quantity, and reserving your own listing;
+- **§3.5 test build:** the developer installed commit `85c9263` from Android Studio, with no local source changes, and followed a step-by-step script covering §3.5 checks 1, 3 and 4 (including a full reservation in check 4) plus the regression steps above. §3.5 check 2 could not be run as written: the "lemon dou" listings were no longer on Home; only the listings created during this test were. The reason was not checked; the feed hides expired and fully reserved listings. Check 2 was then run with a staged listing (row above).
+- **Phase 3 sign-off:** on 2026-09-25 the developer declared Phases 1–3 complete and manually verified. The cancel, claim and Recommended for You tests were then run and passed (rows above). Two optional follow-up checks passed later, in the §3.5 test: reserving your own listing ("Your listing / You cannot reserve it") and a cancelled listing's return to the feed. These checks still have no individual test record:
+  - from the optional follow-up checks above: the fully reserved listing in My Listings, and over-quantity;
   - §3.4 check 5 (tab reload) and the bottom-bar step in check 3;
   - the concurrency and negative ownership tests (§2.11).
 
@@ -536,6 +559,7 @@ Run the §3.4 SQL checks first, then install a build that contains §3.4.
    - The tab label decision (§3.1).
    - How the two "lemon dou" images went missing (§3.4).
 8. **Commit the work since `d4f65fe`.** Done on 2026-09-25: the §3.2–§3.4 code changes, `docs/` and `CLAUDE.md`.
+9. **Known-issue fixes (§3.5).** Made after sign-off in a Claude Code web session (commit `85c9263`). Built and manually tested on 2026-09-25 (results log), then merged into `master` through pull request #1 on 2026-09-25 (merge commit `85e2bf4`).
 
 ### Next: Phase 4 — Messaging and Notifications
 
@@ -552,9 +576,9 @@ Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow; n
 
 ## 7. Other observations (not scheduled; verify before acting)
 
-- **Food details screen.** The `FoodDetailsScreen` header shows the demo drawable (`MainActivity.kt` L2333–2338), not the uploaded image. Its description, allergens and "Pickup Address" are canned text (L2288–2314, L2560) rather than the post's data. **Header image, description and pickup address changed in code on 2026-09-25 (§3.5); not built or tested yet.** Allergens stay generic because they are not saved.
+- **Food details screen.** Since §3.5 (verified on 2026-09-25) the header shows the uploaded image, and the description and "Pickup Address" come from the post. Still generic: allergens (not saved), Storage Note, Pickup Window (shows the listing status), and the map address in `FoodActions.kt`. The "Distance" box shows the pickup location, because `toHomeFood()` puts `pickupLocation` in `distance`.
 - **Dropped requests.** Since §3.4, feed and My Listings loads requested during another `FoodViewModel` request are queued, not dropped. Still ignored while any request is running: `FoodViewModel.createPost()`/`deletePost()`, and every `ReservationViewModel` request (for example a tab-tap reload during a running refresh).
-- **No refresh after cancel or claim.** The Home feed does not reload after either action, and there is no realtime update across devices. **Reload after cancel added in code on 2026-09-25 (§3.5); not built or tested yet.** Claim does not change the feed; realtime updates are still missing.
+- **No realtime updates.** Since §3.5 (verified on 2026-09-25) the Home feed reloads after a cancel. Claim does not change the feed. Nothing updates in real time across devices.
 - **Placeholder or hard-coded UI values:**
   - the greeting "Good evening, Mika";
   - the location "Del Rosarrio, Balilihan";

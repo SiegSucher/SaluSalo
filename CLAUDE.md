@@ -134,13 +134,13 @@ Details, test results and line references are in `docs/PROJECT_STATUS.md`.
    - the Recommended for You image;
    - the missing-image fallback on the feed;
    - the Phase 1/2 regression.
-   - Checks with no test record are listed under the results log in `docs/PROJECT_STATUS.md` §4 (for example tab reload, the over-quantity error and reserving your own listing). Do not treat them as verified.
-2. **Committed.** The work since `d4f65fe` (the Recommended and reservation image changes and the load-failure fixes, `PROJECT_STATUS.md` §3.2–§3.4), `docs/` and this file were committed on 2026-09-25. Commit only when the user asks.
-3. **Known issues fixed in code on 2026-09-25, not yet built or tested** (`PROJECT_STATUS.md` §3.5):
+   - Checks with no test record are listed under the results log in `docs/PROJECT_STATUS.md` §4 (for example tab reload and the over-quantity error). Do not treat them as verified.
+2. **Committed.** The work since `d4f65fe` (the Recommended and reservation image changes and the load-failure fixes, `PROJECT_STATUS.md` §3.2–§3.4), `docs/` and this file were committed on 2026-09-25. The §3.5 fixes (commit `85c9263`) came from pull request #1, merged into `master` on 2026-09-25 (`85e2bf4`). Commit only when the user asks.
+3. **Known issues fixed on 2026-09-25 and verified on a device** (`PROJECT_STATUS.md` §3.5):
    - Reservation details dialogs no longer end with the listing text "This is your live Supabase listing."
    - The `FoodDetailsScreen` header shows the uploaded image, and the screen shows the post's description and pickup location.
    - The Home feed reloads after a cancel. Nothing updates in real time across devices (still open).
-4. **Images missing from Storage.** On 2026-09-25 two listings referenced image files that no longer existed in `food-images`; how they were lost is unknown. The app now loads such listings without an image (`PROJECT_STATUS.md` §3.4).
+4. **Images missing from Storage.** On 2026-09-25 two listings referenced image files that no longer existed in `food-images`; how they were lost is unknown. The app now loads such listings without an image (`PROJECT_STATUS.md` §3.4). By the §3.5 test later that day they were no longer on Home; why was not checked.
 5. **Phase 4 (Messaging and Notifications) has not started.** This area has demo-only UI with no backend:
    - sample alerts (`AlertScreen.kt`);
    - the "Message Donor / Seller" demo chat (`FoodActions.kt`);
