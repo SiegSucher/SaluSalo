@@ -109,13 +109,17 @@ class FoodRepository(
  * fails (for example the object is missing or the request times out), only this
  * post is left without an image; the list it belongs to still loads.
  */
-internal suspend fun FoodPost.withSignedImageUrl(bucket: BucketApi): FoodPost {
-    val path = imageUrl?.takeIf { it.isNotBlank() } ?: return this
+internal suspend fun FoodPost.withSignedImageUrl(bucket: BucketApi): FoodPost =
+    bucket.signedUrlOrNull(imageUrl)?.let { copy(displayImageUrl = it) } ?: this
+
+/** A 1-hour signed URL for a private object path, or null if there is none or signing fails. */
+internal suspend fun BucketApi.signedUrlOrNull(path: String?): String? {
+    val objectPath = path?.takeIf { it.isNotBlank() } ?: return null
     return try {
-        copy(displayImageUrl = bucket.createSignedUrl(path, 1.hours))
+        createSignedUrl(objectPath, 1.hours)
     } catch (error: CancellationException) {
         throw error
     } catch (error: Exception) {
-        this
+        null
     }
 }
