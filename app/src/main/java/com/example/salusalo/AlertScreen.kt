@@ -52,7 +52,8 @@ private fun NotificationType.category() = when (this) {
 fun AlertsScreen(
     notificationViewModel: NotificationViewModel,
     onOpenConversation: (String) -> Unit,
-    onOpenActivity: (String) -> Unit
+    onOpenActivity: (String) -> Unit,
+    onOpenClaimedReservation: (String?) -> Unit
 ) {
     val alerts by notificationViewModel.notifications.collectAsStateWithLifecycle()
     val preferences by notificationViewModel.preferences.collectAsStateWithLifecycle()
@@ -252,7 +253,7 @@ fun AlertsScreen(
                                 NotificationType.MESSAGE ->
                                     alert.conversationId?.let(onOpenConversation)
                                 NotificationType.RESERVATION_CLAIMED ->
-                                    onOpenActivity("My Reservations")
+                                    onOpenClaimedReservation(alert.reservationId)
                                 else ->
                                     onOpenActivity("My Donations")
                             }

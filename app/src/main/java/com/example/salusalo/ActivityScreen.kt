@@ -22,6 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.example.salusalo.model.FoodPost
+import com.example.salusalo.model.ReservationStatus
+import com.example.salusalo.model.formatPeso
+import com.example.salusalo.model.reservationTotal
 import com.example.salusalo.viewmodel.FoodViewModel
 import com.example.salusalo.viewmodel.ReservationViewModel
 import com.example.salusalo.viewmodel.MessageViewModel
@@ -75,7 +78,10 @@ fun ActivityScreen(
     reservationViewModel: ReservationViewModel,
     messageViewModel: MessageViewModel,
     unreadAlerts: Int = 0,
-    initialTab: String = "My Listings"
+    initialTab: String = "My Listings",
+    // A reservation to open, from a "Reservation claimed" alert.
+    focusReservationId: String? = null,
+    onFocusHandled: () -> Unit = {}
 ) {
     val myPosts by foodViewModel.myPosts.collectAsStateWithLifecycle()
     val myReservations by reservationViewModel.myReservations.collectAsStateWithLifecycle()
@@ -213,56 +219,12 @@ fun ActivityScreen(
                 "Reserved May 16, 2025 • 3:00 PM",
                 "Cancelled", "Cancelled on", "May 16, 2025",
                 R.drawable.food_produce
-            ),
-            ActivityRecord(
-                "purchase1", "Purchases", "Pastries Assortment",
-                "2 packs • ₱300", "1.1 km away",
-                "Ordered May 17, 2025 • 9:00 AM",
-                "Confirmed", "Pick up by", "Today, 5:30 PM",
-                R.drawable.food_pastries,
-                details = "Provider: Neighborhood Bakery\nExample payment: pay at pickup"
-            ),
-            ActivityRecord(
-                "purchase2", "Purchases", "Rice Meal Packs",
-                "3 meals • ₱180", "0.4 km away",
-                "Ordered May 16, 2025 • 11:00 AM",
-                "Completed", "Completed on", "May 16, 2025",
-                R.drawable.food_meals
-            ),
-            ActivityRecord(
-                "purchase3", "Purchases", "Farm Produce Bundle",
-                "1 bundle • ₱85", "3.5 km away",
-                "Ordered May 17, 2025 • 8:00 AM",
-                "Pending", "Requested for", "Today, 4:00 PM",
-                R.drawable.food_produce
-            ),
-            ActivityRecord(
-                "claim1", "Claims", "Bread Assortment",
-                "4 pcs • Free", "0.9 km away",
-                "Claimed May 17, 2025 • 10:00 AM",
-                "Confirmed", "Pick up by", "Today, 7:00 PM",
-                R.drawable.food_bread,
-                details = "Example pickup code: DEMO-B104"
-            ),
-            ActivityRecord(
-                "claim2", "Claims", "Extra Vegetable Packs",
-                "2 packs • Free", "3.2 km away",
-                "Claimed May 16, 2025 • 9:00 AM",
-                "Completed", "Completed on", "May 16, 2025",
-                R.drawable.food_vegetables
-            ),
-            ActivityRecord(
-                "claim3", "Claims", "Surplus Pastry Packs",
-                "1 pack • Free", "1.1 km away",
-                "Claimed May 15, 2025 • 2:00 PM",
-                "Completed", "Completed on", "May 15, 2025",
-                R.drawable.food_pastries
             )
         )
     }
 
-    // Food posts are the real Phase 2 records. The other tabs are still
-    // demonstration data until reservations, purchases, and claims are built.
+    // Food posts are the real Phase 2 records; the reservation tabs below are
+    // live too. Only the samples filtered out of allRecords remain.
     val myListingRecords = myPosts
         .sortedByDescending { it.createdAt.orEmpty() }
         .map { post ->
@@ -291,17 +253,42 @@ fun ActivityScreen(
         }
 
     // Recipient-facing records: only reservations created by this signed-in user.
+    // Open and cancelled ones stay in My Reservations; once the donor marks one
+    // claimed it moves to Purchases (priced) or Claims (free). Prices come from
+    // the reservation's unit_price, locked in by the database when it was made.
     val myReservationRecords = myReservations.map { entry ->
         val reservation = entry.reservation
         val post = entry.foodPost
+        val claimed = reservation.status == ReservationStatus.CLAIMED
+        val priced = reservation.unitPrice > 0
+        val total = formatPeso(reservationTotal(reservation.unitPrice, reservation.quantity))
         ActivityRecord(
-            id = "my-reservation-${reservation.id}", tab = "My Reservations",
-            title = post.name, quantity = "${reservation.quantity} ${post.unit}",
+            id = "my-reservation-${reservation.id}",
+            tab = when {
+                !claimed -> "My Reservations"
+                priced -> "Purchases"
+                else -> "Claims"
+            },
+            title = post.name,
+            quantity = "${reservation.quantity} ${post.unit} • ${if (priced) total else "Free"}",
             distance = post.pickupLocation,
             posted = reservation.createdAt?.let { "Reserved ${formatActivityTimestamp(it)}" } ?: "Reserved recently",
             status = reservation.status.name.lowercase().replaceFirstChar { it.uppercase() },
-            timeLabel = "Pickup", timeValue = post.pickupLocation,
-            uri = post.displayImageUrl, details = "Your reservation.",
+            timeLabel = if (claimed) "Picked up" else "Pickup",
+            timeValue = if (claimed) {
+                reservation.updatedAt?.let(::formatActivityTimestamp) ?: "Recently"
+            } else {
+                post.pickupLocation
+            },
+            uri = post.displayImageUrl,
+            details = when {
+                claimed && priced ->
+                    "Price: ${formatPeso(reservation.unitPrice)} per unit\nTotal: $total, paid at pickup."
+                claimed -> "Free food you picked up."
+                priced ->
+                    "Your reservation.\nPrice: ${formatPeso(reservation.unitPrice)} per unit\nPay $total at pickup."
+                else -> "Your reservation."
+            },
             sample = false, reservationId = reservation.id, donorCanClaim = false
         )
     }
@@ -310,15 +297,19 @@ fun ActivityScreen(
     val donorReservationRecords = donorReservations.map { entry ->
         val reservation = entry.reservation
         val post = entry.foodPost
+        val priced = reservation.unitPrice > 0
+        val total = formatPeso(reservationTotal(reservation.unitPrice, reservation.quantity))
         ActivityRecord(
             id = "donor-reservation-${reservation.id}", tab = "My Donations",
-            title = post.name, quantity = "${reservation.quantity} ${post.unit}",
+            title = post.name,
+            quantity = "${reservation.quantity} ${post.unit} • ${if (priced) total else "Free"}",
             distance = post.pickupLocation,
             posted = reservation.createdAt?.let { "Reserved ${formatActivityTimestamp(it)}" } ?: "Reserved recently",
             status = reservation.status.name.lowercase().replaceFirstChar { it.uppercase() },
             timeLabel = "Pickup", timeValue = post.pickupLocation,
             uri = post.displayImageUrl,
-            details = "Recipient: ${entry.recipientName ?: "Unknown"}\nReservation for your listing.",
+            details = "Recipient: ${entry.recipientName ?: "Unknown"}\nReservation for your listing." +
+                if (priced) "\nPrice: ${formatPeso(reservation.unitPrice)} per unit\nCollect $total at pickup." else "",
             sample = false, reservationId = reservation.id, donorCanClaim = true
         )
     }
@@ -335,6 +326,26 @@ fun ActivityScreen(
 
     val displayed = if (expanded || activeOnly) filtered else filtered.take(5)
     val selected = allRecords.firstOrNull { it.id == selectedId }
+
+    // Totals from this account's own claimed reservations, as recipient and as donor.
+    val claimedReservations = (myReservations + donorReservations)
+        .map { it.reservation }
+        .filter { it.status == ReservationStatus.CLAIMED }
+    val completedCount = claimedReservations.size
+    val itemsRescued = claimedReservations.sumOf { it.quantity }
+
+    // A "Reservation claimed" alert opens that reservation in Purchases or
+    // Claims, once the reloaded list shows it as claimed.
+    LaunchedEffect(focusReservationId, myReservations) {
+        val id = focusReservationId ?: return@LaunchedEffect
+        val entry = myReservations.firstOrNull {
+            it.reservation.id == id && it.reservation.status == ReservationStatus.CLAIMED
+        } ?: return@LaunchedEffect
+        tab = if (entry.reservation.unitPrice > 0) "Purchases" else "Claims"
+        activeOnly = false
+        selectedId = "my-reservation-$id"
+        onFocusHandled()
+    }
 
     BackHandler(enabled = expanded || activeOnly) {
         expanded = false
@@ -469,21 +480,21 @@ fun ActivityScreen(
                         Spacer(Modifier.width(9.dp))
 
                         ActivityMetric(
-                            "Completed", "48", "transactions",
+                            "Completed", completedCount.toString(), "transactions",
                             Modifier.weight(1f)
                         ) {
-                            notice = "48 completed transactions is a demonstration " +
-                                    "total matching the reference design."
+                            notice = "$completedCount completed: your reservations that donors " +
+                                    "marked claimed, plus claimed reservations on your listings."
                         }
 
                         MetricDivider()
 
                         ActivityMetric(
-                            "Items Rescued", "128", "items",
+                            "Items Rescued", itemsRescued.toString(), "items",
                             Modifier.weight(1f)
                         ) {
-                            notice = "128 items rescued is a demonstration total. " +
-                                    "It is not calculated from your local listings."
+                            notice = "$itemsRescued items rescued: the total quantity of those " +
+                                    "completed reservations, counting each unit (pack, piece, kg) as one."
                         }
 
                         MetricDivider()
@@ -545,7 +556,7 @@ fun ActivityScreen(
                                 expanded = false
                                 // Reservations can change on another device while this
                                 // screen is open, so reload them when their tab is tapped.
-                                if (label == "My Reservations" || label == "My Donations") {
+                                if (label != "My Listings") {
                                     reservationViewModel.refresh()
                                 }
                             },
@@ -709,6 +720,8 @@ fun ActivityScreen(
                                 "Demonstration record. Dates, distances, and statuses are sample values."
                             record.ownedPost != null -> "This is your live Supabase listing."
                             record.donorCanClaim -> "This is a live reservation on your listing."
+                            record.tab == "Purchases" -> "This is your live purchase, paid at pickup."
+                            record.tab == "Claims" -> "This is free food you picked up."
                             else -> "This is your live reservation."
                         },
                         fontSize = 11.sp,

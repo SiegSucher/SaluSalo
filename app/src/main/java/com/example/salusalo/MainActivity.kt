@@ -3,6 +3,8 @@ package com.example.salusalo
 import android.os.Bundle
 import coil3.compose.AsyncImage
 import com.example.salusalo.model.FoodPost
+import com.example.salusalo.model.formatPeso
+import com.example.salusalo.model.reservationTotal
 import com.example.salusalo.viewmodel.FoodViewModel
 import com.example.salusalo.viewmodel.ReservationViewModel
 import com.example.salusalo.viewmodel.MessageViewModel
@@ -1277,6 +1279,8 @@ private fun HomeScreen(
     val unreadMessageAlerts = alerts.count { it.readAt == null && it.type == NotificationType.MESSAGE }
     // Tab Activity opens on when an alert sends the user there.
     var activityTab by rememberSaveable { mutableStateOf("My Listings") }
+    // Reservation a "Reservation claimed" alert asked Activity to open.
+    var activityFocus by rememberSaveable { mutableStateOf<String?>(null) }
     val remotePosts by foodViewModel.availablePosts.collectAsStateWithLifecycle()
     val feedLoading by foodViewModel.loading.collectAsStateWithLifecycle()
     val feedError by foodViewModel.error.collectAsStateWithLifecycle()
@@ -1293,7 +1297,12 @@ private fun HomeScreen(
             }
         }
     }
-    LaunchedEffect(page) { if (page != "activity") activityTab = "My Listings" }
+    LaunchedEffect(page) {
+        if (page != "activity") {
+            activityTab = "My Listings"
+            activityFocus = null
+        }
+    }
 
     // Greeting follows the signed-in profile and the device's local time;
     // the hour is re-read every minute so it changes while Home stays open.
@@ -1374,6 +1383,13 @@ private fun HomeScreen(
                     onOpenActivity = { tab ->
                         activityTab = tab
                         page = "activity"
+                    },
+                    onOpenClaimedReservation = { reservationId ->
+                        // Claims until the reservation loads; Activity then switches
+                        // to Purchases if it was priced.
+                        activityTab = "Claims"
+                        activityFocus = reservationId
+                        page = "activity"
                     }
                 )
             } else if (page == "messages") {
@@ -1397,7 +1413,9 @@ private fun HomeScreen(
                     reservationViewModel = reservationViewModel,
                     messageViewModel = messageViewModel,
                     unreadAlerts = unreadAlerts,
-                    initialTab = activityTab
+                    initialTab = activityTab,
+                    focusReservationId = activityFocus,
+                    onFocusHandled = { activityFocus = null }
                 )
             } else if (page == "profile") {
                 ProfileScreen(
@@ -2075,7 +2093,8 @@ private fun FoodPost.toHomeFood(): HomeFood {
         donorId = donorId,
         title = name,
         quantity = "$quantity $unit",
-        price = "Free",
+        price = if (price > 0) formatPeso(price) else "Free",
+        unitPrice = price,
         status = if (urgent) "Expires soon" else "Available",
         distance = pickupLocation,
         distanceValue = 0.0,
@@ -2096,6 +2115,8 @@ private data class HomeFood(
     val status: String,
     val distance: String,
     val distanceValue: Double,
+    // Listing price per unit (0 = free). The amount owed comes from the reservation.
+    val unitPrice: Double = 0.0,
     val provider: String,
     val rating: String,
     val photo: Int,
@@ -2863,8 +2884,8 @@ private fun FoodDetailsScreen(
                         "This is a free donation. Please be respectful " +
                                 "and pick up on time."
                     } else {
-                        "Please confirm the price and pickup arrangements " +
-                                "with the seller."
+                        "Pay ${formatPeso(reservationTotal(food.unitPrice, quantity))} " +
+                                "at pickup. The app takes no payments."
                     },
                     modifier = Modifier.fillMaxWidth(),
                     fontSize = 10.sp,
