@@ -273,7 +273,7 @@ Phase 3 was signed off on 2026-09-25. These sections are kept as the record of t
 2. **Decide the tab label.** It is "My Donations" in code; it could become "Manage Reservations" or "My Donations / Manage Reservations". This is a label-only change.
 3. **Related issues seen in the same screen** (not fixed; fix only if in scope):
    - `ActivityScreen` never displays `reservationViewModel.message`, so success **and error** messages from Cancel and Mark claimed are not shown there. The message is not cleared either, so it pops up as a "Reservation" notice the next time any food details dialog opens (`MainActivity.kt` L2279–2287). **Changed in code on 2026-09-25 (§3.4): the Activity screen now shows and clears it. Verified on a device on 2026-09-25 (cancel and claim tests).**
-   - The details dialog for reservation records ends with "This is your live Supabase listing." (L686). That text was meant for listings.
+   - The details dialog for reservation records ends with "This is your live Supabase listing." (L686). That text was meant for listings. **Changed in code on 2026-09-25 (§3.5); not built or tested yet.**
    - The reservation lists have no loading or error state.
 
 ### 3.2 Recommended for You image
@@ -355,6 +355,19 @@ Phase 3 was signed off on 2026-09-25. These sections are kept as the record of t
 - `ActivityScreen.kt`
   - Shows `reservationViewModel.message` in a "Reservation" dialog and clears it, so it no longer appears later in the food details dialog.
   - Tapping the My Reservations or My Donations tab reloads the reservation lists.
+- No SQL, RLS, RPC, authentication or storage-policy changes.
+
+### 3.5 Known-issue fixes (after Phase 3 sign-off)
+
+**Status (2026-09-25): changed in code. Not built (the cloud session that made the change has no Android SDK) and not manually tested.** Run `assembleDebug` and the §4 "Checks for the §3.5 fixes" before treating any of it as done.
+
+- **Reservation dialog text** (`ActivityScreen.kt`): the details dialog's closing line now depends on the record. My Listings keeps "This is your live Supabase listing."; My Donations shows "This is a live reservation on your listing."; My Reservations shows "This is your live reservation."
+- **Food details** (`MainActivity.kt`, `FoodDetailsScreen`):
+  - The header shows the listing's signed image, with the `AvailableFoodCard` fallback: the demo drawable when there is no URL, an "Image unavailable" box when loading fails.
+  - The description is the post's own `description` (`HomeFood` now carries it), or "No description provided."
+  - "Pickup Address" shows the post's pickup location instead of "Del Rosarrio, Balilihan".
+  - Unchanged: allergens ("Not provided — ask the provider", since allergens are not saved), Storage Note, Pickup Window, and the preview-only `FoodActionsDialog`, whose map view still has its own demo address (`FoodActions.kt`).
+- **Home feed after cancel** (`ActivityScreen.kt`): when the Activity screen receives the "Reservation cancelled" message, it also calls `foodViewModel.loadAvailablePosts()`, so Home shows the restored quantity. Claim changes neither quantity nor status, so it does not reload the feed. There is still no realtime update across devices.
 - No SQL, RLS, RPC, authentication or storage-policy changes.
 
 **Live-database checks** (read-only; run in the Supabase SQL Editor)
@@ -446,6 +459,13 @@ Run the §3.4 SQL checks first, then install a build that contains §3.4.
 5. **Tab reload (two devices):** A keeps Activity open while B reserves, then taps My Donations: the new reservation appears.
 6. **Messages:** A taps Mark claimed: a "Reservation" dialog on Activity says "Reservation marked as claimed." After OK, opening any listing on Home shows no leftover notice. Same for B → Cancel ("Reservation cancelled. The quantity is available again.").
 
+### Checks for the §3.5 fixes
+
+1. **Food details:** open a listing that has a photo and a description. The header shows the uploaded photo, the text is the listing's description, and "Pickup Address" is its pickup location. A listing without a description shows "No description provided."
+2. **Missing image:** open one of the "lemon dou" listings (image missing from Storage). The header shows the demo produce photo.
+3. **Dialog text:** in Activity, open one record per tab. My Listings ends with "This is your live Supabase listing.", My Reservations with "This is your live reservation.", My Donations with "This is a live reservation on your listing."
+4. **Feed after cancel:** B reserves part of A's listing, cancels it in Activity → My Reservations, then goes to Home with the bottom bar. The listing shows the restored quantity (and is back on the feed if B had reserved all of it).
+
 ### Results log
 
 | Date | Build / commit | Tester | Result | Notes |
@@ -532,9 +552,9 @@ Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow; n
 
 ## 7. Other observations (not scheduled; verify before acting)
 
-- **Food details screen.** The `FoodDetailsScreen` header shows the demo drawable (`MainActivity.kt` L2333–2338), not the uploaded image. Its description, allergens and "Pickup Address" are canned text (L2288–2314, L2560) rather than the post's data.
+- **Food details screen.** The `FoodDetailsScreen` header shows the demo drawable (`MainActivity.kt` L2333–2338), not the uploaded image. Its description, allergens and "Pickup Address" are canned text (L2288–2314, L2560) rather than the post's data. **Header image, description and pickup address changed in code on 2026-09-25 (§3.5); not built or tested yet.** Allergens stay generic because they are not saved.
 - **Dropped requests.** Since §3.4, feed and My Listings loads requested during another `FoodViewModel` request are queued, not dropped. Still ignored while any request is running: `FoodViewModel.createPost()`/`deletePost()`, and every `ReservationViewModel` request (for example a tab-tap reload during a running refresh).
-- **No refresh after cancel or claim.** The Home feed does not reload after either action, and there is no realtime update across devices.
+- **No refresh after cancel or claim.** The Home feed does not reload after either action, and there is no realtime update across devices. **Reload after cancel added in code on 2026-09-25 (§3.5); not built or tested yet.** Claim does not change the feed; realtime updates are still missing.
 - **Placeholder or hard-coded UI values:**
   - the greeting "Good evening, Mika";
   - the location "Del Rosarrio, Balilihan";
