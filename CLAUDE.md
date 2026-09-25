@@ -8,17 +8,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Kotlin + Jetpack Compose (Material 3).** Single `MainActivity`, single `:app` module, package `com.example.salusalo`.
 - **Firebase Authentication.** Email/password sign-up, sign-in, password reset and sign-out.
-- **Supabase.** Postgres (via PostgREST and RPCs) plus Storage, through supabase-kt 3.x on Ktor. Images load with Coil 3 `AsyncImage`.
+- **Supabase.** Postgres (via PostgREST and RPCs), Storage and Realtime, through supabase-kt 3.5 on Ktor with the OkHttp engine (Realtime needs WebSockets, which the Android engine lacks). Images load with Coil 3 `AsyncImage`.
 - **Supabase trusts Firebase via Third-Party Auth.** `data/SupabaseClientProvider.kt` sends the current Firebase ID token as the Supabase access token.
   - Every Firebase user needs the custom claim `role: authenticated`. A trusted Admin SDK or Cloud Function sets it; that code is **not in this repo**.
   - SQL checks tokens with `is_salusalo_firebase_jwt()`, which requires issuer and audience = Firebase project `salusalo`.
 - **Storage.** The existing private bucket **`food-images`** holds listing photos. The `profile-images` bucket exists but the app does not use it yet.
 
-**Roadmap: six phases.** Phases 1–3 are complete and manually verified (2026-09-25); do not redo them. No phase is in progress.
+**Roadmap: six phases.** Phases 1–3 are complete and manually verified (2026-09-25); do not redo them. Phase 4 is in progress.
 - Phase 1 — Backend Foundation: complete.
 - Phase 2 — Food Listings: complete.
 - Phase 3 — Reservations: complete.
-- Phase 4 — Messaging and Notifications: **not started** (next). Its scope is known only by this title. Do not begin it until the user asks.
+- Phase 4 — Messaging and Notifications: **in progress** (started 2026-09-25). Implemented in code: chat per listing, in-app alerts, Realtime, preferences in Supabase. Not built with AGP, migration not applied, not tested on a device (`PROJECT_STATUS.md` §8).
 - Phase 5 — Maps, Reviews, Reports: not started.
 - Phase 6 — Admin and Final Release: not started.
 - Read `docs/PROJECT_STATUS.md` first. It has the detailed status, the test results and the two-account manual test.
@@ -52,31 +52,36 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
   - System Back on the Home page calls `logOut()`.
 - `HomeScreen()` (also in `MainActivity.kt`) holds `page` (`home | recommended | all | alerts | post | activity | profile`) plus the bottom bar.
   - Food details open as a full-screen `Dialog` (`FoodDetailsScreen`).
-  - It creates the ViewModels with `viewModel(key = "food-$profileId")` / `"reservation-$profileId"`, so each account gets its own instances. They live in the Activity's `ViewModelStore` and are reused if the same account signs in again; `clearSession()` empties their lists when `HomeScreen` is disposed.
+  - It creates the ViewModels with `viewModel(key = "food-$profileId")` / `"reservation-$profileId"` / `"messages-$profileId"` / `"notifications-$profileId"`, so each account gets its own instances. They live in the Activity's `ViewModelStore` and are reused if the same account signs in again; `clearSession()` empties their lists when `HomeScreen` is disposed.
 
 **Layers**
 - `data/`: plain repository classes that use the `SupabaseClientProvider.client` singleton.
   - `UserRepository` finds or creates the caller's `users` row, keyed by `FirebaseAuth.currentUser.uid`.
   - `FoodRepository` handles `food_posts` and image upload. `withSignedImageUrl(bucket)`, a top-level function in `FoodRepository.kt`, turns the stored path into a 1-hour signed URL. If signing fails, only that post loses its image; the list still loads.
   - `ReservationRepository` handles reservation RPCs and reads. It signs the images of the listings its reservations reference with the same helper.
+  - `MessageRepository` (conversation RPCs, messages) and `NotificationRepository` (alerts, preferences). `realtimeInserts()` in `data/RealtimeInserts.kt` streams inserted rows through a Realtime channel.
   - `StorageRepository` builds storage paths.
 - `model/`: `@Serializable` DTOs, with `@SerialName` for snake_case columns.
   - `FoodPost`: its `displayImageUrl` is `@Transient` (a signed URL, never stored).
   - `Reservation`, `ReservationDisplay`, `DonorReservationRow`.
   - `UserProfile`.
+  - `Conversation`, `ConversationSummary`, `ChatMessage` (`model/Conversation.kt`, with `parseTimestamp()`); `AppNotification`, `NotificationType`, `NotificationPreferences`.
 - `viewmodel/`: `AndroidViewModel` + `StateFlow`.
   - `FoodViewModel` exposes `availablePosts` and `myPosts`.
   - `ReservationViewModel` exposes `myReservations`, `donorReservations` and `message`.
   - `FoodViewModel`: a feed or My Listings load requested while another request runs is queued and runs right after it (My Listings first). `createPost()` and `deletePost()` are still **ignored** while any request runs.
   - `ReservationViewModel`: every request is **ignored** while another is running. `refresh()`, also used after cancel and claim, loads My Reservations and My Donations independently.
+  - `MessageViewModel`: inbox, the open chat (`active`, `messages`, live while open) and `send()`.
+  - `NotificationViewModel`: alerts, `unreadCount`, preferences. `start(profileId)` keeps alerts live for the session and re-sends the Realtime token every 5 minutes (Realtime does not refresh the Firebase token itself).
 - UI: large files in the root package.
   - `MainActivity.kt`: auth screens, Home feed, `RecommendationCard`, `AvailableFoodCard`, `FoodDetailsScreen` with Reserve.
   - `ActivityScreen.kt`: tabs My Listings, My Reservations, My Donations, Purchases, Claims. It shows reservation results and errors in a "Reservation" dialog, and reloads the reservation lists when their tab is tapped.
   - `PostScreen.kt`: Create Listing.
   - `ProfileScreen.kt` and `ProfileSections.kt`: profile.
-  - `AlertScreen.kt`: alerts.
-  - `FoodActions.kt`: preview-only dialogs.
-  - **Much of the UI is still demo/placeholder data** (sample records, hard-coded names and locations, preview-only flows). Only the feed, listings, reservations and the profile name use Supabase.
+  - `AlertScreen.kt`: real alerts (Phase 4).
+  - `ChatScreen.kt`: `ChatScreen` (conversation dialog) and `MessagesScreen` (inbox, page `messages`).
+  - `FoodActions.kt`: preview-only dialogs; its demo chat is only a fallback when no `onMessage` is passed.
+  - **Much of the UI is still demo/placeholder data** (sample records, hard-coded names and locations, preview-only flows). The feed, listings, reservations, messages, alerts, notification preferences and the profile name use Supabase.
 
 **Identity.**
 - The Firebase UID is stored in `users.firebase_uid`.
@@ -87,6 +92,7 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
 - Tables `users`, `food_posts` and `reservations`, each with RLS enabled and `anon` revoked.
 - Helper functions: `is_salusalo_firebase_jwt()`, `current_salusalo_profile_id()`, `is_reservation_recipient()`.
 - SECURITY DEFINER RPCs: `create_reservation`, `cancel_reservation`, `claim_reservation`, `get_donor_reservations`.
+- Phase 4: tables `conversations`, `messages`, `notifications`, `notification_preferences`; RPCs `start_listing_conversation`, `open_reservation_conversation`, `send_message`, `mark_conversation_read`, `mark_notifications_read`, `get_my_conversations`; internal `notify_user()` and the `reservations_notify` trigger; `messages` and `notifications` in the `supabase_realtime` publication.
 - `food-images` object path: `<firebaseUid>/<postId>/image.<ext>`. `food_posts.image_url` stores this **path**, so the UI must use `displayImageUrl`.
 
 ## Security and ownership rules (keep them)
@@ -99,7 +105,8 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
   - No one can reserve their own post.
   - Only the recipient can cancel, and only while the reservation is `RESERVED`.
   - Only the post's donor can mark a reservation claimed, and only while it is `RESERVED`.
-- Donors see recipient **names only**, via `get_donor_reservations()`. Do not widen `users` RLS.
+- Donors see recipient **names only**, via `get_donor_reservations()`. Conversation participants see each other's **name only**, via `get_my_conversations()`. Do not widen `users` RLS.
+- **Messages and alerts change only through the Phase 4 RPCs and triggers.** Clients have SELECT only on `conversations`, `messages` and `notifications`; never insert them directly. `notify_user()` must stay non-executable for clients.
 - Client-created profiles are always `RECIPIENT` (enforced by RLS). The client never sets `role`.
 - Keep `food-images` private and display images through signed URLs. Upload only under the uploader's own Firebase-UID folder.
 - Never add a Supabase service-role key or Firebase Admin credentials to the app, docs or commits.
@@ -112,7 +119,7 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
 - **Reuse existing patterns.**
   - Signed URLs: `withSignedImageUrl(bucket)` in `data/FoodRepository.kt`.
   - Image with fallback: `AvailableFoodCard` and `RecommendationCard` (`MainActivity.kt`), and `RecordPhoto` (`ActivityScreen.kt`).
-- **Stay inside the phase the user asks for.** Do not redo Phases 1–3, and do not start Phase 4 or later until the user asks.
+- **Stay inside the phase the user asks for.** Do not redo Phases 1–3, and do not start Phase 5 or later until the user asks.
 - **Keep `docs/PROJECT_STATUS.md` current** whenever work changes status. Never mark anything fixed or tested unless it actually was.
 
 ## Testing expectations
@@ -142,7 +149,4 @@ Details, test results and line references are in `docs/PROJECT_STATUS.md`.
    - The Home feed reloads after a cancel. Nothing updates in real time across devices (still open).
    - The Home greeting uses the signed-in profile's first name and the time of day instead of "Good evening, Mika".
 4. **Images missing from Storage.** On 2026-09-25 two listings referenced image files that no longer existed in `food-images`; how they were lost is unknown. The app now loads such listings without an image (`PROJECT_STATUS.md` §3.4).
-5. **Phase 4 (Messaging and Notifications) has not started.** This area has demo-only UI with no backend:
-   - sample alerts (`AlertScreen.kt`);
-   - the "Message Donor / Seller" demo chat (`FoodActions.kt`);
-   - notification preferences saved only on the device (`ProfileSections.kt`).
+5. **Phase 4 (Messaging and Notifications) is in progress.** Implemented in code on 2026-09-25 (`PROJECT_STATUS.md` §8). The SQL was tested on a local Postgres and the Kotlin was type-checked, but there has been no AGP build, the migration has not been applied to the live project, and nothing has been tested on a device. Remaining: apply the migration, build, run the Phase 4 test in `PROJECT_STATUS.md` §4 plus the regression (the Ktor engine changed).

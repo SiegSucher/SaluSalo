@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-09-25. Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25. Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
+_Last updated: 2026-09-25 (Phase 4 in progress, §8). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25. Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -20,11 +20,11 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Phase 1: Backend Foundation | Firebase email/password auth, Supabase client using Firebase tokens, `users` profiles, private Storage buckets | **Complete.** Do not redo. Authentication/profile regression passed on 2026-09-25 ([results log](#results-log)). |
 | Phase 2: Food Listings | `food_posts`, create listing with image upload to `food-images`, feed, My Listings, delete | **Complete.** Do not redo. Regression passed on 2026-09-25 for both accounts: Home/feed, create listing, delete listing ([results log](#results-log)). |
 | Phase 3: Reservations | Reserve, cancel and claim with atomic quantity; recipient and donor views | **Complete.** Signed off by the developer on 2026-09-25. The A/B reservation test, the missing-image fallback/feed check, and the cancel, claim and Recommended for You tests passed; the remaining checks without an individual test record are listed under the [results log](#results-log). The changes since `d4f65fe` were committed on 2026-09-25 (§6). |
-| Phase 4: Messaging and Notifications | Known only by its roadmap title; not yet specified in the repo | **Not started** (next phase). |
+| Phase 4: Messaging and Notifications | Chat per listing (recipient ↔ donor), in-app alerts for messages and reservation changes, live updates through Supabase Realtime, notification preferences stored in Supabase (§8) | **In progress: implemented in code on 2026-09-25, not built with AGP, migration not applied, not tested on a device.** The SQL was run and tested on a local Postgres 16; the Kotlin was type-checked (§8.6). |
 | Phase 5: Maps, Reviews, Reports | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 | Phase 6: Admin and Final Release | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 
-- The roadmap has six phases (confirmed by the developer on 2026-09-25); earlier versions of this document went only up to Phase 4. Only Phases 1–3 are described in detail here.
+- The roadmap has six phases (confirmed by the developer on 2026-09-25); earlier versions of this document went only up to Phase 4. Phases 1–3 are described in §1–§3 and Phase 4 in §8.
 
 ### Build verification
 
@@ -468,6 +468,21 @@ Run the §3.4 SQL checks first, then install a build that contains §3.4.
 4. **Feed after cancel:** B reserves part of A's listing, cancels it in Activity → My Reservations, then goes to Home with the bottom bar. The listing shows the restored quantity (and is back on the feed if B had reserved all of it).
 5. **Greeting:** sign in as A: Home says "Good morning/afternoon/evening, <A's first name> 👋" matching the device time. Sign in as B: it shows B's first name.
 
+### Phase 4 test: messaging and alerts (Account A / Account B)
+
+Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the SQL Editor, `messages` and `notifications` appear under Database → Publications → `supabase_realtime`, and a build with Phase 4 is installed. Two devices make the live parts visible; with one device, sign out between steps and check the result after signing in.
+
+1. **Start a chat:** B opens A's listing → "Message Donor" → sends "Is this still available?". A (Home open) sees the chat icon badge and the bell badge increase without refreshing; Home → chat icon lists the thread with B's name, the listing and an unread count.
+2. **Live reply:** A opens the thread and replies. B, with the chat open, sees the reply appear without refreshing. A's thread shows no unread count after opening.
+3. **Prefilled questions:** B taps the Allergens row on A's listing: the chat opens with "Hi! What allergens does <listing> contain?" in the input.
+4. **Own listing:** A opens their own listing: the button reads "Your listing", and tapping it (or Allergens/Storage) shows "You cannot message yourself…".
+5. **Reservation alerts:** B reserves part of A's listing → A gets "New reservation" in Alerts. B cancels → A gets "Reservation cancelled". B reserves again and A marks it claimed → B gets "Reservation claimed". Tapping a reservation alert opens Activity on My Donations (A) or My Reservations (B).
+6. **Chat from Activity:** A → Activity → My Donations → record → "Message recipient", and B → My Reservations → record → "Message donor": both land in the same thread as step 1.
+7. **Preferences:** A → Profile → Preferences → Notifications → turns off "New messages" → Save ("Preferences saved to your account."). B sends a message: it arrives in A's chat, but A gets no new MESSAGE alert. Turn it back on afterwards. The same switches are in Alerts → settings icon.
+8. **Mark read:** Alerts → "Mark shown as read": the unread count and the bell badge go to 0 and stay 0 after reopening the app.
+9. **Token refresh:** leave the app open on Home for more than an hour, then have the other account send a message: it still arrives live. (Realtime is re-authenticated every 5 minutes; §8.3.)
+10. **Regression:** because the Ktor engine changed to OkHttp, repeat the Phase 1/2 regression and the A/B reservation test above.
+
 ### Results log
 
 | Date | Build / commit | Tester | Result | Notes |
@@ -504,12 +519,14 @@ Run the §3.4 SQL checks first, then install a build that contains §3.4.
 | Auth / profile | `app/src/main/java/com/example/salusalo/data/UserRepository.kt` | Find-or-create profile; `ProfileException` |
 | Auth / profile | `app/src/main/java/com/example/salusalo/model/UserProfile.kt` | `UserProfile`, `UserRole`, `NewUserProfile` |
 | Auth / profile | `app/src/main/java/com/example/salusalo/data/SupabaseClientProvider.kt` | Supabase client using the Firebase ID token |
-| Auth / profile | `app/src/main/java/com/example/salusalo/ProfileScreen.kt`, `ProfileSections.kt` | Name from Supabase; everything else local or demo |
+| Auth / profile | `app/src/main/java/com/example/salusalo/ProfileScreen.kt`, `ProfileSections.kt` | Name and notification preferences from Supabase; everything else local or demo |
 | Storage paths | `app/src/main/java/com/example/salusalo/data/StorageRepository.kt` | `foodImagePath()`, unused `profileImagePath()` |
 | Create listing | `app/src/main/java/com/example/salusalo/PostScreen.kt` | Create Listing form, "My posts", `PostPhoto` |
-| Demo screens | `app/src/main/java/com/example/salusalo/AlertScreen.kt`, `FoodActions.kt` | Sample alerts; preview-only chat, pickup and checkout dialogs |
+| Messaging (Phase 4) | `ChatScreen.kt`, `data/MessageRepository.kt`, `data/RealtimeInserts.kt`, `model/Conversation.kt`, `viewmodel/MessageViewModel.kt` | Chat dialog and Messages inbox; RPC calls; Realtime insert stream |
+| Alerts (Phase 4) | `AlertScreen.kt`, `data/NotificationRepository.kt`, `model/AppNotification.kt`, `viewmodel/NotificationViewModel.kt` | Real alerts, unread counts, preferences |
+| Demo screens | `app/src/main/java/com/example/salusalo/FoodActions.kt` | Preview-only pickup and checkout dialogs; its demo chat is now only a fallback |
 | Theme | `app/src/main/java/com/example/salusalo/ui/theme/` | `SaluSaloTheme` is **unused**; `MainActivity` builds its own `MaterialTheme` |
-| Database / Storage SQL | `supabase/migrations/` (4 files), `supabase/README.md` | Applied manually in the Supabase SQL Editor |
+| Database / Storage SQL | `supabase/migrations/` (5 files), `supabase/README.md` | Applied manually in the Supabase SQL Editor |
 | Build / config | `app/build.gradle.kts`, `gradle/libs.versions.toml`, `app/google-services.json`, `local.properties` (git-ignored) | Supabase URL and publishable key are read from `local.properties` into `BuildConfig` |
 
 - **Navigation files:** there are none; there is no Navigation-Compose `NavHost`. Navigation is string state in `MainActivity.kt`:
@@ -539,14 +556,14 @@ Run the §3.4 SQL checks first, then install a build that contains §3.4.
    - How the two "lemon dou" images went missing (§3.4).
 8. **Commit the work since `d4f65fe`.** Done on 2026-09-25: the §3.2–§3.4 code changes, `docs/` and `CLAUDE.md`.
 
-### Next: Phase 4 — Messaging and Notifications
+### Phase 4 — Messaging and Notifications (in progress)
 
-- **Not started.** Its scope is known only by its roadmap title. No Phase 4 design, database tables or code exist yet. Do not begin it until the developer asks.
-- Existing demo-only UI in this area, with no backend:
-  - the Alerts page with sample alerts (`AlertScreen.kt`);
-  - the "Message Donor / Seller" demo chat, which sends nothing (`FoodActions.kt`);
-  - notification preferences saved only on the device (`ProfileSections.kt`).
-- The app has no realtime updates or push notifications (§7).
+Started on 2026-09-25 at the developer's request; scope and status are in §8. Remaining steps:
+
+1. Apply `supabase/migrations/20260926_phase4_messaging_notifications.sql` in the Supabase SQL Editor and check the Realtime publication.
+2. Build with `assembleDebug` (not possible in the cloud session that wrote the code).
+3. Run the Phase 4 test in §4 and the regression, and record the results in the results log.
+4. Sign off Phase 4.
 
 Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow; neither has started.
 
@@ -562,8 +579,73 @@ Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow; n
   - the location "Del Rosarrio, Balilihan";
   - "Browse all 10 food listings";
   - Activity metrics 48 / 128;
-  - sample Purchases, Claims, Alerts and reviews;
+  - sample Purchases, Claims and reviews (sample Alerts were replaced by real alerts in Phase 4);
   - "Nearby" and "For Sale" filters that rely on fixed distance and price values.
 - **Read access after cancel.** `is_reservation_recipient()` ignores reservation status, so a recipient keeps read access to a post after cancelling.
 - **Signed URL expiry.** Signed image URLs expire after 1 hour and are not refreshed while a screen stays open.
 - **Raw error messages.** User-facing errors are raw exception messages from supabase-kt and Firebase. How readable the RPC error text is has not been checked.
+
+---
+
+## 8. Phase 4 — Messaging and Notifications
+
+**Status (2026-09-25): implemented in code, not built with AGP, migration not applied to the live project, not tested on a device.** Scope chosen by the developer: chat per listing; in-app alerts only (no push); live updates with Supabase Realtime; notification preferences stored in Supabase.
+
+### 8.1 Database (`supabase/migrations/20260926_phase4_messaging_notifications.sql`)
+
+- **`conversations`**: one thread per `(food_post_id, recipient_id)`; `donor_id` is copied from the listing by the RPCs. Per-side read times (`recipient_last_read_at`, `donor_last_read_at`) and `last_message_at`. Deleted with the listing (cascade).
+- **`messages`**: `conversation_id`, `sender_id`, `body` (1–2000 characters after trimming), `created_at`.
+- **`notifications`**: per-user alerts of type `MESSAGE`, `RESERVATION_CREATED`, `RESERVATION_CANCELLED` or `RESERVATION_CLAIMED`, with optional links to the listing, conversation and reservation, and `read_at`.
+- **`notification_preferences`**: one row per user (`message_alerts`, `reservation_alerts`, `recommendations`, `pickup_reminders`). A missing row means everything is on. Only `message_alerts` and `reservation_alerts` affect alerts today.
+- **Access:** clients may only SELECT conversations and messages they take part in, and their own alerts and preferences. `notification_preferences` also allows INSERT/UPDATE of the caller's own row. Every other write goes through SECURITY DEFINER functions that take the caller from the JWT:
+  - `start_listing_conversation(p_food_post_id)`: get or create the caller's thread with the donor. Rejects the caller's own listing, and listings that are not available unless the caller has a reservation on them.
+  - `open_reservation_conversation(p_reservation_id)`: get or create the thread of a reservation; either its recipient or the listing's donor may call it.
+  - `send_message(p_conversation_id, p_body)`: participants only; also updates the thread and alerts the other participant.
+  - `mark_conversation_read(p_conversation_id)`: also marks that thread's message alerts read.
+  - `mark_notifications_read(p_ids)`: the caller's alerts; `null` marks all.
+  - `get_my_conversations(p_conversation_id)`: the caller's threads with the listing name and image path, the other participant's **display name only**, the last message and the unread count.
+- **Alerts** are created only by the database: `notify_user()` (not executable by clients) respects the preferences, and a trigger on `reservations` alerts the donor when a reservation is created or cancelled and the recipient when it is claimed. The Phase 3 RPCs are unchanged.
+- **Realtime:** `messages` and `notifications` are added to the `supabase_realtime` publication; Realtime applies the SELECT policies to what each client receives.
+
+### 8.2 Privacy change
+
+Before Phase 4, recipients never saw the donor's name. In a conversation, **both participants see each other's display name** (through `get_my_conversations()`), never email or phone. `users` RLS is unchanged.
+
+### 8.3 App
+
+- **Dependencies:** `realtime-kt` added; the Ktor engine changed from `ktor-client-android` to `ktor-client-okhttp` (the Android engine has no WebSocket support) and Ktor aligned to 3.4.2, the version supabase-kt 3.5.0 uses.
+- **Realtime auth:** Realtime uses the same Firebase ID token as PostgREST (the client's `accessToken` lambda), read when a channel joins. Without the Supabase Auth plugin it is never refreshed automatically, so `NotificationViewModel` calls `realtime.setAuth()` every 5 minutes (confirmed by reading the realtime-kt 3.5.0 sources; the refresh itself is untested).
+- **Data layer:** `MessageRepository`, `NotificationRepository`, `realtimeInserts()` (a channel per stream, removed when collection stops), `MessageViewModel` and `NotificationViewModel` (created per profile like the Phase 3 ViewModels and cleared on sign-out). `signedUrlOrNull()` is shared with `withSignedImageUrl()`.
+- **UI:**
+  - Home header: new chat icon (badge = unread message alerts) → Messages inbox (`MessagesScreen`); bell badge = all unread alerts.
+  - `ChatScreen`: full-screen conversation over any screen, live updates, marks the thread read.
+  - Food details: "Message Donor", the Allergens and Storage rows, and the details dialog's "Ask for exact location"/"Message provider" links open the real chat (prefilled where the demo chat was). On your own listing the button reads "Your listing".
+  - Activity: "Message donor"/"Message recipient" in reservation details; the bell dot only shows with unread alerts.
+  - Alerts: real alerts, filters All/Messages/Reservations, Today/Earlier, mark read, tap to open the chat or the Activity tab, settings dialog saved to Supabase. The sample alerts and the "Personalized for you" card were removed.
+  - Profile → Preferences → Notifications: "New messages", "Reservation updates", "Food recommendations" and "Pickup reminders" are saved to Supabase; "Notification sound" stays on the device.
+
+### 8.4 Known limits
+
+- No push notifications (the app must be open for live updates; alerts are still stored and shown later).
+- No blocking or reporting of users (Phase 5), and no editing or deleting of messages.
+- No rate limit on messages beyond the 2000-character limit.
+- Deleting a listing deletes its conversations, messages and related alerts.
+- The chat icon badge counts unread message **alerts**, so it stays empty when message alerts are turned off; the inbox still shows unread counts.
+- The Profile screen's bell still opens settings and always shows its dot (unchanged demo UI).
+
+### 8.5 Status matrix
+
+| Item | Implemented (code) | Verified | Not yet verified |
+|---|---|---|---|
+| Migration applies and re-runs | Yes | Local Postgres 16 with Supabase-like stubs (2026-09-25) | Live Supabase project |
+| RPCs, RLS denials, alerts, preferences | Yes (SQL) | Local three-account SQL test (§8.6) | Live project; Realtime delivery with RLS |
+| Kotlin data layer and ViewModels | Yes | Type-checked (§8.6) | AGP build; device run |
+| Chat, inbox, alerts, preferences UI | Yes | Type-checked (§8.6) | AGP build; §4 Phase 4 test |
+| Ktor engine change (OkHttp) | Yes | — | Phase 1–3 regression |
+
+### 8.6 How the Phase 4 code was checked (2026-09-25)
+
+The cloud session that wrote Phase 4 has no Android SDK, and Google's Maven repository is blocked there, so no AGP build was possible.
+- **SQL:** all five migrations were run in order on a local PostgreSQL 16 with stand-ins for Supabase's `auth.jwt()`, roles, Storage tables and the `supabase_realtime` publication; the Phase 4 file was then re-run without errors. A test with three accounts (A donor, B recipient, C outsider) confirmed: starting a thread and messaging; unread counts and read marking; MESSAGE and reservation alerts (created, cancelled, claimed); the same thread from the listing and from the reservation; the preference switch suppressing message alerts; the preferences upsert; and the denials (messaging your own listing, direct inserts into `messages`/`notifications`, calling `notify_user`, a non-participant reading, sending or opening a thread, writing another user's preferences, calls without a valid token).
+- **Kotlin:** every app source file was compiled with kotlinc 2.2.10 plus the Compose and serialization compiler plugins, against the real supabase-kt 3.5.0 JVM jars and Compose Multiplatform desktop jars, with small stand-ins for Android, AndroidX Activity/Lifecycle and Firebase APIs. It compiled with no errors and no warnings in the new code. This checks types and API usage only; it is not an Android build.
+

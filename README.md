@@ -2,7 +2,7 @@
 
 Salu-Salo is an Android app for sharing surplus food within a community to reduce food waste. Donors post surplus food with a photo, quantity, pickup location and expiry date. Recipients browse the available listings and reserve some or all of a listing for pickup. The UI uses Philippine pesos (₱) and Philippine sample locations.
 
-**Status (2026-09-25):** Phases 1–3 of 6 (backend foundation, food listings and reservations) are complete and were signed off after manual testing. Phase 4, Messaging and Notifications, is next and has not started. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
+**Status (2026-09-25):** Phases 1–3 of 6 (backend foundation, food listings and reservations) are complete and were signed off after manual testing. Phase 4, Messaging and Notifications, is in progress: it is implemented in code but not yet built, deployed to Supabase or tested on a device. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
 
 ## Features
 
@@ -12,8 +12,10 @@ Working against the live backend:
 - **Food listings:** post a listing with a name, photo, category, quantity, pickup location and expiry date. Browse the feed of available, unexpired listings, and view or delete your own.
 - **Reservations:** reserve part or all of another user's listing. The recipient can cancel until the donor marks the reservation claimed. The donor sees the recipient's display name, but not their email or phone number. The server updates the remaining quantity atomically.
 - **Activity:** the My Listings, My Reservations and My Donations tabs.
+- **Messages (Phase 4, not yet tested):** message a listing's donor from its details screen or from a reservation; live chat and a Messages inbox with unread counts. Participants see each other's display name only.
+- **Alerts (Phase 4, not yet tested):** in-app alerts for new messages and for reservations being made, cancelled or claimed, with unread badges and settings saved to your account.
 
-Demo or preview-only, with no backend yet: alerts, the Message Donor / Message Seller chat, the Claim Now / Buy Now dialogs, the Purchases and Claims tabs, reviews, and the Google, Apple and Facebook sign-in buttons. Profile edits and settings are saved only on the device; only the profile name comes from Supabase.
+Demo or preview-only, with no backend yet: the Claim Now / Buy Now dialogs, the Purchases and Claims tabs, reviews, and the Google, Apple and Facebook sign-in buttons. There are no push notifications yet. Profile edits and most settings are saved only on the device; the profile name and notification preferences come from Supabase.
 
 ## Tech stack
 
@@ -21,7 +23,7 @@ Demo or preview-only, with no backend yet: alerts, the Message Donor / Message S
 |---|---|
 | App | Kotlin and Jetpack Compose (Material 3); one activity (`MainActivity`), one module (`:app`) |
 | Sign-in | Firebase Authentication (email/password) |
-| Backend | Supabase Postgres (PostgREST and RPCs) and Storage, through supabase-kt 3.5 on Ktor |
+| Backend | Supabase Postgres (PostgREST and RPCs), Storage and Realtime, through supabase-kt 3.5 on Ktor (OkHttp engine) |
 | Images | Coil 3 |
 | Build | Gradle 9.4.1 wrapper, Android Gradle Plugin 9.2.1, Kotlin 2.2.10, JDK 21; compileSdk 37, targetSdk 36, minSdk 24 |
 
@@ -71,6 +73,7 @@ Skip this section if you use the project's existing Supabase backend.
    2. `20260923_phase2_food_posts.sql`: the `food_posts` table and the listing-image policies.
    3. `20260924_phase3_reservations.sql`: the `reservations` table and the reservation RPCs.
    4. `20260924_phase3_donor_recipient_names.sql`: not needed on a new project, because step 3 already defines the same function. Running it is harmless, but only after step 3, even though its name sorts first.
+   5. `20260926_phase4_messaging_notifications.sql`: conversations, messages, alerts and notification preferences, their RPCs and triggers, and the Realtime publication for `messages` and `notifications`.
 2. **Third-Party Auth.** In Supabase, open **Authentication → Third-Party Auth** and add a Firebase integration for the project ID `salusalo`.
 3. **Custom claim.** Every Firebase user needs the custom claim `role: authenticated`. A trusted Admin SDK or Cloud Function must add it; that code is not in this repository. Existing users must sign in again or refresh their ID token after the claim is added.
 
@@ -96,11 +99,12 @@ app/src/main/java/com/example/salusalo/
 ├── ActivityScreen.kt    Activity tabs: My Listings, My Reservations, My Donations, Purchases, Claims
 ├── PostScreen.kt        Create Listing
 ├── ProfileScreen.kt     Profile (with ProfileSections.kt)
-├── AlertScreen.kt       Alerts (sample data)
-├── FoodActions.kt       Preview-only chat, pickup and checkout dialogs
+├── AlertScreen.kt       Alerts
+├── ChatScreen.kt        Chat and the Messages inbox
+├── FoodActions.kt       Preview-only pickup and checkout dialogs
 ├── data/                Repositories and the Supabase client
 ├── model/               Serializable data classes for the Supabase tables
-├── viewmodel/           FoodViewModel and ReservationViewModel
+├── viewmodel/           Food, Reservation, Message and Notification ViewModels
 └── ui/theme/            Template theme (not currently used)
 supabase/
 ├── migrations/          SQL migrations, applied by hand
@@ -116,7 +120,7 @@ CLAUDE.md                Architecture and working rules for Claude Code
 | 1 | Backend Foundation | Complete |
 | 2 | Food Listings | Complete |
 | 3 | Reservations | Complete |
-| 4 | Messaging and Notifications | Not started (next) |
+| 4 | Messaging and Notifications | In progress |
 | 5 | Maps, Reviews, Reports | Not started |
 | 6 | Admin and Final Release | Not started |
 
@@ -126,6 +130,7 @@ Known issues, and checks that still have no test record, are listed in [`docs/PR
 
 - Never commit `local.properties`, and never add a Supabase service-role key or Firebase Admin credentials to the app, the docs or a commit.
 - Listing photos are stored in the private `food-images` bucket, in a folder named after the uploader's Firebase UID. The app shows them through signed URLs that expire after one hour.
+- The app can only read the `conversations`, `messages` and `notifications` tables; messages are sent through a server function, and alerts are created only by the database.
 - The app can only read the `reservations` table. Reserving, cancelling and claiming go through server functions (RPCs); reserving and cancelling change the listing's quantity in the same transaction.
 - The server enforces the ownership rules: no one can reserve their own listing, only the recipient can cancel, and only the listing's donor can mark a reservation claimed.
 
