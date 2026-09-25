@@ -44,7 +44,10 @@ fun FoodActionsDialog(
     status: String,
     pickupChoice: String,
     onPickupSelected: (String) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    // Opens the real Phase 4 chat with a prefilled message. When null, the
+    // links below fall back to the local demo chat.
+    onMessage: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val address = "Del Rosarrio, Balilihan"
@@ -373,10 +376,13 @@ fun FoodActionsDialog(
                                 ActionButton(
                                     text = "Ask for exact location",
                                     onClick = {
-                                        draft =
-                                            "Hi! Where exactly can I pick up " +
-                                                    "$foodTitle?"
-                                        page = "chat"
+                                        val question = "Hi! Where exactly can I pick up $foodTitle?"
+                                        if (onMessage != null) {
+                                            onMessage(question)
+                                        } else {
+                                            draft = question
+                                            page = "chat"
+                                        }
                                     }
                                 )
                             }
@@ -419,8 +425,12 @@ fun FoodActionsDialog(
                                 ActionButton(
                                     text = "Message provider",
                                     onClick = {
-                                        draft = ""
-                                        page = "chat"
+                                        if (onMessage != null) {
+                                            onMessage("")
+                                        } else {
+                                            draft = ""
+                                            page = "chat"
+                                        }
                                     }
                                 )
                             }

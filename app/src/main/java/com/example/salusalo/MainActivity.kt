@@ -5,6 +5,9 @@ import coil3.compose.AsyncImage
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.viewmodel.FoodViewModel
 import com.example.salusalo.viewmodel.ReservationViewModel
+import com.example.salusalo.viewmodel.MessageViewModel
+import com.example.salusalo.viewmodel.NotificationViewModel
+import com.example.salusalo.model.NotificationType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.Instant
@@ -1264,11 +1267,33 @@ private fun HomeScreen(
     val sessionKey = currentProfile?.id ?: "signed-out"
     val foodViewModel: FoodViewModel = viewModel(key = "food-$sessionKey")
     val reservationViewModel: ReservationViewModel = viewModel(key = "reservation-$sessionKey")
+    val messageViewModel: MessageViewModel = viewModel(key = "messages-$sessionKey")
+    val notificationViewModel: NotificationViewModel = viewModel(key = "notifications-$sessionKey")
+    val activeChat by messageViewModel.active.collectAsStateWithLifecycle()
+    val chatOpening by messageViewModel.opening.collectAsStateWithLifecycle()
+    val messageError by messageViewModel.message.collectAsStateWithLifecycle()
+    val alerts by notificationViewModel.notifications.collectAsStateWithLifecycle()
+    val unreadAlerts by notificationViewModel.unreadCount.collectAsStateWithLifecycle()
+    val unreadMessageAlerts = alerts.count { it.readAt == null && it.type == NotificationType.MESSAGE }
+    // Tab Activity opens on when an alert sends the user there.
+    var activityTab by rememberSaveable { mutableStateOf("My Listings") }
     val remotePosts by foodViewModel.availablePosts.collectAsStateWithLifecycle()
     val feedLoading by foodViewModel.loading.collectAsStateWithLifecycle()
     val feedError by foodViewModel.error.collectAsStateWithLifecycle()
 
     LaunchedEffect(currentProfile?.id) { foodViewModel.loadAvailablePosts() }
+    // Alerts load once per session and then arrive live.
+    LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { notificationViewModel.start(it) } }
+    // Opening a chat marks its message alerts read on the server; mirror that
+    // for alerts that arrive while the chat is open.
+    LaunchedEffect(activeChat?.id, alerts) {
+        activeChat?.id?.let { id ->
+            if (alerts.any { it.conversationId == id && it.readAt == null }) {
+                notificationViewModel.markConversationReadLocally(id)
+            }
+        }
+    }
+    LaunchedEffect(page) { if (page != "activity") activityTab = "My Listings" }
 
     // Greeting follows the signed-in profile and the device's local time;
     // the hour is re-read every minute so it changes while Home stays open.
@@ -1290,6 +1315,8 @@ private fun HomeScreen(
         onDispose {
             foodViewModel.clearSession()
             reservationViewModel.clearSession()
+            messageViewModel.clearSession()
+            notificationViewModel.clearSession()
         }
     }
 
@@ -1342,11 +1369,17 @@ private fun HomeScreen(
             // Separate scroll position when opening another listing screen.
             if (page == "alerts") {
                 AlertsScreen(
-                    onOpenFood = { title ->
-                        selectedFood = foods.firstOrNull {
-                            it.title == title
-                        }
+                    notificationViewModel = notificationViewModel,
+                    onOpenConversation = { id -> messageViewModel.openConversation(id) },
+                    onOpenActivity = { tab ->
+                        activityTab = tab
+                        page = "activity"
                     }
+                )
+            } else if (page == "messages") {
+                MessagesScreen(
+                    messageViewModel = messageViewModel,
+                    onBack = { page = "home" }
                 )
             } else if (page == "post") {
                 PostScreen(
@@ -1361,12 +1394,16 @@ private fun HomeScreen(
                     onPost = { page = "post" },
                     onAlerts = { page = "alerts" },
                     foodViewModel = foodViewModel,
-                    reservationViewModel = reservationViewModel
+                    reservationViewModel = reservationViewModel,
+                    messageViewModel = messageViewModel,
+                    unreadAlerts = unreadAlerts,
+                    initialTab = activityTab
                 )
             } else if (page == "profile") {
                 ProfileScreen(
                     onAlerts = { page = "alerts" },
                     onLogout = onLogout,
+                    notificationViewModel = notificationViewModel,
                     remoteProfile = currentProfile,
                     onOpenFood = { title ->
                         selectedFood = foods.firstOrNull {
@@ -1423,16 +1460,40 @@ private fun HomeScreen(
                                 )
                             }
 
+                            IconButton(onClick = { page = "messages" }) {
+                                BadgedBox(
+                                    badge = {
+                                        if (unreadMessageAlerts > 0) {
+                                            Badge { Text(if (unreadMessageAlerts > 99) "99+" else "$unreadMessageAlerts") }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.ChatBubbleOutline,
+                                        contentDescription = "Open messages",
+                                        tint = DarkGreen
+                                    )
+                                }
+                            }
+
                             IconButton(
                                 onClick = {
                                     page = "alerts"
                                 }
                             ) {
-                                Icon(
-                                    Icons.Outlined.Notifications,
-                                    contentDescription = "Open alerts",
-                                    tint = DarkGreen
-                                )
+                                BadgedBox(
+                                    badge = {
+                                        if (unreadAlerts > 0) {
+                                            Badge { Text(if (unreadAlerts > 99) "99+" else "$unreadAlerts") }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Notifications,
+                                        contentDescription = "Open alerts",
+                                        tint = DarkGreen
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -1981,9 +2042,28 @@ private fun HomeScreen(
                     foodViewModel.loadAvailablePosts()
                     selectedFood = null
                 },
+                onMessage = { draft -> messageViewModel.openForListing(food.id, draft) },
                 onBack = { selectedFood = null }
             )
         }
+    }
+
+    // The open conversation (Phase 4), drawn over any other screen or dialog.
+    if (activeChat != null || chatOpening) {
+        ChatScreen(
+            messageViewModel = messageViewModel,
+            myProfileId = currentProfile?.id,
+            onClose = { messageViewModel.close() }
+        )
+    }
+
+    messageError?.let { error ->
+        AlertDialog(
+            onDismissRequest = { messageViewModel.clearMessage() },
+            title = { Text("Messages") },
+            text = { Text(error) },
+            confirmButton = { TextButton(onClick = { messageViewModel.clearMessage() }) { Text("OK") } }
+        )
     }
 }
 
@@ -2274,6 +2354,7 @@ private fun FoodDetailsScreen(
     isOwnFood: Boolean,
     reservationViewModel: ReservationViewModel,
     onReserved: () -> Unit,
+    onMessage: (String) -> Unit,
     onBack: () -> Unit
 ) {
     val available = food.quantity
@@ -2303,6 +2384,17 @@ private fun FoodDetailsScreen(
         mutableStateOf("")
     }
 
+    // Opens the real conversation with this listing's donor (Phase 4).
+    fun messageDonor(draft: String) {
+        if (isOwnFood) {
+            noticeTitle = "Your listing"
+            notice = "You cannot message yourself. Questions from others about this listing appear in Messages."
+        } else {
+            foodAction = ""
+            onMessage(draft)
+        }
+    }
+
     if (foodAction.isNotEmpty()) {
         FoodActionsDialog(
             action = foodAction,
@@ -2316,7 +2408,8 @@ private fun FoodDetailsScreen(
             status = food.status,
             pickupChoice = pickupChoice,
             onPickupSelected = { pickupChoice = it },
-            onClose = { foodAction = "" }
+            onClose = { foodAction = "" },
+            onMessage = { draft -> messageDonor(draft) }
         )
     }
 
@@ -2580,7 +2673,7 @@ private fun FoodDetailsScreen(
                             icon = Icons.Outlined.Eco,
                             title = "Allergens",
                             value = allergens,
-                            onClick = { foodAction = "allergens" }
+                            onClick = { messageDonor("Hi! What allergens does ${food.title} contain?") }
                         )
 
                         HorizontalDivider(color = Line)
@@ -2628,7 +2721,7 @@ private fun FoodDetailsScreen(
                             icon = Icons.Outlined.AcUnit,
                             title = "Storage Note",
                             value = "Ask the provider for storage instructions.",
-                            onClick = { foodAction = "storage" }
+                            onClick = { messageDonor("Hi! How should I store ${food.title} after pickup?") }
                         )
 
                         HorizontalDivider(color = Line)
@@ -2729,12 +2822,12 @@ private fun FoodDetailsScreen(
                     horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
                     FoodActionButton(
-                        title = if (donation) "Message Donor" else "Message Seller",
-                        subtitle = "Ask a question",
+                        title = if (isOwnFood) "Your listing" else if (donation) "Message Donor" else "Message Seller",
+                        subtitle = if (isOwnFood) "Questions go to Messages" else "Ask a question",
                         background = Color.White,
                         foreground = Green,
                         modifier = Modifier.weight(1f),
-                        onClick = { foodAction = "message" }
+                        onClick = { messageDonor("") }
                     )
 
                     FoodActionButton(

@@ -1,7 +1,5 @@
 package com.example.salusalo
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -21,11 +19,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.salusalo.model.AppNotification
+import com.example.salusalo.model.NotificationType
+import com.example.salusalo.model.parseTimestamp
+import com.example.salusalo.viewmodel.NotificationViewModel
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private val AlertsGreen = Color(0xFF397B24)
 private val AlertsCream = Color(0xFFFAF9F3)
@@ -33,23 +38,26 @@ private val AlertsPale = Color(0xFFEDF4DF)
 private val AlertsDark = Color(0xFF17281B)
 private val AlertsGray = Color(0xFF646878)
 
-private data class SampleAlert(
-    val id: String,
-    val title: String,
-    val provider: String,
-    val category: String,
-    val detail: String,
-    val time: String,
-    val priority: String,
-    val photo: Int?,
-    val foodTitle: String?,
-    val earlier: Boolean = false
-)
+/** Filter chip label for each alert type. */
+private fun NotificationType.category() = when (this) {
+    NotificationType.MESSAGE -> "Messages"
+    else -> "Reservations"
+}
 
+/**
+ * Real in-app alerts (Phase 4). The database creates them for new messages and
+ * reservation changes; they arrive live through NotificationViewModel.
+ */
 @Composable
 fun AlertsScreen(
-    onOpenFood: (String) -> Unit
+    notificationViewModel: NotificationViewModel,
+    onOpenConversation: (String) -> Unit,
+    onOpenActivity: (String) -> Unit
 ) {
+    val alerts by notificationViewModel.notifications.collectAsStateWithLifecycle()
+    val preferences by notificationViewModel.preferences.collectAsStateWithLifecycle()
+    val error by notificationViewModel.message.collectAsStateWithLifecycle()
+
     var filter by rememberSaveable {
         mutableStateOf("All")
     }
@@ -58,119 +66,14 @@ fun AlertsScreen(
         mutableStateOf(false)
     }
 
-    var showLearnMore by rememberSaveable {
-        mutableStateOf(false)
-    }
-
-    var recommendationsEnabled by rememberSaveable {
-        mutableStateOf(true)
-    }
-
-    var reservationsEnabled by rememberSaveable {
-        mutableStateOf(true)
-    }
-
-    var updatesEnabled by rememberSaveable {
-        mutableStateOf(true)
-    }
-
-    var readIds by rememberSaveable {
-        mutableStateOf(arrayListOf<String>())
-    }
-
-    var selectedId by rememberSaveable {
-        mutableStateOf<String?>(null)
-    }
-
-    val alerts = remember {
-        listOf(
-            SampleAlert(
-                id = "bread",
-                title = "Nearby bakery posted 30 breads",
-                provider = "Local Bakery • 1.2 km away",
-                category = "Recommended",
-                detail = "Surplus bread available for pickup",
-                time = "5m ago",
-                priority = "High",
-                photo = R.drawable.food_bread,
-                foodTitle = "Bread Assortment"
-            ),
-            SampleAlert(
-                id = "rice",
-                title = "Reserved rice meals ready for pickup",
-                provider = "Community Kitchen • 0.8 km",
-                category = "Reservations",
-                detail = "Sample order #RK78A2 • Pickup within 1 hr",
-                time = "15m ago",
-                priority = "Medium",
-                photo = R.drawable.food_meals,
-                foodTitle = "Packed Rice Meals"
-            ),
-            SampleAlert(
-                id = "produce",
-                title = "Expiring soon: Fresh produce",
-                provider = "Community Pantry • 0.6 km",
-                category = "Recommended",
-                detail = "Expires in 2 hrs • 3 boxes available",
-                time = "25m ago",
-                priority = "High",
-                photo = R.drawable.food_produce,
-                foodTitle = "Fresh Produce Box"
-            ),
-            SampleAlert(
-                id = "approved",
-                title = "Your listing was approved by admin",
-                provider = "Mixed Vegetables • Sample listing #MV120",
-                category = "Updates",
-                detail = "Example of a listing approval notification",
-                time = "1h ago",
-                priority = "Update",
-                photo = null,
-                foodTitle = null
-            ),
-            SampleAlert(
-                id = "saved",
-                title = "Bread Assortment saved",
-                provider = "Local Bakery",
-                category = "Updates",
-                detail = "Example of a saved food reminder",
-                time = "3h ago",
-                priority = "Update",
-                photo = R.drawable.food_bread,
-                foodTitle = "Bread Assortment",
-                earlier = true
-            ),
-            SampleAlert(
-                id = "pastry",
-                title = "Pastry packs you might like",
-                provider = "Neighborhood Bakery • 1.1 km",
-                category = "Recommended",
-                detail = "8 packs available • ₱150",
-                time = "Yesterday",
-                priority = "Medium",
-                photo = R.drawable.food_pastries,
-                foodTitle = "Pastries Assortment",
-                earlier = true
-            )
-        )
-    }
+    LaunchedEffect(Unit) { notificationViewModel.refresh() }
 
     val visibleAlerts = alerts.filter { alert ->
-        val matchesFilter =
-            filter == "All" || alert.category == filter
-
-        val categoryEnabled = when (alert.category) {
-            "Recommended" -> recommendationsEnabled
-            "Reservations" -> reservationsEnabled
-            else -> updatesEnabled
-        }
-
-        matchesFilter && categoryEnabled
+        filter == "All" || alert.type.category() == filter
     }
-
-    val selectedAlert = alerts.firstOrNull {
-        it.id == selectedId
-    }
+    val today = LocalDate.now(ZoneId.systemDefault())
+    fun isToday(alert: AppNotification) =
+        parseTimestamp(alert.createdAt)?.atZone(ZoneId.systemDefault())?.toLocalDate() == today
 
     LazyColumn(
         modifier = Modifier
@@ -207,7 +110,7 @@ fun AlertsScreen(
 
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "Alerts & Recommendations",
+                        "Alerts",
                         fontSize = 19.sp,
                         lineHeight = 23.sp,
                         fontWeight = FontWeight.Bold,
@@ -217,14 +120,17 @@ fun AlertsScreen(
                     Spacer(Modifier.height(4.dp))
 
                     Text(
-                        "Stay updated on what matters to you",
+                        "Messages and updates on your reservations",
                         fontSize = 11.sp,
                         color = AlertsGray
                     )
                 }
 
                 IconButton(
-                    onClick = { showSettings = true }
+                    onClick = {
+                        notificationViewModel.loadPreferences()
+                        showSettings = true
+                    }
                 ) {
                     Icon(
                         Icons.Outlined.Settings,
@@ -244,9 +150,8 @@ fun AlertsScreen(
             ) {
                 listOf(
                     "All",
-                    "Recommended",
-                    "Reservations",
-                    "Updates"
+                    "Messages",
+                    "Reservations"
                 ).forEach { label ->
                     FilterChip(
                         selected = filter == label,
@@ -267,75 +172,25 @@ fun AlertsScreen(
         }
 
         item {
-            Surface(
-                shape = RoundedCornerShape(18.dp),
-                color = AlertsPale,
-                border = BorderStroke(
-                    1.dp,
-                    AlertsGreen.copy(alpha = 0.12f)
-                )
-            ) {
-                Column(Modifier.padding(14.dp)) {
-                    Text(
-                        "Personalized for you",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = AlertsDark
-                    )
-
-                    Spacer(Modifier.height(5.dp))
-
-                    Text(
-                        "Discover food and keep track of pickup updates.",
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp,
-                        color = AlertsGray
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Sample alerts",
-                            modifier = Modifier.weight(1f),
-                            fontSize = 10.sp,
-                            color = AlertsGreen
-                        )
-
-                        TextButton(
-                            onClick = { showLearnMore = true },
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text(
-                                "Learn more",
-                                color = AlertsGreen,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "${visibleAlerts.count { it.id !in readIds }} unread",
+                    "${visibleAlerts.count { it.readAt == null }} unread",
                     modifier = Modifier.weight(1f),
                     fontSize = 12.sp,
                     color = AlertsGray
                 )
 
                 TextButton(
-                    enabled = visibleAlerts.any { it.id !in readIds },
+                    enabled = visibleAlerts.any { it.readAt == null },
                     onClick = {
-                        readIds = ArrayList(
-                            (readIds + visibleAlerts.map { it.id }).distinct()
-                        )
+                        if (filter == "All") {
+                            notificationViewModel.markAllRead()
+                        } else {
+                            notificationViewModel.markRead(visibleAlerts.map { it.id })
+                        }
                     }
                 ) {
                     Text(
@@ -362,7 +217,8 @@ fun AlertsScreen(
                         Spacer(Modifier.height(6.dp))
 
                         Text(
-                            "Try another filter or enable categories in settings.",
+                            "You will be alerted here when someone messages you " +
+                                    "or a reservation on your listings changes.",
                             fontSize = 13.sp,
                             color = AlertsGray
                         )
@@ -371,15 +227,13 @@ fun AlertsScreen(
             }
         }
 
-        listOf(false, true).forEach { earlier ->
-            val group = visibleAlerts.filter {
-                it.earlier == earlier
-            }
+        listOf(true, false).forEach { todayGroup ->
+            val group = visibleAlerts.filter { isToday(it) == todayGroup }
 
             if (group.isNotEmpty()) {
                 item {
                     Text(
-                        if (earlier) "Earlier" else "Today",
+                        if (todayGroup) "Today" else "Earlier",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = AlertsDark
@@ -392,20 +246,15 @@ fun AlertsScreen(
                 ) { alert ->
                     AlertListingCard(
                         alert = alert,
-                        unread = alert.id !in readIds,
                         onClick = {
-                            if (alert.id !in readIds) {
-                                readIds = ArrayList(readIds).apply {
-                                    add(alert.id)
-                                }
-                            }
-
-                            val foodTitle = alert.foodTitle
-
-                            if (foodTitle != null) {
-                                onOpenFood(foodTitle)
-                            } else {
-                                selectedId = alert.id
+                            notificationViewModel.markRead(listOf(alert.id))
+                            when (alert.type) {
+                                NotificationType.MESSAGE ->
+                                    alert.conversationId?.let(onOpenConversation)
+                                NotificationType.RESERVATION_CLAIMED ->
+                                    onOpenActivity("My Reservations")
+                                else ->
+                                    onOpenActivity("My Donations")
                             }
                         }
                     )
@@ -414,29 +263,9 @@ fun AlertsScreen(
         }
     }
 
-    if (showLearnMore) {
-        AlertDialog(
-            onDismissRequest = { showLearnMore = false },
-            title = { Text("About recommendations") },
-            text = {
-                Text(
-                    "These are sample alerts for testing the design.\n\n" +
-                            "Later, recommendations can use food preferences, " +
-                            "location, and activity. Reservation and listing " +
-                            "updates will come from actual transactions."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { showLearnMore = false }
-                ) {
-                    Text("Got it")
-                }
-            }
-        )
-    }
-
     if (showSettings) {
+        var messageAlerts by remember(preferences) { mutableStateOf(preferences?.messageAlerts ?: true) }
+        var reservationAlerts by remember(preferences) { mutableStateOf(preferences?.reservationAlerts ?: true) }
         AlertDialog(
             onDismissRequest = { showSettings = false },
             title = { Text("Alert settings") },
@@ -445,110 +274,58 @@ fun AlertsScreen(
                     modifier = Modifier.heightIn(max = 380.dp)
                 ) {
                     Text(
-                        "Choose which sample categories appear here. " +
-                                "These switches do not control phone notifications.",
+                        "Choose which events create alerts for your account. " +
+                                "These settings are saved to your account. " +
+                                "Messages still arrive in Messages when message alerts are off.",
                         fontSize = 12.sp
                     )
 
                     Spacer(Modifier.height(12.dp))
 
                     AlertSettingRow(
-                        title = "Recommendations",
-                        checked = recommendationsEnabled,
-                        onCheckedChange = {
-                            recommendationsEnabled = it
-                        }
+                        title = "New messages",
+                        checked = messageAlerts,
+                        onCheckedChange = { messageAlerts = it }
                     )
 
                     AlertSettingRow(
-                        title = "Reservations",
-                        checked = reservationsEnabled,
-                        onCheckedChange = {
-                            reservationsEnabled = it
-                        }
-                    )
-
-                    AlertSettingRow(
-                        title = "Updates",
-                        checked = updatesEnabled,
-                        onCheckedChange = {
-                            updatesEnabled = it
-                        }
+                        title = "Reservation updates",
+                        checked = reservationAlerts,
+                        onCheckedChange = { reservationAlerts = it }
                     )
                 }
             },
             confirmButton = {
                 TextButton(
+                    enabled = preferences != null,
+                    onClick = {
+                        preferences?.let {
+                            notificationViewModel.savePreferences(
+                                it.copy(messageAlerts = messageAlerts, reservationAlerts = reservationAlerts)
+                            ) { showSettings = false }
+                        }
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(
                     onClick = { showSettings = false }
                 ) {
-                    Text("Done")
+                    Text("Cancel")
                 }
             }
         )
     }
 
-    selectedAlert?.let { alert ->
+    error?.let { text ->
         AlertDialog(
-            onDismissRequest = { selectedId = null },
-            title = { Text(alert.title) },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(alert.provider)
-                    Text(alert.detail)
-
-                    Text(
-                        when (alert.id) {
-                            "rice" ->
-                                "Demo reservation only. No actual order " +
-                                        "has been placed."
-
-                            "approved" ->
-                                "This is an example approval alert. " +
-                                        "No listing has been submitted or approved."
-
-                            "saved" ->
-                                "This sample reminder is not connected " +
-                                        "to your bookmark buttons yet."
-
-                            else ->
-                                "Sample notification. Open the listing " +
-                                        "to view its food details."
-                        },
-                        fontSize = 12.sp,
-                        color = AlertsGray
-                    )
-                }
-            },
+            onDismissRequest = { notificationViewModel.clearMessage() },
+            title = { Text("Alerts") },
+            text = { Text(text) },
             confirmButton = {
-                val title = alert.foodTitle
-
-                if (title != null) {
-                    TextButton(
-                        onClick = {
-                            selectedId = null
-                            onOpenFood(title)
-                        }
-                    ) {
-                        Text("View food")
-                    }
-                } else {
-                    TextButton(
-                        onClick = { selectedId = null }
-                    ) {
-                        Text("Close")
-                    }
-                }
-            },
-            dismissButton = {
-                if (alert.foodTitle != null) {
-                    TextButton(
-                        onClick = { selectedId = null }
-                    ) {
-                        Text("Close")
-                    }
-                }
+                TextButton(onClick = { notificationViewModel.clearMessage() }) { Text("OK") }
             }
         )
     }
@@ -556,14 +333,15 @@ fun AlertsScreen(
 
 @Composable
 private fun AlertListingCard(
-    alert: SampleAlert,
-    unread: Boolean,
+    alert: AppNotification,
     onClick: () -> Unit
 ) {
-    val priorityColor = when (alert.priority) {
-        "High" -> Color(0xFFE95524)
-        "Medium" -> Color(0xFFB76C09)
-        else -> AlertsGreen
+    val unread = alert.readAt == null
+    val symbol = when (alert.type) {
+        NotificationType.MESSAGE -> "💬"
+        NotificationType.RESERVATION_CREATED -> "🧺"
+        NotificationType.RESERVATION_CANCELLED -> "↩"
+        NotificationType.RESERVATION_CLAIMED -> "✓"
     }
 
     Surface(
@@ -574,46 +352,34 @@ private fun AlertListingCard(
         shape = RoundedCornerShape(18.dp),
         shadowElevation = 2.dp
     ) {
-        Row {
-            val photo = alert.photo
-
-            if (photo != null) {
-                Image(
-                    painter = painterResource(photo),
-                    contentDescription = alert.foodTitle,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .width(82.dp)
-                        .height(158.dp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .padding(11.dp)
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(AlertsPale),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    symbol,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AlertsGreen
                 )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .width(82.dp)
-                        .height(158.dp)
-                        .background(AlertsPale),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "✓",
-                        fontSize = 40.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = AlertsGreen
-                    )
-                }
             }
 
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(11.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .padding(top = 11.dp, bottom = 11.dp, end = 11.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        alert.time,
+                        formatAlertTime(alert.createdAt),
                         modifier = Modifier.weight(1f),
                         fontSize = 10.sp,
                         color = AlertsGray
@@ -642,46 +408,33 @@ private fun AlertListingCard(
                 )
 
                 Text(
-                    alert.provider,
-                    fontSize = 10.sp,
-                    lineHeight = 14.sp,
-                    color = AlertsGray
+                    alert.body,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    color = AlertsGray,
+                    maxLines = 3
                 )
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        alert.category,
-                        fontSize = 9.sp,
-                        color = AlertsGreen,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(7.dp))
-                            .background(AlertsPale)
-                            .padding(horizontal = 6.dp, vertical = 4.dp)
-                    )
-
-                    Text(
-                        alert.priority,
-                        fontSize = 9.sp,
-                        color = priorityColor,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(7.dp))
-                            .background(priorityColor.copy(alpha = 0.09f))
-                            .padding(horizontal = 6.dp, vertical = 4.dp)
-                    )
-                }
-
                 Text(
-                    alert.detail,
-                    fontSize = 10.sp,
-                    lineHeight = 14.sp,
-                    color = AlertsGray
+                    alert.type.category(),
+                    fontSize = 9.sp,
+                    color = AlertsGreen,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(AlertsPale)
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
                 )
             }
         }
     }
+}
+
+/** "3:05 PM" today, otherwise "Sep 24, 3:05 PM". */
+private fun formatAlertTime(value: String): String {
+    val instant = parseTimestamp(value) ?: return ""
+    val zone = ZoneId.systemDefault()
+    val pattern = if (instant.atZone(zone).toLocalDate() == LocalDate.now(zone)) "h:mm a" else "MMM d, h:mm a"
+    return DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).withZone(zone).format(instant)
 }
 
 @Composable

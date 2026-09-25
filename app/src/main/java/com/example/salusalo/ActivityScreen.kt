@@ -24,6 +24,7 @@ import coil3.compose.AsyncImage
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.viewmodel.FoodViewModel
 import com.example.salusalo.viewmodel.ReservationViewModel
+import com.example.salusalo.viewmodel.MessageViewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -71,7 +72,10 @@ fun ActivityScreen(
     onPost: () -> Unit,
     onAlerts: () -> Unit,
     foodViewModel: FoodViewModel,
-    reservationViewModel: ReservationViewModel
+    reservationViewModel: ReservationViewModel,
+    messageViewModel: MessageViewModel,
+    unreadAlerts: Int = 0,
+    initialTab: String = "My Listings"
 ) {
     val myPosts by foodViewModel.myPosts.collectAsStateWithLifecycle()
     val myReservations by reservationViewModel.myReservations.collectAsStateWithLifecycle()
@@ -96,7 +100,7 @@ fun ActivityScreen(
         }
     }
 
-    var tab by rememberSaveable { mutableStateOf("My Listings") }
+    var tab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var activeOnly by rememberSaveable { mutableStateOf(false) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -380,13 +384,15 @@ fun ActivityScreen(
                                 tint = ADark,
                                 modifier = Modifier.size(28.dp)
                             )
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(9.dp)
-                                    .clip(CircleShape)
-                                    .background(AOrange)
-                            )
+                            if (unreadAlerts > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(9.dp)
+                                        .clip(CircleShape)
+                                        .background(AOrange)
+                                )
+                            }
                         }
                     }
                 }
@@ -708,6 +714,14 @@ fun ActivityScreen(
                         fontSize = 11.sp,
                         color = AGray
                     )
+                    record.reservationId?.let { reservationId ->
+                        OutlinedButton(onClick = {
+                            messageViewModel.openForReservation(reservationId)
+                            selectedId = null
+                        }) {
+                            Text(if (record.donorCanClaim) "Message recipient" else "Message donor")
+                        }
+                    }
                 }
             },
             confirmButton = {

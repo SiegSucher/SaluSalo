@@ -1,5 +1,6 @@
 package com.example.salusalo
 
+import com.example.salusalo.viewmodel.NotificationViewModel
 import android.content.Intent
 import com.example.salusalo.model.UserProfile
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -48,6 +49,7 @@ fun ProfileScreen(
     onAlerts: () -> Unit,
     onLogout: () -> Unit,
     onOpenFood: (String) -> Unit,
+    notificationViewModel: NotificationViewModel,
     remoteProfile: UserProfile? = null
 ) {
     val context = LocalContext.current
@@ -605,7 +607,8 @@ fun ProfileScreen(
                 page = ""
                 onOpenFood(title)
             },
-            onClose = { page = "" }
+            onClose = { page = "" },
+            notificationViewModel = notificationViewModel
         )
     }
 
