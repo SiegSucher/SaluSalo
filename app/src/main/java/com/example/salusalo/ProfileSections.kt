@@ -9,6 +9,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.salusalo.viewmodel.NotificationViewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -34,7 +36,8 @@ fun ProfileSections(
     onAccountSaved: (String, String) -> Unit,
     onPreferencesSaved: (Boolean, Boolean, Boolean) -> Unit,
     onOpenFood: (String) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    notificationViewModel: NotificationViewModel
 ) {
     val context = LocalContext.current
     val prefs = remember {
@@ -66,6 +69,24 @@ fun ProfileSections(
     }
     var compact by rememberSaveable {
         mutableStateOf(prefs.getBoolean("compactPreview", false))
+    }
+
+    // Alert preferences saved to the account in Supabase (Phase 4). The
+    // recommendation and pickup-reminder switches are stored there too, but no
+    // alert uses them yet. Notification sound stays on this device.
+    val serverPreferences by notificationViewModel.preferences.collectAsStateWithLifecycle()
+    var messageAlerts by rememberSaveable { mutableStateOf(true) }
+    var reservationAlerts by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(page) {
+        if (page == "notifications") notificationViewModel.loadPreferences()
+    }
+    LaunchedEffect(serverPreferences) {
+        serverPreferences?.let {
+            messageAlerts = it.messageAlerts
+            reservationAlerts = it.reservationAlerts
+            recommendations = it.recommendations
+            reminders = it.pickupReminders
+        }
     }
 
     var verificationRequested by rememberSaveable {
@@ -480,15 +501,29 @@ fun ProfileSections(
 
                             "notifications" -> {
                                 SectionCard {
-                                    SectionToggle(
-                                        "Food recommendations",
-                                        recommendations
-                                    ) { recommendations = it }
+                                    if (serverPreferences == null) {
+                                        Text("Loading your alert settings…", fontSize = 13.sp)
+                                    } else {
+                                        SectionToggle(
+                                            "New messages",
+                                            messageAlerts
+                                        ) { messageAlerts = it }
 
-                                    SectionToggle(
-                                        "Pickup reminders",
-                                        reminders
-                                    ) { reminders = it }
+                                        SectionToggle(
+                                            "Reservation updates",
+                                            reservationAlerts
+                                        ) { reservationAlerts = it }
+
+                                        SectionToggle(
+                                            "Food recommendations",
+                                            recommendations
+                                        ) { recommendations = it }
+
+                                        SectionToggle(
+                                            "Pickup reminders",
+                                            reminders
+                                        ) { reminders = it }
+                                    }
 
                                     SectionToggle(
                                         "Notification sound",
@@ -497,13 +532,33 @@ fun ProfileSections(
                                 }
 
                                 Text(
-                                    "These choices are stored locally. Phone " +
-                                            "notifications and sounds are not connected yet.",
+                                    "Alert choices are saved to your account and apply to " +
+                                            "the Alerts page. Food recommendations and pickup " +
+                                            "reminders are saved but not sent yet. Notification " +
+                                            "sound is stored on this device; phone notifications " +
+                                            "are not connected yet.",
                                     fontSize = 12.sp
                                 )
 
-                                SectionButton("Save preferences") {
+                                SectionButton(
+                                    "Save preferences",
+                                    enabled = serverPreferences != null
+                                ) {
                                     savePreferences()
+                                    val base = serverPreferences
+                                    if (base == null) {
+                                        feedback = "Could not load your account's alert settings. " +
+                                                "Other preferences were saved on this device."
+                                    } else {
+                                        notificationViewModel.savePreferences(
+                                            base.copy(
+                                                messageAlerts = messageAlerts,
+                                                reservationAlerts = reservationAlerts,
+                                                recommendations = recommendations,
+                                                pickupReminders = reminders
+                                            )
+                                        ) { feedback = "Preferences saved to your account." }
+                                    }
                                 }
                             }
 
@@ -875,9 +930,10 @@ private fun SectionLink(
 }
 
 @Composable
-private fun SectionButton(text: String, onClick: () -> Unit) {
+private fun SectionButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp),

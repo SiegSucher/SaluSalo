@@ -4,6 +4,7 @@ import com.example.salusalo.BuildConfig
 import com.google.firebase.auth.FirebaseAuth
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.SupabaseClient
 import kotlinx.coroutines.tasks.await
@@ -35,6 +36,10 @@ object SupabaseClientProvider {
             }
             install(Postgrest)
             install(Storage)
+            // Realtime also authenticates with the Firebase token above, read
+            // when a channel joins. It is not refreshed automatically without
+            // the Supabase Auth plugin; NotificationViewModel re-sends it.
+            install(Realtime)
         }
     }
 }
