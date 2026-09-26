@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-09-26 (Phase 4 signed off, §8; Purchases, Claims and listing prices merged into `master` through PR #3, migrated, and passed on two phones except the "Reserved" dialog, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — merged through PR #3, migrated, and passed on two phones, §10; Phase 2 demo fixes — real donor names, listing details, up to 4 photos, editing, saved listings, expiry — built on branch `claude/phase2-demo-fixes` (PR #5), migrated, and passed on two phones with a regression round, §11). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
+_Last updated: 2026-09-26 (Phase 4 signed off, §8; Purchases, Claims and listing prices merged into `master` through PR #3, migrated, and passed on two phones except the "Reserved" dialog, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — merged through PR #3, migrated, and passed on two phones, §10; Phase 2 demo fixes — real donor names, listing details, up to 4 photos, editing, saved listings, expiry — built on branch `claude/phase2-demo-fixes` (PR #5), migrated, and passed on two phones with a regression round, §11; PR #5 merged into `master` as `aa3e823`; Phase 3 demo fixes in code on branch `claude/phase3-demo-fixes`, not built or tested, §12). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -24,6 +24,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Activity: Purchases, Claims, listing prices (between Phases 4 and 5; not part of Phase 5) | Stored listing prices, the price locked into each reservation, real Purchases and Claims tabs, real Activity totals (§9) | **Merged into `master` through PR #3 on 2026-09-26, together with the Phase 1 demo fixes, before its own device test. Built with AGP and migration applied to the live project on 2026-09-26. The §9.4 two-phone test passed on 2026-09-26, except the "Reserved" dialog after Reserve, which never appears: a Phase 3 bug present since `d4f65fe`, left for the Phase 3 demo fixes (§9.6).** |
 | Phase 1 demo fixes: accounts, profile, security (fixes to finished Phase 1 features; not part of Phase 5) | Google sign-in, a working "Keep me signed in", honest sign-in texts, profile name and photo saved to Supabase, real password change, real Member since; location, Privacy and Signed-in devices removed (§10) | **Complete.** Merged into `master` through PR #3 on 2026-09-26; built with AGP (`googleid` 1.2.0, new `google-services.json`) and migration applied the same day. The developer ran the Phase 1 checks on two phones on 2026-09-26 and reported that they passed ([results log](#results-log)). "Keep me signed in" starting unchecked was changed after PR #3; the tested build included it (§10). |
 | Phase 2 demo fixes: listings (fixes to finished Phase 2 features; not part of Phase 5) | Real donor names, no ratings or distances, newest-first feed, the listing's own pickup address, pickup window, handover, allergens and storage notes saved and shown, up to 4 photos, Edit listing, real Saved Listings, "Expired" from the expiry date (§11) | **Passed.** Built with AGP on branch `claude/phase2-demo-fixes` at `4b6aac6` (PR #5), and migration `20260929_phase2_listing_details.sql` applied to the live project on 2026-09-26. The §11.4 two-phone test (steps 1–25) and its regression round (steps 26–39) passed the same day ([results log](#results-log), §11.6). New small issues are listed in §11.5. |
+| Phase 3 demo fixes: reservations, Activity, Profile (fixes to finished Phase 3 features; not part of Phase 5) | Reserve review page and receipt, pickup questions and notes through the chat, deleting reserved listings by removing them, real Activity records, real Profile claims and donations, Phase 2 leftovers (§12) | **In code on branch `claude/phase3-demo-fixes`. Not built, migration `20260930_phase3_demo_fixes.sql` not applied, not tested.** The SQL passed on a local PostgreSQL copy only (§12.3). |
 | Phase 5: Maps, Reviews, Reports | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 | Phase 6: Admin and Final Release | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 
@@ -1037,7 +1038,7 @@ Not covered by this round (use §4, §9.4 and §10.4 when those areas change): e
 - `get_listing_donor_names` repeats the `food_posts` SELECT rule in SQL; if that policy changes, the function must change with it. (The `saved_listings` insert policy reads `food_posts` under its RLS, so it follows automatically.)
 - **Blank Saved Listings card.** A saved listing the user can no longer see (expired, and not reserved by them) is hidden by the `food_posts` SELECT policy, so its card shows only "No longer available" and "Remove", without its name or photo. Seen in the §11.4 test (step 21). Small follow-up.
 - **Dates follow the phone's language.** The details times (`listingTimeFormat` and `listingClockFormat` in `MainActivity.kt`), the time buttons of Create and Edit Listing (`postTime()` in `PostScreen.kt`), Activity, Alerts and Chat format dates with `Locale.getDefault()`, while "Member since" uses English; on a phone set to another language the month names and AM/PM change. Found in review; not tested.
-- **Long error text on Post Listing and Delete.** `FoodViewModel.errorText()` shows the whole exception message, which for a Supabase error includes the request URL (headers masked); Edit uses the short `supabaseErrorText()`. Found in review; not tested.
+- **Long error text on Post Listing; no error on Delete.** `FoodViewModel.errorText()` shows the whole exception message on Post Listing, which for a Supabase error includes the request URL (headers masked); Edit uses the short `supabaseErrorText()`. _Correction (2026-09-26):_ Delete errors were never shown at all; they went to the feed's error state, which no dialog displays and the next load clears. Found in review; not tested. Both are addressed in §12 (not yet tested).
 
 ### 11.6 Results (2026-09-26)
 
@@ -1049,3 +1050,94 @@ Not covered by this round (use §4, §9.4 and §10.4 when those areas change): e
 - **New small issue:** the blank Saved Listings card (§11.5).
 - **Not checked on the live project:** the other negative checks of §11.3 (the photo-path rules, the saved-listing refusals, who can see donor names, the refusals of `update_my_food_post`) ran only on the local PostgreSQL copy. The missing UPDATE privilege and policy were confirmed live (above), but no direct UPDATE was attempted there.
 
+
+## 12. Phase 3 demo fixes: reservations, Activity, Profile
+
+**Status: in code on branch `claude/phase3-demo-fixes` (from `master` at `aa3e823`). Not built with AGP, migration `20260930_phase3_demo_fixes.sql` not applied to the live project, and not tested on a device.** The SQL was run and tested only on a local PostgreSQL 16 copy (§12.3), and the Kotlin was only type-checked with kotlinc 2.2.10 (0 errors). These are fixes to finished Phase 3 features, not part of Phase 5.
+
+### 12.1 What changed
+
+- **Reserve review page and receipt** (`FoodActions.kt` `ReservationReviewDialog`, `MainActivity.kt` `FoodDetailsScreen`).
+  - Buy Now, Claim Now and the fake checkout and reserve pages are gone. The details page keeps Message and Reserve; on your own listing it shows "Your listing / You cannot reserve it". Near Reserve it shows the amount: "You'll pay ₱X at pickup for N <unit>." / "The app takes no payments.", or "Free — nothing to pay." / "Please be respectful and pick up on time."
+  - Reserve opens the full-screen "Review reservation" page: cover, name, "From <donor>", Reserving as, quantity and unit, pickup location, pickup window, handover ("Not set — ask the donor"), expiry, the price (per unit, total, "Paid at pickup. The app takes no payments.") or "Free", and an optional message to the donor. "Confirm reservation" shows "Reserving…" and is disabled while it runs.
+  - On success the page becomes the "Reserved" receipt ("You reserved N <unit> of <name>.", the amount, location, pickup window, whether the message was sent, "You'll find this reservation in Activity → My Reservations.", and Message donor/seller and Done). Done and Back close the receipt and the details and reload the feed. This fixes the missing "Reserved" dialog of §9.6.
+  - On failure the page stays open with the server's short error text, or "Your reservation could not be made. Check your internet connection and try again."
+  - When the donor name is unavailable, no sentence uses it: "the donor" (or "the seller" for a priced listing) is used instead and the "From" line is left out.
+  - The receipt's button reads "Message seller" for a paid reservation and "Message donor" otherwise.
+- **Pickup times and the note go through the chat.** The demo pickup picker (`PickupOptions`) and the demo chat in `FoodActions.kt` are removed. The Pickup Window row opens the chat with "Hi! When can I pick up <name>?". The review page's note is sent after the reservation succeeds (`open_reservation_conversation`, then `send_message`); if sending fails, the reservation stands and the receipt says so.
+- **Delete through `remove_my_food_post`.** Clients can no longer delete `food_posts` rows directly. A listing nobody ever reserved is deleted with its photos; otherwise it becomes `REMOVED`: hidden from Home, My Listings, saving and reserving; its open reservations are cancelled with `cancel_reason = 'LISTING_REMOVED'`, each recipient gets one "Listing removed" alert (it follows the "Reservation updates" switch and opens that reservation in My Reservations); past reservations, photos and chats are kept, and its saved-listing rows are deleted. Both delete dialogs explain this, and a "Delete listing" dialog shows the result.
+- **Activity.** The sample records, the location picker, the "Demonstration record" and closing lines are removed; the footer says "Share surplus food by creating a listing." with Post Food. A record without a photo shows a plain tile. Reservations on a removed listing say "Listing: Removed by the donor" / "Removed by you" with "Cancelled because the donor removed this listing.", "The donor has since removed this listing." or "You removed this listing." Cancel and Mark claimed are disabled while a request runs, and a failed load shows "Your reservations could not be loaded. Check your internet connection and try again."
+- **`ReservationViewModel`** runs requests behind a `Mutex`, queues a refresh instead of dropping it, and exposes `saving`, `reserveResult` and `loadFailed`.
+- **Profile.** Successful Claims (own reservations marked claimed) and Successful Donations (claimed reservations on own listings) are real, and together equal Activity's Completed. Their pages list the records newest first ("3 packs • ₱135.30", "Picked up Sep 26, 2026 • 3:00 PM", "Recipient: <name>"), with loading, error and empty states. A record page shows "View listing" only while the listing is available, and opens it by ID. The demo totals (38/24), "Demo total…", "DEMO-104", the by-title food lookup and `SectionFoodPhoto` are removed. A caption says "Verified badge, rating and response rate are demo values".
+- **Phase 2 leftovers (§11.5).** Post Listing and Delete errors show the short text ("Your listing could not be published. Check your internet connection and try again." / "Your listing could not be deleted. …"). All dates use `Locale.ENGLISH`. A saved listing the user can no longer see shows its name and photo from `get_my_saved_listing_names()`.
+
+**Left as they are:** the Profile bell, the Food recommendations and Pickup reminders switches, sound, compact preview, Response Rate, Ratings & Reviews, Report a concern, the Identity Verified badge, the Home filter help and "Help reduce food waste" card, and a donor cancelling a single reservation.
+
+### 12.2 Migration `20260930_phase3_demo_fixes.sql`
+
+Run it by hand in the SQL Editor after `20260929_phase2_listing_details.sql` (see `supabase/README.md`). It is safe to run again. It adds `REMOVED` to the `food_posts.status` check, `reservations.cancel_reason`, and `RESERVATION_REMOVED` to the `notifications.type` check; drops the `food_posts` DELETE policy and revokes DELETE; refuses removed listings in `create_reservation`, `update_my_food_post` and the `saved_listings` insert policy; makes `notify_reservation_change` skip listing-removal cancellations; and adds `remove_my_food_post(uuid)` and `get_my_saved_listing_names()` (SECURITY DEFINER, `authenticated` only).
+
+Afterwards, run `supabase/tests/phase3_demo_fixes_check.sql` (read-only, 13 checks, expect all PASS) and `supabase/tests/phase3_live_safety_check.sql` (always ends with the error "SAFETY CHECK FINISHED", which rolls everything back; expect every check PASS or SKIP).
+
+### 12.3 Local results (PostgreSQL 16, not the live project)
+
+- All migrations in order, then the new one twice more: no errors, exactly one check constraint each on `food_posts.status` and `notifications.type`, and `authenticated` has only SELECT and INSERT on `food_posts`.
+- Functional tests: outsider, `anon` and foreign-token calls refused; a reserved listing with two open reservations by one recipient and one claimed by another → `REMOVED`, 2 cancelled, quantity unchanged, one alert linked to the newest reservation, no alert for the donor or the claimed recipient, saved rows deleted, chats kept; removing again → `REMOVED`, 0; reserving, saving and editing a removed listing refused; a never-reserved listing → `DELETED`; single-reservation wording; no alert with the preference off; a recipient's own cancel still alerts the donor; bad `cancel_reason` values rejected; saved names are the caller's own only.
+- Concurrency (two sessions, 2 s hold): cancel/claim/create racing a remove in either order all end consistently, and the log shows no deadlock.
+- `phase4_live_safety_check.sql`: 21/21 PASS. `phase3_demo_fixes_check.sql`: 13/13 PASS. `phase3_live_safety_check.sql`: 14/14 PASS and fully rolled back; the SKIP path was checked too.
+
+### 12.4 Manual test (A → B → A; phones 1 and 2)
+
+**Preconditions:** the migration and both checks above have been run; the app is built from this branch and installed on both phones; A (phone 1) and B (phone 2) are signed in. Steps are tagged [New] or [Regression].
+
+**A**
+1. Post `P3 PAID` (5 packs, ₱45.10, pickup window and handover set) and `P3 FREE` (3 pcs, free, no pickup window) [Regression].
+2. Open `P3 PAID`: the details show "Your listing / You cannot reserve it", no Buy Now or Claim Now [New].
+
+**B**
+3. Open `P3 PAID`: near Reserve, "You'll pay ₱135.30 at pickup for 3 packs." appears once the quantity is 3, and "The app takes no payments." [New].
+4. Tap the Pickup Window row: the chat with A opens with "Hi! When can I pick up P3 PAID?" ready to send [New].
+5. Reserve 3: "Review reservation" shows the cover, "From <A>", Reserving as <B>, 3 packs, the location, window, handover, expiry, ₱45.10 per unit, Total ₱135.30 and "Paid at pickup. The app takes no payments." Type "I'll come at 5." and tap Confirm; the button shows "Reserving…" [New].
+6. The receipt "Reserved": "You reserved 3 packs of P3 PAID.", "Pay ₱135.30 at pickup.", the location and window, "Your message was sent to <A>.", and the Activity line. Tap Message seller: the chat shows "I'll come at 5." Then Done: Home shows 2 packs left [New].
+7. Open `P3 FREE`: "Free — nothing to pay." / "Please be respectful and pick up on time."; the review page shows Pickup window and Handover "Not set — ask the donor" and Price "Free". Reserve 1 without a message; the receipt says "Free — nothing to pay." and no message line [New].
+
+**Stale quantity (both phones, both signed in as B)**
+8. On phone 1, sign out A and sign in as B. On both phones open `P3 FREE` (2 left), tap Reserve with quantity 2, and stay on "Review reservation". Confirm on phone 1: the receipt appears. Then Confirm on phone 2: the page stays open and shows the server's short error (for example "Not enough food available. Only 0 remains." or "Food post is no longer available."), with no receipt; Back returns to the details. Sign out B on phone 1 and sign in as A again [New].
+
+**A**
+9. Activity → My Donations: B's reservations with "Recipient: <B>". Mark B's 1-pc reservation of `P3 FREE` claimed; the button is disabled until it finishes [Regression].
+10. Profile: Successful Donations = 1, Successful Claims as before; the sum equals Activity's Completed. Open Successful donations: "1 pcs • Free", "Picked up …", "Recipient: <B>"; the record page shows View listing only if `P3 FREE` is still available. The caption "Verified badge, rating and response rate are demo values" is shown [New].
+11. Activity: no location picker, no sample records; the footer opens "Share surplus food by creating a listing." with Post Food [New].
+
+**B**
+12. Reserve 1 more of `P3 PAID` (B now has two open reservations on it: 3 and 1) [New].
+13. Profile → Successful claims: `P3 FREE`, "1 pcs • Free". Save `P3 PAID` (bookmark) [New].
+
+**A — Delete, both cases**
+14. Post `P3 NEVER` and delete it: the dialog "Delete listing?" explains both cases; the result says "Listing deleted." and it is gone [New].
+15. Delete `P3 PAID`: the result says "Listing removed. 2 open reservations were cancelled, and their recipients were told. Its past reservations and chats are kept." It disappears from Home and My Listings; My Donations shows its reservations as cancelled with "Listing: Removed by you" [New].
+
+**B**
+16. A single alert "Listing removed": "<A> removed P3 PAID, so your 2 reservations were cancelled." Tapping it opens Activity → My Reservations on the newest one, with "Cancelled because the donor removed this listing." [New].
+17. The chat with A about `P3 PAID` is still there. Home no longer shows `P3 PAID`; Saved Listings no longer lists it [New].
+18. The `P3 FREE` claim shows "Listing: Removed by the donor … The donor has since removed this listing." only if A also removed it (optional: remove `P3 FREE` as A → "Listing removed. Its past reservations and chats are kept.") [New].
+
+**Error texts and Saved Listings**
+19. Turn on flight mode and post a listing: "Your listing could not be published. Check your internet connection and try again." Delete one: "Your listing could not be deleted. …". Cancel a reservation: "Your reservation could not be cancelled. …" Reserve: the review page shows "Your reservation could not be made. …" [New].
+20. Saved Listings: a saved listing that has expired shows its name and photo with "No longer available" and Remove [New].
+21. Optional: set the phone language to Filipino or another language; dates in the details, Create Listing, Activity, Alerts, Chat and Profile stay in English [New].
+
+**Regression (Phases 1–4, §9, §11)**
+22. Sign-up, sign-in (email and Google), sign-out, "Keep me signed in".
+23. Create a listing with 2 photos, edit it, see the gallery on the other phone.
+24. The A/B reservation test of §4: reserve, cancel (quantity returns, Home reloads), claim.
+25. Phase 4: live chat and alerts both ways; notification preferences save.
+26. §9: a priced claim appears in Purchases, a free one in Claims, and the Activity totals match.
+
+### 12.5 Known limits
+
+- A user who already had a chat about a listing keeps it after the listing is removed and can still open it; nobody else can start one.
+- A removed listing cannot be restored.
+- Nothing updates live apart from chat and alerts: other phones see a removal after their next reload.
+- Deleting photos of a never-reserved listing is best effort.
+- **Older app builds break against this migration:** they can't delete listings (no DELETE privilege), and their `Json` fails on the new `REMOVED` status and `RESERVATION_REMOVED` alert type. Install the new build on every phone after running the migration.
