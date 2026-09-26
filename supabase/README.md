@@ -71,6 +71,27 @@ Run `migrations/20260929_phase2_listing_details.sql` by hand in the SQL Editor a
 - **`get_listing_donor_names(uuid[])`** (SECURITY DEFINER) returns only the donor's name, and only for listings the caller may see under the `food_posts` SELECT policy (available and unexpired, their own, or one they reserved). `users` RLS is not widened.
 - **`saved_listings`** (bookmarks): the caller's own rows only (select, insert, delete; no update; nothing for `anon`). A listing can be saved only if the caller can see it and it is not their own. Rows are deleted with their listing or user.
 
+## Phase 3 demo fixes: removing listings, saved names
+
+Run `migrations/20260930_phase3_demo_fixes.sql` by hand in the SQL Editor after `20260929_phase2_listing_details.sql`. It is safe to run again. **Install the new app build on both phones right after running it: older builds break.** They cannot read a `REMOVED` listing or a `RESERVATION_REMOVED` alert, so any list that contains one (My Listings, My Reservations, Alerts) fails to load, and their Delete button uses a direct DELETE, which is now refused and silently does nothing.
+
+- **New values.** `food_posts.status` may be `REMOVED`, and `notifications.type` may be `RESERVATION_REMOVED`. Every earlier check constraint on those two columns is dropped (whatever its name) and one new one is added.
+- **`reservations.cancel_reason`** (new, nullable): `LISTING_REMOVED` when the reservation was cancelled because its donor removed the listing; NULL otherwise. Allowed only on `CANCELLED` rows.
+- **No direct DELETE.** The policy "Users may delete their own food posts" is dropped and DELETE on `food_posts` is revoked from `authenticated`. **Do not run `20260923_phase2_food_posts.sql` again after this file**: it would restore the delete policy (and the update policy).
+- **`remove_my_food_post(p_food_post_id)`** (SECURITY DEFINER) is the only way to delete a listing, and only the caller's own:
+  - never reserved: the row is deleted, with its saved rows, chats and alerts; the app then deletes its photos (best effort). Returns `('DELETED', 0)`;
+  - reserved at least once: the status becomes `REMOVED` and the quantity stays as it was. Open reservations are cancelled with `cancel_reason = 'LISTING_REMOVED'`, each of their recipients gets one `RESERVATION_REMOVED` alert (it follows the "Reservation updates" switch; the donor gets none), and saved rows are deleted. Past reservations, photos and chats are kept. Returns `('REMOVED', n)`, n = open reservations cancelled;
+  - already removed: returns `('REMOVED', 0)` and changes nothing.
+  It locks the listing's open reservations first and then the listing, the same order as `cancel_reservation` and `claim_reservation`, so running at the same time as either waits instead of deadlocking.
+- **A removed listing** is hidden from everyone except its donor and its past recipients (it is no longer `AVAILABLE`). `create_reservation` and `update_my_food_post` refuse it, `start_listing_conversation` refuses a new chat about it, and it cannot be saved. `cancel_reservation`, `claim_reservation`, the price trigger and the other Phase 4 functions are unchanged. `notify_reservation_change` sends nothing for a `LISTING_REMOVED` cancellation.
+- **`get_my_saved_listing_names()`** (SECURITY DEFINER) returns the name and cover path of the caller's own saved listings, including ones the caller can no longer read (expired or fully reserved), so Saved Listings can still show them.
+- **Known limit:** someone who only chatted about a listing (no reservation) keeps that chat after the listing is removed.
+
 ## Safety checks (`tests/`)
 
 The files in `tests/` are not migrations and change nothing. `tests/phase4_live_safety_check.sql` checks that the live Phase 4 rules still refuse what they should. Paste it into the SQL Editor (role `postgres`) and run it. It pretends to be the two participants of the most recent chat and the newest other account, tries forbidden actions, and reports each check as PASS, FAIL or SKIP. It always ends with an error on purpose (`SAFETY CHECK FINISHED: …`); the error rolls back everything the check did. It needs at least one chat with messages, and a third account for the outsider checks.
+
+After running `20260930_phase3_demo_fixes.sql`, run two more files the same way:
+
+- `tests/phase3_demo_fixes_check.sql` only reads the catalog and returns one row per check (PASS or FAIL): the new constraints, that `food_posts` has no DELETE or UPDATE policy or privilege, and the grants of the new and changed functions.
+- `tests/phase3_live_safety_check.sql` works like the Phase 4 check and also always ends with an error that undoes everything. It picks the newest listing that is unexpired and not removed, its donor and the newest other account. It checks that a direct DELETE by the donor, a removal by the outsider, without a login or with another project's token are refused, that the outsider's saved names are their own only, and, after marking the listing `REMOVED`, that it can no longer be edited, reserved, chatted about, saved or seen. Checks it cannot run are reported as SKIP.
