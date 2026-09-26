@@ -16,7 +16,8 @@ coroutinesPlayServices = "1.10.2"
 desugarJdkLibs = "2.0.3"
 coil = "3.3.0"
 credentials = "1.6.0"
-googleid = "1.2.1"
+# Not 1.2.1: it is built with Kotlin 2.4 metadata, which Kotlin 2.2.10 cannot read.
+googleid = "1.2.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
