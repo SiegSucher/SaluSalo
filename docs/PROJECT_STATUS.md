@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-09-25 (Phase 4 signed off, §8; Purchases, Claims and listing prices in code, not yet built or tested, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — in code, not yet built or tested, §10). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
+_Last updated: 2026-09-26 (Phase 4 signed off, §8; Purchases, Claims and listing prices merged into `master` through PR #3, migrated, and passed on two phones except the "Reserved" dialog, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — merged through PR #3, migrated, and passed on two phones, §10). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -21,8 +21,8 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Phase 2: Food Listings | `food_posts`, create listing with image upload to `food-images`, feed, My Listings, delete | **Complete.** Do not redo. Regression passed on 2026-09-25 for both accounts: Home/feed, create listing, delete listing ([results log](#results-log)). |
 | Phase 3: Reservations | Reserve, cancel and claim with atomic quantity; recipient and donor views | **Complete.** Signed off by the developer on 2026-09-25. The A/B reservation test, the missing-image fallback/feed check, and the cancel, claim and Recommended for You tests passed; the remaining checks without an individual test record are listed under the [results log](#results-log). The changes since `d4f65fe` were committed on 2026-09-25 (§6). The known-issue fixes made after sign-off (§3.5) were built and manually tested on 2026-09-25. |
 | Phase 4: Messaging and Notifications | Chat per listing (recipient ↔ donor), in-app alerts for messages and reservation changes, live updates through Supabase Realtime, notification preferences stored in Supabase (§8) | **Complete.** Signed off by the developer on 2026-09-25. Migration applied to the live project. At `266325b` the one-phone A/B test and regression passed, except saving a preference switched back on. At `c7323b8` the two preference fixes and all the live two-phone checks passed, including live alerts after more than 1 hour, and a new account signed up. The live safety check (negative tests) passed 21 of 21. Not tested: the password-reset email, whose code Phase 4 did not change (§8). |
-| Activity: Purchases, Claims, listing prices (between Phases 4 and 5; not part of Phase 5) | Stored listing prices, the price locked into each reservation, real Purchases and Claims tabs, real Activity totals (§9) | **Implemented in code on 2026-09-25. Not built with AGP, migration not applied, not tested on a device.** The SQL was tested on a local Postgres 16; the Kotlin was type-checked (§9.5). |
-| Phase 1 demo fixes: accounts, profile, security (fixes to finished Phase 1 features; not part of Phase 5) | Google sign-in, a working "Keep me signed in", honest sign-in texts, profile name and photo saved to Supabase, real password change, real Member since; location, Privacy and Signed-in devices removed (§10) | **Implemented in code on 2026-09-26 on branch `claude/phase1-demo-fixes`; built with AGP on 2026-09-26 (`googleid` 1.2.0, new `google-services.json`). Migration not applied, not tested on a device.** The SQL was tested on a local Postgres 16; the Kotlin was type-checked (§10.6). |
+| Activity: Purchases, Claims, listing prices (between Phases 4 and 5; not part of Phase 5) | Stored listing prices, the price locked into each reservation, real Purchases and Claims tabs, real Activity totals (§9) | **Merged into `master` through PR #3 on 2026-09-26, together with the Phase 1 demo fixes, before its own device test. Built with AGP and migration applied to the live project on 2026-09-26. The §9.4 two-phone test passed on 2026-09-26, except the "Reserved" dialog after Reserve, which never appears: a Phase 3 bug present since `d4f65fe`, left for the Phase 3 demo fixes (§9.6).** |
+| Phase 1 demo fixes: accounts, profile, security (fixes to finished Phase 1 features; not part of Phase 5) | Google sign-in, a working "Keep me signed in", honest sign-in texts, profile name and photo saved to Supabase, real password change, real Member since; location, Privacy and Signed-in devices removed (§10) | **Complete.** Merged into `master` through PR #3 on 2026-09-26; built with AGP (`googleid` 1.2.0, new `google-services.json`) and migration applied the same day. The developer ran the Phase 1 checks on two phones on 2026-09-26 and reported that they passed ([results log](#results-log)). "Keep me signed in" starting unchecked was changed after PR #3; the tested build included it (§10). |
 | Phase 5: Maps, Reviews, Reports | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 | Phase 6: Admin and Final Release | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 
@@ -49,6 +49,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 - **After the §8.7 preference fixes (commit `c7323b8`, which includes `5c1e89c`):** `BUILD SUCCESSFUL in 29s` on 2026-09-25 21:21 (+08:00), `gradlew.bat :app:assembleDebug`.
   - Its only warning, the deprecated `Icons.Outlined.ArrowBack` (`MainActivity.kt`), was already present.
   - No tests or lint were run. The developer then installed this code from Android Studio and ran the retest ([results log](#results-log)).
+- **Purchases/Claims and Phase 1 demo fixes (branch `claude/phase1-demo-fixes` at `8908548`, merged as PR #3):** `assembleDebug` BUILD SUCCESSFUL on 2026-09-26 after pinning `googleid` 1.2.0 (§10.6), and again with the "starts unchecked" change. The developer then installed it from Android Studio and ran the Phase 1 checks ([results log](#results-log)).
 - **Automated tests:** only the Android Studio templates `ExampleUnitTest` and `ExampleInstrumentedTest` exist.
 
 ### Phase 1: what exists (summary)
@@ -116,7 +117,7 @@ Code involved:
 - **On success.**
   - The message "Reservation created. Please coordinate pickup with the donor." is set.
   - `myReservations` is reloaded.
-  - `FoodDetailsScreen` calls `onReserved()`, which reloads the feed and closes the dialog (L1960–1963, L2279–2287).
+  - `FoodDetailsScreen` calls `onReserved()`, which reloads the feed and closes the dialog (L1960–1963, L2279–2287). This also closes the "Reserved" notice set just before, so it is never seen (found on 2026-09-26, §9.6).
 - **On failure.** The raw exception message is shown in a "Reservation" dialog.
 - **Not a reservation.** "Claim Now" / "Buy Now" on the same screen opens `FoodActionsDialog` (`FoodActions.kt`). That flow is **preview-only**; it states "No request was sent, no stock was held, and no payment was taken."
 
@@ -531,9 +532,12 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 | 2026-09-25 | same | Developer | Passed | Token refresh (Phase 4 test step 9). A's app stayed open on Home for more than 65 minutes (the steps asked for the screen to stay on, with the phone charging and unused). B then sent a message, and A's chat icon and bell badges went up live. |
 | 2026-09-25 | same | Developer | Passed | Sign-up with the OkHttp engine, on the second phone: a new account was created, the role-claim script (outside this repo) was run, and the account signed in again. Reported as done. The password-reset email was not reported. |
 | 2026-09-25 | live project (SQL Editor); script `supabase/tests/phase4_live_safety_check.sql` | Developer | Passed | Live safety check (negative tests): 21 passed, 0 failed, 0 skipped. It used the most recent chat, with its donor and recipient (the two test accounts), and the newest other account as the outsider; the three sanity checks confirmed the simulated sign-ins. Refused as expected: the outsider reading the chat (directly or through `get_my_conversations`), sending in it, marking it read, opening a chat from someone else's reservation, and seeing or changing other people's alerts and alert settings; a chat member inserting or editing messages directly, creating alerts directly, calling `notify_user`, starting a chat about their own listing, or reading the other person's `users` row; a token from another Firebase project; no login (all four tables, and `send_message`). The script ends with an error on purpose, which rolled everything back. |
+| 2026-09-26 | `8908548` (branch `claude/phase1-demo-fixes`, merged as PR #3) plus the uncommitted "starts unchecked" change; both migrations applied | Developer | Passed | Phase 1 demo fixes (§10) on two phones, from a summary checklist of §10.4, reported as one result ("phase 1 demo fixes passed"). The checklist covered: the Welcome and sign-in texts with only "Continue with Google"; Keep me signed in (ticked: still signed in after closing the app; unticked: signed out); Profile with no location and a real Member since; the name change with its errors, then saved, with the Home greeting updating at once; a photo kept after signing out and in, then replaced by a second photo; the password change (a wrong current password and a too-short new one refused, then changed; afterwards the old password failed and the new one worked); Settings without Privacy or the devices list; B seeing A's new name in Messages and My Donations and sending a chat message; the message arriving live; reserving and cancelling one of B's listings; renaming A back; a new Google account (closing the picker shows no error; the first sign-in fails until the role script runs, then works; the Gmail address in Account Settings; no password to change). The checklist's regression row (email sign-up, the password-reset email, create and delete a listing, the feed, reserving, chat and alerts) was not reported separately. |
+| 2026-09-26 | same build | Developer | Passed, with one known issue | Purchases, Claims and listing prices: the §9.4 two-phone test, given in parts (§9.6). Every step passed except the "Reserved" dialog after Reserve (steps 8, 9, 19), which never appears: a Phase 3 bug present since `d4f65fe`, left for the Phase 3 demo fixes. Step 4 passed on a redo (the first try typed the price into Quantity). A0/A1/B0/B1 = 2/2/2/2; the totals then matched (4 and 7). The new price showed on Home after a reload. |
 
 - **Build:** the test phone's app code was deployed on 2026-09-25 at 10:37 (+08:00), after the last source change (10:04), so it matches the working tree above. That same code was committed on 2026-09-25, with no source changes after 10:04. The build on any second device was not checked.
 - **Phase 4 retest build:** `c7323b8`, built at 21:21 (+08:00) with no local source changes and installed from Android Studio. A's phone showed the new "Loading your alert settings…" text, so it ran this build; which build the second phone ran was not checked.
+- **Phase 1 demo fix test build:** installed from Android Studio on 2026-09-26 from `claude/phase1-demo-fixes` at `8908548` plus the uncommitted "starts unchecked" change, which was committed afterwards on branch `claude/phase1-demo-fixes-results`. Which build each phone ran was not checked.
 - **§3.5 test build:** the developer installed commit `85c9263` from Android Studio, with no local source changes, and followed a step-by-step script covering §3.5 checks 1, 3 and 4 (including a full reservation in check 4) plus the regression steps above. §3.5 check 2 could not be run as written: the "lemon dou" listings were no longer on Home; only the listings created during this test were. The reason was not checked; the feed hides expired and fully reserved listings. Check 2 was then run with a staged listing (row above).
 - **Phase 3 sign-off:** on 2026-09-25 the developer declared Phases 1–3 complete and manually verified. The cancel, claim and Recommended for You tests were then run and passed (rows above). Two optional follow-up checks passed later, in the §3.5 test: reserving your own listing ("Your listing / You cannot reserve it") and a cancelled listing's return to the feed. These checks still have no individual test record:
   - from the optional follow-up checks above: the fully reserved listing in My Listings, and over-quantity;
@@ -619,11 +623,11 @@ Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow; n
 - **No realtime updates outside Phase 4.** Since §3.5 (verified on 2026-09-25) the Home feed reloads after a cancel. Claim does not change the feed. Apart from Phase 4's open chat and alerts (§8), nothing updates in real time across devices.
 - **Placeholder or hard-coded UI values:**
   - the greeting "Good evening, Mika". **Changed on 2026-09-25 (§3.5, commit `851e8cb`): it now uses the signed-in profile's first name and the time of day. Built; the evening greeting was seen in the Phase 4 test on 2026-09-25.**
-  - the location "Del Rosarrio, Balilihan". **The profile location was removed in code on 2026-09-26 (§10; not yet tested).** The Home and Activity location pickers still show sample places.
+  - the location "Del Rosarrio, Balilihan". **The profile location was removed on 2026-09-26 (§10; passed on two phones).** The Home and Activity location pickers still show sample places.
   - "Browse all 10 food listings";
-  - Activity metrics 48 / 128. **Replaced in code on 2026-09-25 by real totals (§9); not yet built or tested.**
-  - sample Purchases, Claims and reviews (sample Alerts were replaced by real alerts in Phase 4). **The sample Purchases and Claims were replaced in code on 2026-09-25 (§9); not yet built or tested.** Sample reviews remain.
-  - The "Nearby" filter relies on a fixed distance. The "For Sale" filter matched nothing, because every live listing was "Free"; since §9 it matches listings with a price (not yet tested).
+  - Activity metrics 48 / 128. **Replaced by real totals (§9); passed on two phones on 2026-09-26 (§9.6).**
+  - sample Purchases, Claims and reviews (sample Alerts were replaced by real alerts in Phase 4). **The sample Purchases and Claims were replaced (§9); passed on two phones on 2026-09-26 (§9.6).** Sample reviews remain.
+  - The "Nearby" filter relies on a fixed distance. The "For Sale" filter matched nothing, because every live listing was "Free"; since §9 it matches listings with a price (passed on 2026-09-26, §9.4 step 5).
 - **Read access after cancel.** `is_reservation_recipient()` ignores reservation status, so a recipient keeps read access to a post after cancelling.
 - **Signed URL expiry.** Signed image URLs expire after 1 hour and are not refreshed while a screen stays open.
 - **Raw error messages.** User-facing errors are raw exception messages from supabase-kt and Firebase. How readable the RPC error text is has not been checked.
@@ -725,7 +729,7 @@ The cloud session that wrote Phase 4 has no Android SDK, and Google's Maven repo
 
 ## 9. Activity: Purchases, Claims and listing prices
 
-**Status (2026-09-25): implemented in code on branch `claude/activity-purchases-claims` (from `master` at `5eaee72`). Not built with AGP, the migration has not been applied to the live project, and nothing has been tested on a device.** This is not Phase 5: no reviews, ratings, maps, reports or online payments. Payment is always in person at pickup.
+**Status (2026-09-26): written on branch `claude/activity-purchases-claims` (from `master` at `5eaee72`) and merged into `master` through PR #3 on 2026-09-26, together with the Phase 1 demo fixes (§10), before its own device test. Built with AGP on 2026-09-26 as part of the §10 build (§10.6), and the migration was applied to the live project the same day. The §9.4 two-phone test passed on 2026-09-26 (reported by the developer), except the "Reserved" dialog after Reserve, which never appears (§9.6).** This is not Phase 5: no reviews, ratings, maps, reports or online payments. Payment is always in person at pickup.
 
 ### 9.1 What the tabs show (the developer chose "split by stage")
 
@@ -759,25 +763,25 @@ The cloud session that wrote Phase 4 has no Android SDK, and Google's Maven repo
 
 ### 9.4 Two-phone test (Account A = donor on phone 1, Account B = recipient on phone 2)
 
-Preconditions: run `20260927_activity_prices.sql` in the SQL Editor (check: `select table_name, column_name from information_schema.columns where column_name in ('price','unit_price') and table_schema = 'public';` returns `food_posts.price` and `reservations.unit_price`). Build this branch and install it on both phones.
+Preconditions: run `20260927_activity_prices.sql` in the SQL Editor (check: `select table_name, column_name from information_schema.columns where column_name in ('price','unit_price') and table_schema = 'public';` returns `food_posts.price` and `reservations.unit_price`; run on 2026-09-26). Build `master` (PR #3 or later) and install it on both phones.
 
 **A, part 1**
 1. [Regression] Sign in as A. Home shows "Good <morning/afternoon/evening>, <A's first name> 👋".
-2. [New] Post → For Sale, name `PRICE TEST`, a photo, any category, quantity `5`, unit `packs`, price `45.10`, future dates → Post Listing. Back on Home, its card shows "₱45.10".
-3. [New] Post → Donation, name `FREE TEST`, a photo, quantity `4`, unit `pcs` → Post Listing. Its card shows "Free".
-4. [New] Post → For Sale, price `100000` → Post Listing shows "Enter a price of at most ₱99,999.99." Leave without posting.
+2. [New] Post → "I want to sell", name `PRICE TEST`, a photo, any category, quantity `5`, unit `packs`, price `45.10`, future dates → Post Listing. Back on Home, its card shows "₱45.10".
+3. [New] Post → "I want to donate", name `FREE TEST`, a photo, quantity `4`, unit `pcs` → Post Listing. Its card shows "Free".
+4. [New] Post → "I want to sell", filled in as in step 2 but with `100000` in "Price per unit (₱)" (not in Quantity) → Post Listing shows "Enter a price of at most ₱99,999.99." Leave without posting.
 5. [New] Home chips: "For Sale" lists `PRICE TEST` and not `FREE TEST`; "Donation" lists `FREE TEST` and not `PRICE TEST`.
 6. [New] Activity: write down Completed and Items Rescued (A0, A1). Tap Completed: "<A0> completed: your reservations that donors marked claimed, plus claimed reservations on your listings." The Purchases and Claims tabs show no sample records.
 
 **B, part 1**
 7. [New] Sign in as B. Activity: write down Completed and Items Rescued (B0, B1).
-8. [New] Home → `PRICE TEST`: the price box shows "₱45.10" / "For sale". Set quantity 3: the line under Reserve reads "Pay ₱135.30 at pickup. The app takes no payments." Reserve → dialog "Reserved": "Reservation created. Pay ₱135.30 at pickup."
-9. [Regression] Home → `FREE TEST`: "This is a free donation. Please be respectful and pick up on time." Quantity 2 → Reserve → "Reservation created. Please coordinate pickup with the donor."
-10. [New] Activity → My Reservations: "`PRICE TEST` 3 packs • ₱135.30", status Reserved; details "Your reservation.", "Price: ₱45.10 per unit", "Pay ₱135.30 at pickup.", closing "This is your live reservation.", buttons Cancel and "Message donor". `FREE TEST`: "2 pcs • Free". Purchases and Claims are empty.
+8. [New] Home → `PRICE TEST`: the price box shows "₱45.10" / "For sale". Set quantity 3: the small grey line under the three buttons reads "Pay ₱135.30 at pickup. The app takes no payments." Reserve → dialog "Reserved": "Reservation created. Pay ₱135.30 at pickup." (**Known issue:** this dialog never appears; the details close and Home reloads, §9.6.)
+9. [Regression] Home → `FREE TEST`: "This is a free donation. Please be respectful and pick up on time." Quantity 2 → Reserve → "Reservation created. Please coordinate pickup with the donor." (never appears, §9.6).
+10. [New] Activity → My Reservations: "`PRICE TEST` 3 packs • ₱135.30", status Reserved; details "Your reservation.", "Price: ₱45.10 per unit", "Pay ₱135.30 at pickup.", closing "This is your live reservation.", buttons Cancel and "Message donor". `FREE TEST`: "2 pcs • Free". Purchases and Claims do not list either one (Claims can show older claimed reservations as "Free").
 
 **A, part 2**
 11. [New] Activity → My Donations: `PRICE TEST` "3 packs • ₱135.30"; details "Recipient: <B's name>", "Reservation for your listing.", "Price: ₱45.10 per unit", "Collect ₱135.30 at pickup.". `FREE TEST` "2 pcs • Free" with no price lines. [Regression] Alerts has two "New reservation" alerts.
-12. [New] Price lock: in the SQL Editor run `update public.food_posts set price = 99 where name = 'PRICE TEST' returning name, price;` → 1 row, `99.00`. Tap My Donations again: still "₱135.30".
+12. [New] Price lock: in the SQL Editor run `update public.food_posts set price = 99 where id = (select id from public.food_posts where name = 'PRICE TEST' order by created_at desc limit 1) returning name, price, created_at;` (only the newest `PRICE TEST`) → 1 row, `99.00`. Tap My Donations again: still "₱135.30". Home shows the new price only after it reloads (step 19).
 13. [Regression] Open `PRICE TEST` in My Donations → "Mark claimed" → "Reservation" dialog "Reservation marked as claimed.". Same for `FREE TEST`.
 14. [New] Completed = A0 + 2, Items Rescued = A1 + 5.
 
@@ -786,24 +790,35 @@ Preconditions: run `20260927_activity_prices.sql` in the SQL Editor (check: `sel
 16. [New] Tap the `PRICE TEST` alert: Activity opens on **Purchases** with its details open: "3 packs • ₱135.30", "Status: Claimed", "Picked up: <time>", "Price: ₱45.10 per unit", "Total: ₱135.30, paid at pickup.", "This is your live purchase, paid at pickup." Only Close and "Message donor" (no Cancel). The total is not ₱297.00, so the reserved price was kept.
 17. [New] Back to Alerts, tap the `FREE TEST` alert: Activity opens on **Claims** with "2 pcs • Free", "Free food you picked up.", "This is free food you picked up."
 18. [New] My Reservations no longer lists these two. Completed = B0 + 2, Items Rescued = B1 + 5.
-19. [New] Home (open Post, then Back, to reload): `PRICE TEST` shows "₱99.00". Reserve 1 → "Reservation created. Pay ₱99.00 at pickup." [Regression] Activity → My Reservations → it → Cancel → "Reservation cancelled. The quantity is available again."; it stays in My Reservations as Cancelled, "1 packs • ₱99.00".
+19. [New] Home (open Post, then Back, to reload): `PRICE TEST` shows "₱99.00". Reserve 1 → "Reservation created. Pay ₱99.00 at pickup." (never appears, §9.6). [Regression] Activity → My Reservations → it → Cancel → "Reservation cancelled. The quantity is available again."; it stays in My Reservations as Cancelled, "1 packs • ₱99.00".
 20. [Regression] Purchases → `PRICE TEST` → "Message donor" → send "Thanks!". On A's phone, the chat badge goes up without refreshing; A opens the thread and replies; B sees the reply live.
 
 **A, part 3**
 21. [Regression] Alerts has "Reservation cancelled" for `PRICE TEST`; tapping it opens My Donations.
-22. [Regression] Delete `PRICE TEST` and `FREE TEST` in Activity → My Listings; they leave Home and My Listings. Sign out, sign in again.
+22. [Regression] Delete `PRICE TEST` and `FREE TEST` in Activity → My Listings; they leave Home and My Listings. Sign out, sign in again. Deleting a listing also deletes its reservations, chat and alerts (§9.6), so B's Purchases and Claims lose these two and both totals drop back.
 
 ### 9.5 How this was checked (2026-09-25)
 
 - **SQL:** all migrations run in order on a local PostgreSQL 16 with stand-ins for Supabase's roles and `auth.jwt()`, then `20260927_activity_prices.sql` run twice more without errors. A two-account test confirmed: the price check rejects −1 and 100000; a donor's own insert saves a price; `create_reservation` returns `unit_price` 45.10 for a priced listing and 0.00 for a free one; clients still cannot insert reservations; after the donor changed the price to 99 the earlier reservation kept 45.10 and a new one got 99.00; a directly supplied `unit_price` is overwritten; `get_donor_reservations()` returns names and `unit_price`; claim and cancel still work and still create the Phase 4 alerts; clients cannot execute the trigger function; `anon` cannot execute `get_donor_reservations()`. Running `20260924_phase3_donor_recipient_names.sql` afterwards fails with "cannot change return type of existing function", as documented.
 - **Kotlin:** all app sources compiled with kotlinc 2.2.10 and the Compose and serialization plugins against the supabase-kt 3.5.0 JVM jars and Compose desktop jars, with small stand-ins for Android and Firebase APIs: no errors; the only warning is the deprecated `FormatListBulleted` that was already there. A small JVM check: `formatPeso(45.1)` = ₱45.10, 0.1 + 0.2 = ₱0.30, `reservationTotal(45.1, 3)` = ₱135.30, `NewFoodPost` encodes `"price":0.0`, and `unit_price: 45.10` decodes. This is not an Android build.
-- **Not done:** AGP build, live migration, any device test (§9.4).
+- **Since then (2026-09-26):** built with AGP as part of the §10 build (§10.6); the developer ran the migration on the live project; merged into `master` through PR #3; device test in §9.6.
+
+### 9.6 Device test (2026-09-26) and known issues
+
+- **Result:** the developer ran §9.4 on two phones (A = donor on phone 1, B = recipient on phone 2) with the §10 build, given in parts, and reported that every step passed except the "Reserved" dialog below. Recorded values: A0 = 2, A1 = 2, B0 = 2, B1 = 2; steps 14 and 18 then expected Completed 4 and Items Rescued 7, and were reported as passed.
+  - Step 4: the first try put `100000` into Quantity, leaving the price empty, and correctly got "Enter a price greater than zero, with up to two decimal places."; the redo with the price field showed "Enter a price of at most ₱99,999.99.".
+  - Step 12: A had two `PRICE TEST` listings (another account had reserved the first one); the newest-only update changed the tested one and returned 1 row, `99.00`. Home showed "₱99.00" only after a reload (Post → Back), since the feed does not update live (§7).
+- **Known issue, not fixed: the "Reserved" dialog never appears.** After a successful Reserve, `FoodDetailsScreen` sets its "Reserved" notice ("Reservation created. Pay ₱… at pickup." or "…Please coordinate pickup with the donor.") and at once calls `onReserved()`. `HomeScreen`'s `onReserved` reloads the feed and sets `selectedFood = null`, which closes the details dialog and the notice inside it before it is drawn. Present since `d4f65fe`, so not caused by §9 or §10. It affects §9.4 steps 8, 9 and 19 and §10.4 step 17. The reservation itself is created correctly; the amount still shows in My Reservations and in the line under the buttons. The developer chose on 2026-09-26 to fix it with the Phase 3 demo fixes, together with Buy Now / Claim Now. Proposed fix: keep the details open until the dialog's OK, then close them; the feed can still reload at once.
+- **Observations for later (not bugs in §9):**
+  - The "Pay ₱… at pickup" line under the buttons is 10 sp grey text and was missed at first.
+  - The Buy Now / Claim Now demo checkout looks like a receipt and was taken for the real flow.
+  - Deleting a listing deletes its reservations (`on delete cascade`), with their chats and alerts, so a buyer's Purchases and Claims history disappears when the donor deletes the listing.
 
 ---
 
 ## 10. Phase 1 demo fixes: accounts, profile, security
 
-**Status (2026-09-26): implemented in code on branch `claude/phase1-demo-fixes` (from `claude/activity-purchases-claims` at `32915d1`; merge after the Purchases/Claims pull request). Built with AGP on 2026-09-26 (§10.6); the migration has not been applied and nothing has been tested on a device.** The new `google-services.json` is committed (§10.2). Fixes to finished Phase 1 features, found in the developer's audit; not part of Phase 5.
+**Status (2026-09-26): complete.** Written on branch `claude/phase1-demo-fixes` (from `claude/activity-purchases-claims` at `32915d1`) and merged into `master` through PR #3 on 2026-09-26, which also brought in §9. Built with AGP (§10.6); the migration was applied to the live project, and the developer ran the Phase 1 checks on two phones and reported that they passed (§10.6, [results log](#results-log)). "Keep me signed in" starting unchecked was changed after PR #3, before the test, and reached `master` in a later pull request. The new `google-services.json` is committed (§10.2). Fixes to finished Phase 1 features, found in the developer's audit; not part of Phase 5.
 
 ### 10.1 What changed
 
@@ -811,7 +826,7 @@ Preconditions: run `20260927_activity_prices.sql` in the SQL Editor (check: `sel
   - Cancelling the picker shows nothing. No Google account: "No Google account was found on this phone. Add one in your phone's Settings, then try again." Firebase errors use the existing texts (for example "An account already exists for this email address."). Anything else: "Google sign-in failed. Please try again." The no-account and failure messages add a second line "Details: <message>" so setup errors (wrong SHA-1 or client ID) can be read without logcat.
   - A new Google account without the role claim gets "We could not load your profile. Check your internet connection and try again." and stays signed in to Firebase, as after an email sign-up. After the role script runs, tapping Google again works.
   - Logging out also clears the Credential Manager state (best effort).
-- **Keep me signed in.** Stored on the device (`salusalo_session`, `keep_signed_in`). Sign In tab (email or Google): the checkbox value; sign-up and Google from the Create Account tab: kept. When unchecked, a fresh start of the app (for example after swiping it away from Recents) signs out and shows the Welcome screen. Rotation and restores by Android keep the session.
+- **Keep me signed in.** The checkbox starts **unchecked** (the developer's choice, 2026-09-26). Stored on the device (`salusalo_session`, `keep_signed_in`; a device that never saved it keeps its session). Sign In tab (email or Google): the checkbox value; sign-up and Google from the Create Account tab: kept. When unchecked, a fresh start of the app (for example after swiping it away from Recents) signs out and shows the Welcome screen. Rotation and restores by Android keep the session.
 - **Honest texts.** Welcome page 1 left card: "Find surplus food" / "Browse food shared in your community."; page 2: "Add a photo, quantity, and pickup location."; page 3 body: "Hold food for pickup, message the provider, and collect it at the agreed place.", right card "Message before pickup" / "Chat with the donor to arrange pickup."; sign-in footer: "Agree on pickup details in the chat and check the food before you take it." The illustrations are unchanged.
 - **Display name** saved through `update_my_profile_name`. Account Details shows the sign-in email read-only ("Email (used to sign in)"). Texts: "Enter your name.", "Your name must be 120 characters or fewer.", "Saved to your account."; errors show the database's short text, or "Your name could not be saved. Check your internet connection and try again." for network errors. The new profile goes up to the app, so the Home greeting and Profile header change at once. The "Mika" default and the device-only name are gone.
 - **Profile location removed:** the header line, the Location field, the Preferences → Privacy page and its switch.
@@ -824,7 +839,7 @@ Preconditions: run `20260927_activity_prices.sql` in the SQL Editor (check: `sel
 ### 10.2 Setup (developer)
 
 1. **Firebase console:** Authentication → Sign-in method → enable **Google** (choose a support email). Project settings → Your apps → the Android app `com.example.salusalo` → **Add fingerprint** with the debug SHA-1 (`./gradlew signingReport`, or `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`). Download the new `google-services.json` and commit it to this branch as `app/google-services.json`. It must now contain an OAuth client; without it `R.string.default_web_client_id` does not exist and the build fails. **Done on 2026-09-26:** Google enabled, the debug SHA-1 added, and the new `google-services.json` (Android and web OAuth clients) committed to this branch.
-2. **Supabase:** run `supabase/migrations/20260927_activity_prices.sql` (if not yet run), then `supabase/migrations/20260928_profile_updates.sql`, by hand in the SQL Editor. Check: `select proname from pg_proc where proname in ('update_my_profile_name','set_my_profile_image');` returns 2 rows.
+2. **Supabase:** run `supabase/migrations/20260927_activity_prices.sql` (if not yet run), then `supabase/migrations/20260928_profile_updates.sql`, by hand in the SQL Editor. Check: `select proname from pg_proc where proname in ('update_my_profile_name','set_my_profile_image');` returns 2 rows. **Both run on 2026-09-26.**
 3. Build and install on both phones.
 
 ### 10.3 Database (`supabase/migrations/20260928_profile_updates.sql`)
@@ -838,9 +853,9 @@ Preconditions: run `20260927_activity_prices.sql` in the SQL Editor (check: `sel
 **A (phone 1)**
 1. [New] Signed out, swipe through Welcome: page 1 left card "Find surplus food" / "Browse food shared in your community."; page 2 left card "Add a photo, quantity, and pickup location."; page 3 "Hold food for pickup, message the provider, and collect it at the agreed place." with the right card "Message before pickup" / "Chat with the donor to arrange pickup.".
 2. [New] Sign In tab: under "or continue with" there is one button, "Continue with Google" (no Apple or Facebook); the same on Create Account. Footer: "Your safety matters" / "Agree on pickup details in the chat and check the food before you take it."
-3. [New] Sign in as A with "Keep me signed in" **checked**. Swipe the app away from Recents and open it again: Home opens.
-4. [New] Profile → Log out. Sign in as A with it **unchecked**. Rotate the phone: still Home. Swipe the app away from Recents and open it again: the Welcome screen shows.
-5. [Regression] Sign in as A with it checked.
+3. [New] Sign In tab: "Keep me signed in" starts **unchecked**. Tick it and sign in as A. Swipe the app away from Recents and open it again: Home opens.
+4. [New] Profile → Log out. Sign in as A leaving it **unchecked**. Rotate the phone: still Home. Swipe the app away from Recents and open it again: the Welcome screen shows.
+5. [Regression] Sign in as A with it ticked.
 6. [New] Profile: no location line under the name. The Member Since stat shows the month A signed up, e.g. "Sep 2026"; tapping it shows "Member since September 2026" and "Account name: <A's name>", with no "sample value" text.
 7. [New] Profile → Account Settings: "Display name" shows A's name; "Email (used to sign in)" shows A's email, greyed out and not editable. Clear the name → Save account details → "Enter your name.". Type "  Ana Test  " → Save → "Saved to your account.". Back: the Profile header shows "Ana Test"; Home says "Good <morning/afternoon/evening>, Ana 👋".
 8. [New] Profile → camera button → choose photo 1: a spinner, then "Profile photo updated."; the circle shows photo 1. Log out and sign in again (checked): photo 1 still shows.
@@ -860,7 +875,7 @@ Preconditions: run `20260927_activity_prices.sql` in the SQL Editor (check: `sel
 
 **A (phone 1)**
 16. [Regression] The chat badge and a message alert appear without refreshing. Open the chat and reply "Got it"; B sees it live.
-17. [Regression] Open one of B's listings → Reserve 1 → "Reservation created…". Activity → My Reservations → it → Cancel → "Reservation cancelled. The quantity is available again."
+17. [Regression] Open one of B's listings → Reserve 1 → "Reservation created…" (this dialog never appears, §9.6). Activity → My Reservations → it → Cancel → "Reservation cancelled. The quantity is available again."
 18. [New] Account Settings → set the name back to A's original name → "Saved to your account.". Optionally change the password back (current P2, new = the old password). Log out.
 
 **G (phone 1, signed out)**
@@ -879,10 +894,12 @@ Preconditions: run `20260927_activity_prices.sql` in the SQL Editor (check: `sel
 - The profile photo is visible only to its owner (the Phase 1 `profile-images` policy allows only the owner's folder). There is no way to remove a photo, only to replace it. Deleting the previous file is best effort, so an old file can remain.
 - Other people see a new name on their next load, not live.
 - "Keep me signed in" is per device and applies only to a fresh start.
+- If Firebase rejects a Google sign-in as an invalid credential, the message is the email/password text "The email address or password is incorrect.", because `authErrorMessage()` in `MainActivity.kt` is shared with email sign-in. Found by reading the code; not seen on a device.
 
 ### 10.6 How this was checked (2026-09-26)
 
 - **SQL:** all migrations run in order on a local PostgreSQL 16 with stand-ins for Supabase's roles, `auth.jwt()` and `storage.objects`, then `20260928_profile_updates.sql` twice more without errors. Confirmed: a user renames themselves and the name is saved trimmed ("  Ana Test \n" → "Ana Test"); blank, null and 121-character names are refused ("Enter your name.", "Your name must be 120 characters or fewer."), 120 characters are accepted; photo paths in another user's folder, with `..`, with a lookalike prefix (`uidAX/…`), null, or for a missing object are refused; an own existing path is saved; `role`, `email` and `firebase_uid` do not change and other users are untouched; a direct `update public.users` is still permission denied; a token from another issuer gets "Not authenticated"; `anon` gets permission denied; `get_donor_reservations()` and `get_my_conversations()` show the new name; `supabase/tests/phase4_live_safety_check.sql` passed 21 of 21 on the local data.
 - **Kotlin:** all sources compiled with kotlinc 2.2.10 and the Compose and serialization plugins, against the supabase-kt 3.5.0 JVM jars and Compose desktop jars. Google's Maven repository is blocked in this session, so `androidx.credentials` 1.6.0, `googleid` 1.2.1, the new Firebase calls (`GoogleAuthProvider`, `EmailAuthProvider`, `reauthenticate`, `updatePassword`, `providerData`, `FirebaseAuthWeakPasswordException`) and the Android graphics and `ExifInterface` APIs were checked only against hand-written stubs of their signatures. No errors; only the three deprecation warnings that were already there. This is not an Android build.
 - **AGP build (2026-09-26, the developer's PC):** with `googleid` 1.2.1, `compileDebugKotlin` failed: "Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.4.0, expected version is 2.2.0." `googleid` 1.2.0 (metadata 2.1.0) builds: `assembleDebug` BUILD SUCCESSFUL, with only the three old deprecation warnings. `gradle/libs.versions.toml` now pins 1.2.0.
-- **Not done:** the live migration, any device test.
+- **Live migration and device test (2026-09-26):** the developer ran `20260927_activity_prices.sql` and `20260928_profile_updates.sql` in the SQL Editor, installed the build from Android Studio (this branch at `8908548` plus the uncommitted "starts unchecked" change, which also built with AGP), and ran the Phase 1 checks on two phones from a summary of §10.4. Reported result: passed ([results log](#results-log)).
+- **Not reported:** the regression list at the end of §10.4 (including the password-reset email, never tested) and the §9.4 test.

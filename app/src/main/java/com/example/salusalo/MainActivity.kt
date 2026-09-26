@@ -134,7 +134,8 @@ class MainActivity : ComponentActivity() {
 }
 
 // Device-only "Keep me signed in" choice. It survives sign-out, so the next
-// fresh start can act on the choice made at the last sign-in.
+// fresh start can act on the choice made at the last sign-in. When it was never
+// saved (a session from an older build), the session is kept.
 private fun sessionPreferences(context: Context) =
     context.getSharedPreferences("salusalo_session", 0)
 
@@ -690,7 +691,8 @@ private fun SignInScreen(
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
 
-    var keepSignedIn by rememberSaveable { mutableStateOf(true) }
+    // Starts unchecked: staying signed in is the user's choice at each sign-in.
+    var keepSignedIn by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
