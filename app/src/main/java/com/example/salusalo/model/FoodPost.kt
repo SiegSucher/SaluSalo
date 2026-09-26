@@ -38,7 +38,11 @@ data class FoodPost(
 )
 
 @Serializable
-enum class FoodPostStatus { AVAILABLE, RESERVED, CLAIMED, EXPIRED }
+enum class FoodPostStatus {
+    AVAILABLE, RESERVED, CLAIMED, EXPIRED,
+    /** Deleted by its donor after it was reserved; kept for its reservations and chats. */
+    REMOVED
+}
 
 @Serializable
 data class NewFoodPost(
@@ -74,6 +78,24 @@ enum class ListingHandover(val code: String, val label: String) {
         fun fromCode(code: String?): ListingHandover? = entries.firstOrNull { it.code == code }
         fun fromLabel(label: String): ListingHandover? = entries.firstOrNull { it.label == label }
     }
+}
+
+/** Row returned by get_my_saved_listing_names(). */
+@Serializable
+data class SavedListingName(
+    @SerialName("food_post_id") val foodPostId: String,
+    val name: String,
+    @SerialName("image_path") val imagePath: String? = null
+)
+
+/** What remove_my_food_post() did. */
+@Serializable
+data class RemoveFoodPostResult(
+    /** DELETED (never reserved; the row is gone) or REMOVED (hidden, kept for its reservations). */
+    val outcome: String,
+    @SerialName("cancelled_reservations") val cancelledReservations: Int = 0
+) {
+    val deleted: Boolean get() = outcome == "DELETED"
 }
 
 /** Row returned by get_listing_donor_names(). */

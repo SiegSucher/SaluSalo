@@ -20,7 +20,7 @@ data class AppNotification(
 )
 
 @Serializable
-enum class NotificationType { MESSAGE, RESERVATION_CREATED, RESERVATION_CANCELLED, RESERVATION_CLAIMED }
+enum class NotificationType { MESSAGE, RESERVATION_CREATED, RESERVATION_CANCELLED, RESERVATION_CLAIMED, RESERVATION_REMOVED }
 
 /**
  * A missing row on the server means every alert type is on, matching these defaults.

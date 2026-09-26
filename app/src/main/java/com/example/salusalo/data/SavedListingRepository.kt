@@ -1,12 +1,16 @@
 package com.example.salusalo.data
 
 import com.example.salusalo.model.NewSavedListing
+import com.example.salusalo.model.SavedListingName
 import com.example.salusalo.model.SavedListingRow
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.storage.storage
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Bookmarks in saved_listings. RLS limits every call to the caller's own rows,
@@ -25,9 +29,32 @@ class SavedListingRepository(
             order("created_at", Order.DESCENDING)
         }.decodeList<SavedListingRow>()
         val named = foodRepository.withDonorNames(rows.mapNotNull { it.foodPost }).associateBy { it.id }
+        val hidden = if (rows.any { it.foodPost == null }) savedNames() else emptyMap()
         return rows.map { row ->
-            row.copy(foodPost = named[row.foodPostId]?.withSignedImageUrl(bucket))
+            val post = named[row.foodPostId]
+            if (post != null) {
+                row.copy(foodPost = post.withSignedImageUrl(bucket))
+            } else {
+                val name = hidden[row.foodPostId]
+                row.copy(
+                    fallbackName = name?.name,
+                    fallbackImageUrl = bucket.signedUrlOrNull(name?.imagePath)
+                )
+            }
         }
+    }
+
+    /**
+     * Name and cover path of every saved listing, from get_my_saved_listing_names(),
+     * for those the caller can no longer see. If it fails, those cards stay blank.
+     */
+    private suspend fun savedNames(): Map<String, SavedListingName> = try {
+        supabase.postgrest.rpc("get_my_saved_listing_names")
+            .decodeList<SavedListingName>().associateBy { it.foodPostId }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        emptyMap()
     }
 
     suspend fun save(foodPostId: String) {

@@ -26,7 +26,9 @@ import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.ReservationStatus
 import com.example.salusalo.model.formatPeso
 import com.example.salusalo.model.reservationTotal
+import com.example.salusalo.viewmodel.DeleteResult
 import com.example.salusalo.viewmodel.FoodViewModel
+import com.example.salusalo.viewmodel.text
 import com.example.salusalo.viewmodel.ReservationViewModel
 import com.example.salusalo.viewmodel.MessageViewModel
 import androidx.compose.ui.Modifier
@@ -342,13 +344,21 @@ fun ActivityScreen(
     val itemsRescued = claimedReservations.sumOf { it.quantity }
 
     // A "Reservation claimed" alert opens that reservation in Purchases or
-    // Claims, once the reloaded list shows it as claimed.
+    // Claims, once the reloaded list shows it as claimed. A "Listing removed"
+    // alert opens the cancelled reservation in My Reservations.
     LaunchedEffect(focusReservationId, myReservations) {
         val id = focusReservationId ?: return@LaunchedEffect
         val entry = myReservations.firstOrNull {
-            it.reservation.id == id && it.reservation.status == ReservationStatus.CLAIMED
+            it.reservation.id == id && (
+                it.reservation.status == ReservationStatus.CLAIMED ||
+                    it.reservation.cancelledByListingRemoval
+                )
         } ?: return@LaunchedEffect
-        tab = if (entry.reservation.unitPrice > 0) "Purchases" else "Claims"
+        tab = when {
+            entry.reservation.status != ReservationStatus.CLAIMED -> "My Reservations"
+            entry.reservation.unitPrice > 0 -> "Purchases"
+            else -> "Claims"
+        }
         activeOnly = false
         selectedId = "my-reservation-$id"
         onFocusHandled()
@@ -771,7 +781,7 @@ fun ActivityScreen(
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text("Delete listing?") },
-            text = { Text("This permanently removes this listing and its photos.") },
+            text = { Text(DELETE_LISTING_TEXT) },
             confirmButton = {
                 TextButton(enabled = !foodSaving, onClick = {
                     foodViewModel.deletePost(post)
@@ -782,6 +792,11 @@ fun ActivityScreen(
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
         )
     }
+    DeleteResultDialog(
+        foodViewModel = foodViewModel,
+        // A removal cancels open reservations, so reload the reservation lists too.
+        onRemoved = { reservationViewModel.refresh() }
+    )
     editing?.let { post ->
         EditListingDialog(
             post = post,
@@ -1095,3 +1110,28 @@ private fun formatActivityTimestamp(value: String): String =
     runCatching { java.time.Instant.parse(value) }
         .map { java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy • h:mm a", Locale.getDefault()).withZone(java.time.ZoneId.systemDefault()).format(it) }
         .getOrElse { value }
+
+const val DELETE_LISTING_TEXT =
+    "If nobody has ever reserved this listing, it is deleted with its photos. If it has reservations, it is removed from Home and your listings instead: open reservations are cancelled and their recipients are told, and past reservations, photos and chats are kept."
+
+/** Shows the result of Delete listing, then clears it. */
+@Composable
+fun DeleteResultDialog(
+    foodViewModel: FoodViewModel,
+    onRemoved: () -> Unit = {}
+) {
+    val result by foodViewModel.deleteResult.collectAsStateWithLifecycle()
+    LaunchedEffect(result) {
+        if (result is DeleteResult.Removed) onRemoved()
+    }
+    result?.let {
+        AlertDialog(
+            onDismissRequest = { foodViewModel.clearDeleteResult() },
+            title = { Text("Delete listing") },
+            text = { Text(it.text()) },
+            confirmButton = {
+                TextButton(onClick = { foodViewModel.clearDeleteResult() }) { Text("OK") }
+            }
+        )
+    }
+}

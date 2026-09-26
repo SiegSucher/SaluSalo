@@ -1281,7 +1281,7 @@ private fun HomeScreen(
     val unreadMessageAlerts = alerts.count { it.readAt == null && it.type == NotificationType.MESSAGE }
     // Tab Activity opens on when an alert sends the user there.
     var activityTab by rememberSaveable { mutableStateOf("My Listings") }
-    // Reservation a "Reservation claimed" alert asked Activity to open.
+    // Reservation a "Reservation claimed" or "Listing removed" alert asked Activity to open.
     var activityFocus by rememberSaveable { mutableStateOf<String?>(null) }
     val remotePosts by foodViewModel.availablePosts.collectAsStateWithLifecycle()
     val feedLoading by foodViewModel.loading.collectAsStateWithLifecycle()
@@ -1384,6 +1384,12 @@ private fun HomeScreen(
                         // Claims until the reservation loads; Activity then switches
                         // to Purchases if it was priced.
                         activityTab = "Claims"
+                        activityFocus = reservationId
+                        page = "activity"
+                    },
+                    onOpenRemovedReservation = { reservationId ->
+                        // A reservation cancelled because its listing was removed.
+                        activityTab = "My Reservations"
                         activityFocus = reservationId
                         page = "activity"
                     }
@@ -2006,12 +2012,14 @@ private fun HomeScreen(
                 saved = food.id in savedIds,
                 onToggleSave = { savedListingViewModel.toggle(food.id) },
                 loadExtraPhotos = { foodViewModel.extraPhotoUrls(food.post) },
+                profileName = currentProfile?.name,
                 reservationViewModel = reservationViewModel,
                 onReserved = {
                     foodViewModel.loadAvailablePosts()
                     selectedFood = null
                 },
                 onMessage = { draft -> messageViewModel.openForListing(food.id, draft) },
+                onMessageReservation = { reservationId -> messageViewModel.openForReservation(reservationId) },
                 onBack = { selectedFood = null }
             )
         }
@@ -2320,9 +2328,12 @@ private fun FoodDetailsScreen(
     saved: Boolean,
     onToggleSave: () -> Unit,
     loadExtraPhotos: suspend () -> List<String?>,
+    profileName: String?,
     reservationViewModel: ReservationViewModel,
+    // Closes the details page and reloads the feed after a reservation.
     onReserved: () -> Unit,
     onMessage: (String) -> Unit,
+    onMessageReservation: (String) -> Unit,
     onBack: () -> Unit
 ) {
     val available = food.quantity
@@ -2333,21 +2344,22 @@ private fun FoodDetailsScreen(
     val unit = food.quantity.substringAfter(" ", "items")
     val donation = food.price == "Free"
 
-    var quantity by rememberSaveable(food.title) {
+    var quantity by rememberSaveable(food.id) {
         mutableStateOf(1)
     }
-    var expanded by rememberSaveable(food.title) {
+    var expanded by rememberSaveable(food.id) {
         mutableStateOf(false)
     }
     var notice by remember { mutableStateOf("") }
     var noticeTitle by remember { mutableStateOf("") }
-    var foodAction by rememberSaveable(food.title) {
+    var foodAction by rememberSaveable(food.id) {
         mutableStateOf("")
     }
-
-    var pickupChoice by rememberSaveable(food.title) {
-        mutableStateOf("")
+    var reviewing by rememberSaveable(food.id) {
+        mutableStateOf(false)
     }
+    val reserveSaving by reservationViewModel.saving.collectAsStateWithLifecycle()
+    val reserveResult by reservationViewModel.reserveResult.collectAsStateWithLifecycle()
 
     // Opens the real conversation with this listing's donor (Phase 4).
     fun messageDonor(draft: String) {
@@ -2369,25 +2381,12 @@ private fun FoodDetailsScreen(
             pickupLocation = food.pickupLocation,
             imageUrl = food.imageUrl,
             price = food.price,
-            quantity = quantity,
-            unit = unit,
             status = food.status,
-            pickupChoice = pickupChoice,
-            onPickupSelected = { pickupChoice = it },
             onClose = { foodAction = "" },
             onMessage = { draft -> messageDonor(draft) }
         )
     }
 
-    val reservationMessage by reservationViewModel.message.collectAsStateWithLifecycle()
-    LaunchedEffect(reservationMessage) {
-        reservationMessage?.let { result ->
-            noticeTitle = if (result.startsWith("Reservation created")) "Reserved" else "Reservation"
-            notice = result
-            reservationViewModel.clearMessage()
-            if (result.startsWith("Reservation created")) onReserved()
-        }
-    }
     val description = food.description ?: "No description provided."
 
     // Listings made before these fields existed, or left blank, have none.
@@ -2400,6 +2399,40 @@ private fun FoodDetailsScreen(
     val pickupWindow = listingPickupWindow(post.pickupStart, post.pickupEnd) ?: notSet
     val handover = ListingHandover.fromCode(post.handover)?.label ?: notSet
     val expires = parseTimestamp(post.expirationDate)?.let { listingTime(it) } ?: "—"
+
+    if (reviewing && !isOwnFood) {
+        ReservationReviewDialog(
+            foodPostId = food.id,
+            foodTitle = food.title,
+            donorName = post.donorName?.takeIf { it.isNotBlank() },
+            photo = food.photo,
+            imageUrl = food.imageUrl,
+            profileName = profileName,
+            quantity = quantity,
+            unit = unit,
+            unitPrice = food.unitPrice,
+            pickupLocation = food.pickupLocation,
+            pickupWindow = pickupWindow,
+            handover = handover,
+            expires = expires,
+            saving = reserveSaving,
+            result = reserveResult,
+            onConfirm = { note -> reservationViewModel.reserve(food.id, quantity, note) },
+            onMessageDonor = { reservationId -> onMessageReservation(reservationId) },
+            onFinished = {
+                reviewing = false
+                reservationViewModel.clearReserveResult()
+                onReserved()
+            },
+            onBack = {
+                // Leaving while the request runs keeps its result for the receipt.
+                if (!reserveSaving) {
+                    reviewing = false
+                    reservationViewModel.clearReserveResult()
+                }
+            }
+        )
+    }
 
     // The cover is already signed; photos 2–4 get their own signed URLs here.
     val extraPhotos by produceState<List<String?>?>(null, post.id) {
@@ -2689,7 +2722,7 @@ private fun FoodDetailsScreen(
                             icon = Icons.Outlined.Schedule,
                             title = "Pickup Window",
                             value = pickupWindow,
-                            onClick = { foodAction = "pickup" }
+                            onClick = { messageDonor("Hi! When can I pick up ${food.title}?") }
                         )
 
                         HorizontalDivider(color = Line)
@@ -2849,44 +2882,53 @@ private fun FoodDetailsScreen(
                     FoodActionButton(
                         title = if (isOwnFood) "Your listing" else "Reserve",
                         subtitle = if (isOwnFood) "You cannot reserve it" else "Hold for pickup",
-                        background = PaleGreen,
-                        foreground = Green,
+                        background = Green,
+                        foreground = Color.White,
                         modifier = Modifier.weight(1f),
                         onClick = {
                             if (isOwnFood) {
                                 noticeTitle = "Your listing"
                                 notice = "You cannot reserve your own food post."
                             } else {
-                                reservationViewModel.reserve(food.id, quantity)
+                                reservationViewModel.clearReserveResult()
+                                reviewing = true
                             }
                         }
-                    )
-
-                    FoodActionButton(
-                        title = if (donation) "Claim Now" else "Buy Now",
-                        subtitle = "Confirm & pickup",
-                        background = Green,
-                        foreground = Color.White,
-                        modifier = Modifier.weight(1f),
-                        onClick = { foodAction = "checkout" }
                     )
                 }
 
                 Spacer(Modifier.height(14.dp))
 
+                // What the chosen quantity costs, near Reserve. The amount owed is
+                // fixed by the server when the reservation is made.
                 Text(
                     if (donation) {
-                        "This is a free donation. Please be respectful " +
-                                "and pick up on time."
+                        "Free — nothing to pay."
                     } else {
-                        "Pay ${formatPeso(reservationTotal(food.unitPrice, quantity))} " +
-                                "at pickup. The app takes no payments."
+                        "You'll pay ${formatPeso(reservationTotal(food.unitPrice, quantity))} " +
+                                "at pickup for $quantity $unit."
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    fontSize = 10.sp,
-                    lineHeight = 15.sp,
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp,
+                    fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
-                    color = Gray
+                    color = DarkGreen
+                )
+
+                Spacer(Modifier.height(3.dp))
+
+                Text(
+                    if (donation) {
+                        "Please be respectful and pick up on time."
+                    } else {
+                        "The app takes no payments."
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    textAlign = TextAlign.Center,
+                    color = DarkGreen
                 )
             }
         }

@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.salusalo.data.FoodRepository
 import com.example.salusalo.data.encodeListingPhoto
+import com.example.salusalo.data.shortErrorText
 import com.example.salusalo.data.supabaseErrorText
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostDraft
@@ -15,11 +16,33 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.SerializationException
 
 /** The outcome of an edit, for the Edit Listing dialog. */
 sealed interface EditResult {
     data object Updated : EditResult
     data class Failed(val message: String) : EditResult
+}
+
+/** The outcome of Delete, for the "Delete listing" result dialog. */
+sealed interface DeleteResult {
+    /** Never reserved: the listing and its photos are gone. */
+    data object Deleted : DeleteResult
+    /** Reserved at least once: hidden, with [cancelledReservations] open reservations cancelled. */
+    data class Removed(val cancelledReservations: Int) : DeleteResult
+    data class Failed(val message: String) : DeleteResult
+}
+
+fun DeleteResult.text(): String = when (this) {
+    DeleteResult.Deleted -> "Listing deleted."
+    is DeleteResult.Removed -> when (cancelledReservations) {
+        0 -> "Listing removed. Its past reservations and chats are kept."
+        1 -> "Listing removed. 1 open reservation was cancelled, and its recipient was told. " +
+            "Its past reservations and chats are kept."
+        else -> "Listing removed. $cancelledReservations open reservations were cancelled, and their " +
+            "recipients were told. Its past reservations and chats are kept."
+    }
+    is DeleteResult.Failed -> message
 }
 
 class FoodViewModel(application: Application) : AndroidViewModel(application) {
@@ -38,6 +61,8 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
     val createError = _createError.asStateFlow()
     private val _editResult = MutableStateFlow<EditResult?>(null)
     val editResult = _editResult.asStateFlow()
+    private val _deleteResult = MutableStateFlow<DeleteResult?>(null)
+    val deleteResult = _deleteResult.asStateFlow()
 
     /** True from the moment a create, edit or delete is accepted until it has finished. */
     private val _saving = MutableStateFlow(false)
@@ -78,7 +103,12 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
             _createError.value = "One of the photos could not be read. Please choose another photo."
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error
-            _createError.value = errorText(error)
+            _createError.value = if (error is IllegalArgumentException && error !is SerializationException) {
+                // The repository's own checks, for example "Choose a food image before posting."
+                error.message ?: PUBLISH_FAILED
+            } else {
+                shortErrorText(error, PUBLISH_FAILED)
+            }
         }
     }
 
@@ -100,12 +130,24 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Deletes a never-reserved listing, or removes (hides) one with reservations.
+     * Returns false when ignored because another write has not finished yet.
+     */
     fun deletePost(post: FoodPost): Boolean = launchWrite {
-        runCatching {
-            repository.deleteFoodPost(post)
+        _deleteResult.value = try {
+            val result = repository.removeMyFoodPost(post)
             _myPosts.value = _myPosts.value.filterNot { it.id == post.id }
             _availablePosts.value = _availablePosts.value.filterNot { it.id == post.id }
-        }.onFailure { reportError(it) }
+            myPostsLoadPending = true
+            feedLoadPending = true
+            if (result.deleted) DeleteResult.Deleted else DeleteResult.Removed(result.cancelledReservations)
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            DeleteResult.Failed(
+                shortErrorText(error, "Your listing could not be deleted. Check your internet connection and try again.")
+            )
+        }
     }
 
     /** Signed URLs for a listing's photos 2–4, for the details gallery; a photo that can't be signed is null. */
@@ -119,12 +161,14 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         _createdPost.value = null
         _createError.value = null
         _editResult.value = null
+        _deleteResult.value = null
         _error.value = null
     }
 
     fun clearCreatedPost() { _createdPost.value = null }
     fun clearCreateError() { _createError.value = null }
     fun clearEditResult() { _editResult.value = null }
+    fun clearDeleteResult() { _deleteResult.value = null }
     fun clearError() { _error.value = null }
 
     // A second write asked for before the first has finished (for example a
@@ -168,9 +212,14 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         _error.value = errorText(throwable)
     }
 
+    // Only the short server text: the full exception message can include the URL and headers.
     private fun errorText(throwable: Throwable): String =
-        throwable.message?.takeIf { it.isNotBlank() }
-            ?: "Could not complete this request. Check your internet connection and try again."
+        shortErrorText(throwable, "Could not complete this request. Check your internet connection and try again.")
 
     private class UnreadablePhotoException : Exception()
+
+    private companion object {
+        const val PUBLISH_FAILED =
+            "Your listing could not be published. Check your internet connection and try again."
+    }
 }
