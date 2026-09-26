@@ -1379,9 +1379,8 @@ private fun HomeScreen(
                         page = "activity"
                     },
                     onOpenClaimedReservation = { reservationId ->
-                        // Claims until the reservation loads; Activity then switches
-                        // to Purchases if it was priced.
-                        activityTab = "Claims"
+                        // History includes both collected donations and purchases.
+                        activityTab = "History"
                         activityFocus = reservationId
                         page = "activity"
                     }
@@ -1915,13 +1914,7 @@ private fun HomeScreen(
             ) {
                 listOf(
                     "Home" to Icons.Outlined.Home,
-                    (
-                            if (page == "activity") {
-                                "Browse" to Icons.Outlined.Search
-                            } else {
-                                "Alerts" to Icons.Outlined.Notifications
-                            }
-                            ),
+                    "Alerts" to Icons.Outlined.Notifications,
                     "Post" to Icons.Outlined.Add,
                     "Activity" to Icons.Outlined.Timeline,
                     "Profile" to Icons.Outlined.Person
@@ -1948,12 +1941,6 @@ private fun HomeScreen(
 
                                     "Activity" -> {
                                         page = "activity"
-                                    }
-
-                                    "Browse" -> {
-                                        page = "all"
-                                        category = "All"
-                                        search = ""
                                     }
 
                                     "Profile" -> {
@@ -2041,8 +2028,11 @@ private fun HomeScreen(
     }
 
     selectedFood?.let { food ->
+        val submission by reservationViewModel.claimSubmission.collectAsStateWithLifecycle()
         androidx.compose.ui.window.Dialog(
-            onDismissRequest = { selectedFood = null },
+            onDismissRequest = {
+                if (!(submission.foodPostId == food.id && submission.isSubmitting)) selectedFood = null
+            },
             properties = androidx.compose.ui.window.DialogProperties(
                 usePlatformDefaultWidth = false
             )
@@ -2053,7 +2043,12 @@ private fun HomeScreen(
                 reservationViewModel = reservationViewModel,
                 onReserved = {
                     foodViewModel.loadAvailablePosts()
+                },
+                onViewRequests = {
                     selectedFood = null
+                    activityFocus = null
+                    activityTab = "My Requests"
+                    page = "activity"
                 },
                 onMessage = { draft -> messageViewModel.openForListing(food.id, draft) },
                 onBack = { selectedFood = null }
@@ -2370,6 +2365,7 @@ private fun FoodDetailsScreen(
     isOwnFood: Boolean,
     reservationViewModel: ReservationViewModel,
     onReserved: () -> Unit,
+    onViewRequests: () -> Unit,
     onMessage: (String) -> Unit,
     onBack: () -> Unit
 ) {
@@ -2381,22 +2377,22 @@ private fun FoodDetailsScreen(
     val unit = food.quantity.substringAfter(" ", "items")
     val donation = food.price == "Free"
 
-    var quantity by rememberSaveable(food.title) {
+    var quantity by rememberSaveable(food.id) {
         mutableStateOf(1)
     }
-    var saved by rememberSaveable(food.title) {
+    var saved by rememberSaveable(food.id) {
         mutableStateOf(false)
     }
-    var expanded by rememberSaveable(food.title) {
+    var expanded by rememberSaveable(food.id) {
         mutableStateOf(false)
     }
     var notice by remember { mutableStateOf("") }
     var noticeTitle by remember { mutableStateOf("") }
-    var foodAction by rememberSaveable(food.title) {
+    var foodAction by rememberSaveable(food.id) {
         mutableStateOf("")
     }
 
-    var pickupChoice by rememberSaveable(food.title) {
+    var pickupChoice by rememberSaveable(food.id) {
         mutableStateOf("")
     }
 
@@ -2411,6 +2407,12 @@ private fun FoodDetailsScreen(
         }
     }
 
+    val claimState by reservationViewModel.claimSubmission.collectAsStateWithLifecycle()
+    val currentClaim = claimState.takeIf { it.foodPostId == food.id }
+    LaunchedEffect(currentClaim?.savedReservation?.id) {
+        if (currentClaim?.savedReservation != null) onReserved()
+    }
+
     if (foodAction.isNotEmpty()) {
         FoodActionsDialog(
             action = foodAction,
@@ -2418,14 +2420,30 @@ private fun FoodDetailsScreen(
             provider = food.provider,
             rating = food.rating,
             photo = food.photo,
+            imageUrl = food.imageUrl,
             price = food.price,
             quantity = quantity,
             unit = unit,
             status = food.status,
             pickupChoice = pickupChoice,
             onPickupSelected = { pickupChoice = it },
-            onClose = { foodAction = "" },
-            onMessage = { draft -> messageDonor(draft) }
+            onClose = {
+                foodAction = ""
+                if (currentClaim?.savedReservation != null) onBack()
+            },
+            onMessage = { draft -> messageDonor(draft) },
+            pickupLocation = food.distance,
+            claimSubmitting = currentClaim?.isSubmitting == true,
+            claimReservationId = currentClaim?.savedReservation?.id,
+            claimQuantity = currentClaim?.savedReservation?.quantity,
+            claimUnitPrice = currentClaim?.savedReservation?.unitPrice ?: 0.0,
+            claimError = currentClaim?.error,
+            onConfirmClaim = if (donation) ({
+                if (!isOwnFood && quantity in 1..available) {
+                    reservationViewModel.submitClaim(food.id, quantity)
+                }
+            }) else null,
+            onViewRequests = onViewRequests
         )
     }
 
@@ -2435,7 +2453,10 @@ private fun FoodDetailsScreen(
             noticeTitle = if (result.startsWith("Reservation created")) "Reserved" else "Reservation"
             notice = result
             reservationViewModel.clearMessage()
-            if (result.startsWith("Reservation created")) onReserved()
+            if (result.startsWith("Reservation created")) {
+                onReserved()
+                onBack()
+            }
         }
     }
     val description = food.description ?: "No description provided."
@@ -2846,29 +2867,42 @@ private fun FoodDetailsScreen(
                         onClick = { messageDonor("") }
                     )
 
+                    if (!donation) {
+                        FoodActionButton(
+                            title = if (isOwnFood) "Your listing" else "Reserve",
+                            subtitle = if (isOwnFood) "You cannot reserve it" else "Hold for pickup",
+                            background = PaleGreen,
+                            foreground = Green,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                if (isOwnFood) {
+                                    noticeTitle = "Your listing"
+                                    notice = "You cannot reserve your own food post."
+                                } else {
+                                    reservationViewModel.reserve(food.id, quantity)
+                                }
+                            }
+                        )
+                    }
+
                     FoodActionButton(
-                        title = if (isOwnFood) "Your listing" else "Reserve",
-                        subtitle = if (isOwnFood) "You cannot reserve it" else "Hold for pickup",
-                        background = PaleGreen,
-                        foreground = Green,
+                        title = if (donation) "Claim Food" else "Buy Now",
+                        subtitle = if (donation) "Review & hold for pickup" else "Review purchase",
+                        background = Green,
+                        foreground = Color.White,
                         modifier = Modifier.weight(1f),
                         onClick = {
                             if (isOwnFood) {
                                 noticeTitle = "Your listing"
-                                notice = "You cannot reserve your own food post."
+                                notice = "You cannot request your own food post."
+                            } else if (available < 1) {
+                                noticeTitle = "Unavailable"
+                                notice = "This food is no longer available."
                             } else {
-                                reservationViewModel.reserve(food.id, quantity)
+                                reservationViewModel.prepareClaim(food.id)
+                                foodAction = "checkout"
                             }
                         }
-                    )
-
-                    FoodActionButton(
-                        title = if (donation) "Claim Now" else "Buy Now",
-                        subtitle = "Confirm & pickup",
-                        background = Green,
-                        foreground = Color.White,
-                        modifier = Modifier.weight(1f),
-                        onClick = { foodAction = "checkout" }
                     )
                 }
 
@@ -3027,11 +3061,3 @@ private fun FoodActionButton(
         }
     }
 }
-
-
-
-
-
-
-
-

@@ -281,26 +281,6 @@ fun ProfileScreen(
 
             Column {
                 IconButton(
-                    onClick = { page = "settings" },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Box {
-                        Icon(
-                            Icons.Outlined.Notifications,
-                            contentDescription = "Open alerts",
-                            tint = PDark
-                        )
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFF6900))
-                        )
-                    }
-                }
-
-                IconButton(
                     onClick = { openAccount() },
                     modifier = Modifier.size(36.dp)
                 ) {

@@ -25,6 +25,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.util.Locale
+import com.example.salusalo.model.formatPeso
+import com.example.salusalo.model.reservationTotal
+import coil3.compose.AsyncImage
 
 private val ActionGreen = Color(0xFF28754A)
 private val ActionCream = Color(0xFFF8F7EF)
@@ -47,11 +50,21 @@ fun FoodActionsDialog(
     onClose: () -> Unit,
     // Opens the real Phase 4 chat with a prefilled message. When null, the
     // links below fall back to the local demo chat.
-    onMessage: ((String) -> Unit)? = null
+    onMessage: ((String) -> Unit)? = null,
+    imageUrl: String? = null,
+    pickupLocation: String? = null,
+    claimSubmitting: Boolean = false,
+    claimReservationId: String? = null,
+    claimQuantity: Int? = null,
+    claimUnitPrice: Double = 0.0,
+    claimError: String? = null,
+    onConfirmClaim: (() -> Unit)? = null,
+    onViewRequests: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val address = "Del Rosarrio, Balilihan"
+    val address = pickupLocation?.takeIf { it.isNotBlank() } ?: "Ask the provider for the pickup location"
     val donation = price.equals("Free", ignoreCase = true)
+    val claimSuccessTitle = if (claimUnitPrice > 0) "Reservation confirmed" else "Claim confirmed"
 
     var page by rememberSaveable(action) {
         mutableStateOf(
@@ -119,12 +132,12 @@ fun FoodActionsDialog(
         "location" -> "Pickup location"
         "provider" -> "Provider profile"
         "reserve" -> "Review reservation"
-        "checkout" -> if (donation) "Review claim" else "Review purchase"
+        "checkout" -> if (donation && claimReservationId != null) claimSuccessTitle else if (donation) "Review claim" else "Review purchase"
         else -> "Food details"
     }
 
     Dialog(
-        onDismissRequest = onClose,
+        onDismissRequest = { if (!claimSubmitting) onClose() },
         properties = DialogProperties(
             usePlatformDefaultWidth = false
         )
@@ -149,7 +162,7 @@ fun FoodActionsDialog(
                             .padding(horizontal = 8.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = onClose) {
+                        TextButton(onClick = onClose, enabled = !claimSubmitting) {
                             Text("Back", color = ActionGreen)
                         }
 
@@ -182,8 +195,9 @@ fun FoodActionsDialog(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Image(
-                                    painter = painterResource(photo),
+                                ActionFoodPhoto(
+                                    photo = photo,
+                                    imageUrl = imageUrl,
                                     contentDescription = foodTitle,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
@@ -442,8 +456,9 @@ fun FoodActionsDialog(
                             )
 
                             ActionCard {
-                                Image(
-                                    painter = painterResource(photo),
+                                ActionFoodPhoto(
+                                    photo = photo,
+                                    imageUrl = imageUrl,
                                     contentDescription = foodTitle,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
@@ -467,7 +482,52 @@ fun FoodActionsDialog(
                         }
 
                         "reserve", "checkout" -> {
-                            if (confirmed) {
+                            if (donation && onConfirmClaim != null) {
+                                if (claimReservationId != null) {
+                                    ActionCard {
+                                        Text(claimSuccessTitle, fontSize = 24.sp,
+                                            fontWeight = FontWeight.Bold, color = ActionGreen)
+                                        Text("Your food is reserved for pickup. You can find it in Activity → My Requests.")
+                                        ActionLine("Food", foodTitle)
+                                        ActionLine("Quantity", "${claimQuantity ?: quantity} $unit")
+                                        ActionLine("Status", "Awaiting pickup")
+                                        if (claimUnitPrice > 0) {
+                                            ActionLine("Amount due", formatPeso(reservationTotal(claimUnitPrice, claimQuantity ?: quantity)))
+                                            Text("The saved reservation has a price. Pay at pickup. You can review or cancel it in My Requests.")
+                                        } else {
+                                            ActionLine("Cost", "Free")
+                                        }
+                                        ActionLine("Pickup location", address)
+                                        Text("Contact the provider to agree on pickup time. The provider will mark it collected after handover.")
+                                        ActionButton(text = "View in Activity", onClick = { onViewRequests?.invoke() })
+                                    }
+                                } else {
+                                    ActionCard {
+                                        ActionLine("Food", foodTitle)
+                                        ActionLine("Quantity", "$quantity $unit")
+                                        ActionLine("Pickup location", address)
+                                        ActionLine("Deadline", status)
+                                        ActionLine("Cost", "Free")
+                                        Text("Confirming reserves this quantity for you. Contact the provider to agree on pickup time.")
+                                    }
+                                    claimError?.let { error ->
+                                        ActionCard {
+                                            Text(error, color = Color(0xFFB3261E))
+                                            TextButton(onClick = { onViewRequests?.invoke() }) {
+                                                Text("Check My Requests")
+                                            }
+                                        }
+                                    }
+                                    Button(
+                                        onClick = onConfirmClaim,
+                                        enabled = !claimSubmitting && quantity > 0,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = ActionGreen)
+                                    ) {
+                                        Text(if (claimSubmitting) "Confirming…" else "Confirm Claim")
+                                    }
+                                }
+                            } else if (confirmed) {
                                 ActionCard {
                                     Text(
                                         "Preview complete",
@@ -710,6 +770,69 @@ private fun PickupOptions(
                     selectedLabelColor = ActionGreen
                 )
             )
+        }
+    }
+}
+
+@Composable
+private fun ActionFoodPhoto(
+    photo: Int,
+    imageUrl: String?,
+    contentDescription: String?,
+    contentScale: ContentScale,
+    modifier: Modifier = Modifier
+) {
+    if (imageUrl.isNullOrBlank()) {
+        Image(
+            painter = painterResource(photo),
+            contentDescription = contentDescription,
+            contentScale = contentScale,
+            modifier = modifier
+        )
+    } else {
+        var loading by remember(imageUrl) { mutableStateOf(true) }
+        var failed by remember(imageUrl) { mutableStateOf(false) }
+
+        Box(
+            modifier = modifier.background(ActionPale),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = contentDescription,
+                contentScale = contentScale,
+                modifier = Modifier.fillMaxSize(),
+                onLoading = {
+                    loading = true
+                    failed = false
+                },
+                onSuccess = {
+                    loading = false
+                    failed = false
+                },
+                onError = {
+                    loading = false
+                    failed = true
+                }
+            )
+
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    color = ActionGreen,
+                    strokeWidth = 2.dp
+                )
+            }
+
+            if (failed) {
+                Text(
+                    text = "Photo unavailable",
+                    modifier = Modifier.padding(4.dp),
+                    color = ActionDark,
+                    fontSize = 10.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
         }
     }
 }
