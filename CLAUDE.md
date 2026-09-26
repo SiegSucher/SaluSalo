@@ -21,6 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Phase 4 — Messaging and Notifications: complete (signed off 2026-09-25). Chat per listing, in-app alerts, Realtime, preferences in Supabase. Built, migration applied, and tested on two phones, including the two preference fixes and live alerts after more than 1 hour; the live safety check passed. The password-reset email was not tested (`PROJECT_STATUS.md` §8).
 - Activity Purchases, Claims and listing prices (between Phases 4 and 5, not part of Phase 5): **merged into `master` through PR #3; built, migration `20260927_activity_prices.sql` applied, and the two-phone test passed (2026-09-26), except the "Reserved" dialog after Reserve, a Phase 3 bug left for the Phase 3 demo fixes** (`PROJECT_STATUS.md` §9.6).
 - Phase 1 demo fixes (Google sign-in, Keep me signed in, profile name and photo in Supabase, password change; not part of Phase 5): **complete: merged into `master` through PR #3, migration `20260928_profile_updates.sql` applied, and passed on two phones (2026-09-26)** (`PROJECT_STATUS.md` §10).
+- Phase 2 demo fixes (real donor names, no ratings or distances, listing details, up to 4 photos, Edit listing, Saved Listings, expiry; not part of Phase 5): **in code only on branch `claude/phase2-demo-fixes`; not built, migration `20260929_phase2_listing_details.sql` not applied, not tested** (`PROJECT_STATUS.md` §11).
 - Phase 5 — Maps, Reviews, Reports: not started.
 - Phase 6 — Admin and Final Release: not started.
 - Read `docs/PROJECT_STATUS.md` first. It has the detailed status, the test results and the two-account manual test.
@@ -53,14 +54,15 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
 - `SaluSaloApp()` in `MainActivity.kt` holds `screen` (`welcome | signin | signup | forgot | home`).
   - It runs Firebase sign-in, sign-up and reset, then `UserRepository.loadOrCreateCurrentProfile()` before entering `home`.
   - System Back on the Home page calls `logOut()`.
-- `HomeScreen()` (also in `MainActivity.kt`) holds `page` (`home | recommended | all | alerts | post | activity | profile`) plus the bottom bar.
+- `HomeScreen()` (also in `MainActivity.kt`) holds `page` (`home | all | messages | alerts | post | activity | profile`; the `recommended` page was removed in §11) plus the bottom bar.
   - Food details open as a full-screen `Dialog` (`FoodDetailsScreen`).
-  - It creates the ViewModels with `viewModel(key = "food-$profileId")` / `"reservation-$profileId"` / `"messages-$profileId"` / `"notifications-$profileId"`, so each account gets its own instances. They live in the Activity's `ViewModelStore` and are reused if the same account signs in again; `clearSession()` empties their lists when `HomeScreen` is disposed.
+  - It creates the ViewModels with `viewModel(key = "food-$profileId")` / `"reservation-$profileId"` / `"messages-$profileId"` / `"notifications-$profileId"` / `"saved-$profileId"`, so each account gets its own instances. They live in the Activity's `ViewModelStore` and are reused if the same account signs in again; `clearSession()` empties their lists when `HomeScreen` is disposed.
 
 **Layers**
 - `data/`: plain repository classes that use the `SupabaseClientProvider.client` singleton.
   - `UserRepository` finds or creates the caller's `users` row, keyed by `FirebaseAuth.currentUser.uid`. It also changes the name and photo through the profile functions, uploads photos to `profile-images` (a new `<uid>/profile-<millis>.jpg` each time, shrunk by `data/ProfilePhoto.kt`), and changes the password (reauthenticate, then update). `supabaseErrorText()` shows only a `RestException`'s short `error` text, never the full message.
-  - `FoodRepository` handles `food_posts` and image upload. `withSignedImageUrl(bucket)`, a top-level function in `FoodRepository.kt`, turns the stored path into a 1-hour signed URL. If signing fails, only that post loses its image; the list still loads.
+  - `FoodRepository` handles `food_posts` and image upload: the feed (newest first, donor names from `get_listing_donor_names`), create with up to 4 photos (each shrunk to a 1600 px JPEG by `encodeListingPhoto()` in `data/ProfilePhoto.kt`), `updateMyFoodPost()` (the `update_my_food_post` RPC) and delete (removes every photo, best effort).
+  - `SavedListingRepository` handles `saved_listings` (bookmarks), with each listing embedded. `withSignedImageUrl(bucket)`, a top-level function in `FoodRepository.kt`, turns the stored path into a 1-hour signed URL. If signing fails, only that post loses its image; the list still loads.
   - `ReservationRepository` handles reservation RPCs and reads. It signs the images of the listings its reservations reference with the same helper.
   - `MessageRepository` (conversation RPCs, messages) and `NotificationRepository` (alerts, preferences). `realtimeInserts()` in `data/RealtimeInserts.kt` streams inserted rows through a Realtime channel.
   - `StorageRepository` builds storage paths.
@@ -72,7 +74,8 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
 - `viewmodel/`: `AndroidViewModel` + `StateFlow`.
   - `FoodViewModel` exposes `availablePosts` and `myPosts`.
   - `ReservationViewModel` exposes `myReservations`, `donorReservations` and `message`.
-  - `FoodViewModel`: a feed or My Listings load requested while another request runs is queued and runs right after it (My Listings first). `createPost()` and `deletePost()` are still **ignored** while any request runs.
+  - `FoodViewModel`: requests run one at a time behind a `Mutex`. A feed or My Listings load requested while another request runs is queued and runs right after it (My Listings first). A write (`createPost()`, `updatePost()`, `deletePost()`) waits for the running request instead of being dropped; a second write before the first has finished is ignored (`saving` is true meanwhile), and create and edit report their own result (`createError`, `editResult`).
+  - `SavedListingViewModel`: `savedIds` for the bookmark icons (loaded once per profile when Home starts), `saved` rows for Saved Listings (reloaded when it opens), `toggle()` changes the icon at once and reverts it if the server refuses.
   - `ReservationViewModel`: every request is **ignored** while another is running. `refresh()`, also used after cancel and claim, loads My Reservations and My Donations independently.
   - `MessageViewModel`: inbox, the open chat (`active`, `messages`, live while open) and `send()`.
   - `NotificationViewModel`: alerts, `unreadCount`, preferences. `start(profileId)` keeps alerts live for the session and re-sends the Realtime token every 5 minutes (Realtime does not refresh the Firebase token itself).
@@ -84,7 +87,7 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
   - `AlertScreen.kt`: real alerts (Phase 4).
   - `ChatScreen.kt`: `ChatScreen` (conversation dialog) and `MessagesScreen` (inbox, page `messages`).
   - `FoodActions.kt`: preview-only dialogs; its demo chat is only a fallback when no `onMessage` is passed.
-  - **Much of the UI is still demo/placeholder data** (sample records, hard-coded names and locations, preview-only flows). The feed, listings, reservations, messages, alerts, notification preferences, and the profile name and photo use Supabase.
+  - **Much of the UI is still demo/placeholder data** (sample records, hard-coded names and locations, preview-only flows). The feed, listings (with donor names, details and photos), saved listings, reservations, messages, alerts, notification preferences, and the profile name and photo use Supabase.
 
 **Identity.**
 - The Firebase UID is stored in `users.firebase_uid`.
@@ -98,11 +101,16 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
 - SECURITY DEFINER RPCs: `create_reservation`, `cancel_reservation`, `claim_reservation`, `get_donor_reservations` (returns `unit_price` since `20260927_activity_prices.sql`; do not re-run the Phase 3 files after it).
 - Prices: `food_posts.price` and `reservations.unit_price`. `unit_price` is set only by the `reservations_set_unit_price` trigger from the listing's price; never send or adjust it from the app. Pay at pickup only, no online payments.
 - Phase 4: tables `conversations`, `messages`, `notifications`, `notification_preferences`; RPCs `start_listing_conversation`, `open_reservation_conversation`, `send_message`, `mark_conversation_read`, `mark_notifications_read`, `get_my_conversations`; internal `notify_user()` and the `reservations_notify` trigger; `messages` and `notifications` in the `supabase_realtime` publication.
-- `food-images` object path: `<firebaseUid>/<postId>/image.<ext>`. `food_posts.image_url` stores this **path**, so the UI must use `displayImageUrl`.
+- `food-images` object paths: `<firebaseUid>/<postId>/image.<ext>` (the cover; new listings use `image.jpg`) and, since §11, `photo-2.jpg`–`photo-4.jpg`. `food_posts.image_url` stores the cover's **path** and `extra_image_paths` the others, so the UI must use `displayImageUrl` (and `FoodViewModel.extraPhotoUrls()` for the gallery).
+- Phase 2 demo fixes (`20260929_phase2_listing_details.sql`, §11): `food_posts` columns `pickup_start`, `pickup_end`, `handover` (`MEET_AT_PICKUP_LOCATION` / `COLLECT_FROM_PROVIDER`), `allergens`, `storage_notes`, `extra_image_paths` (≤ 3); SECURITY DEFINER `update_my_food_post(...)` and `get_listing_donor_names(uuid[])`; table `saved_listings` (user, post, `created_at`). Do not re-run the Phase 2 migration after it (it would restore the UPDATE grant and policy).
 
 ## Security and ownership rules (keep them)
 
 - Identity comes only from the token: `FirebaseAuth.currentUser` in Kotlin, and `auth.jwt() ->> 'sub'` / `current_salusalo_profile_id()` in SQL. Never trust a user or profile ID passed in from the UI.
+- **Listings change only by insert and `update_my_food_post`** (plus the reservation RPCs for quantity and status). Clients have no UPDATE on `food_posts`; never add an UPDATE grant or policy. The function takes the caller from the token, locks the row, refuses other people's and expired listings, and never changes quantity, unit, status, donor, photos or `created_at`. New insert fields must be sent explicitly (no defaults in `NewFoodPost`).
+- Listing photos must be in the uploader's own `<firebaseUid>/<postId>/` folder (checked by the `food_posts` insert policy too).
+- **`saved_listings`:** own rows only (select, insert, delete; no UPDATE; nothing for `anon`); insert only for a listing the caller can see that is not their own.
+- Donor names come only from `get_listing_donor_names()` (names only, same visibility as the `food_posts` SELECT policy). If that policy changes, change the function too.
 - **Reservations change only through the RPCs.** Clients have SELECT only on `reservations`.
   - The RPCs lock the `food_posts` row and update `quantity`/`status` atomically.
   - Never write `reservations` directly, and never adjust listing quantity or status from the app.
@@ -165,6 +173,7 @@ Details, test results and line references are in `docs/PROJECT_STATUS.md`.
    - **Two bugs, fixed (`5c1e89c`) and retested** (`PROJECT_STATUS.md` §8.7):
      1. A notification preference switched back on was never saved. supabase-kt's `Json` leaves out values equal to their default, so `true` was missing from the upsert. The fix puts `@EncodeDefault` on the four booleans in `NotificationPreferences`.
      2. The switches showed on before the saved settings loaded. They now show "Loading your alert settings…" and Save stays disabled until then.
-   - Not fixed: the unused `FoodRepository.updateFoodPost()` has the same problem with dropped defaults. Do not turn on `encodeDefaults` globally; that would change the inserts of other models.
+   - The unused `FoodRepository.updateFoodPost()`, which had the same problem with dropped defaults, was removed in §11. Do not turn on `encodeDefaults` globally; that would change the inserts of other models.
 6. **Activity Purchases, Claims and listing prices** (`PROJECT_STATUS.md` §9), written on 2026-09-25 on branch `claude/activity-purchases-claims` and merged into `master` through PR #3 on 2026-09-26, together with the Phase 1 demo fixes, before its own device test. Built with AGP, and the migration was applied to the live project on 2026-09-26. The §9.4 two-phone test then passed on 2026-09-26, except one older bug: **the "Reserved" dialog never appears after Reserve**, because `onReserved()` closes the details dialog that holds it (since `d4f65fe`). The developer left it for the Phase 3 demo fixes, together with Buy Now / Claim Now (§9.6). My Reservations no longer lists claimed reservations; they are in Purchases or Claims. Deleting a listing deletes its reservations (cascade), so a buyer's Purchases and Claims history goes with it.
 7. **Phase 1 demo fixes are complete** (`PROJECT_STATUS.md` §10): merged into `master` through PR #3 on 2026-09-26, migration applied, and the Phase 1 checks passed on two phones the same day (reported as one result; the regression list was not reported). Built after pinning `googleid` 1.2.0 (1.2.1 is built with Kotlin 2.4 metadata, which Kotlin 2.2.10 cannot read). "Keep me signed in" starts unchecked (changed after PR #3; the tested build had it). `app/google-services.json` (Google enabled, the debug SHA-1 of the developer's PC, Android and web OAuth clients) is committed; Google sign-in works only in builds signed with a registered SHA-1. Google sign-in with the email of an unverified email/password account makes that account Google-only (§10.5).
+8. **Phase 2 demo fixes** (`PROJECT_STATUS.md` §11), written on 2026-09-26 on branch `claude/phase2-demo-fixes` from `master` at `8cc18e3`. **In code only: not built with AGP, migration `20260929_phase2_listing_details.sql` not applied (it must be run by hand before installing this build), not tested on a device.** Checked locally only: the migration on PostgreSQL 16 with Supabase stand-ins (applied three times; the §11.3 checks and the Phase 4 safety check passed), and a kotlinc type check against the supabase-kt and Compose desktop jars. Known limits: recipients are not told about edits, photos can't be edited, saved listings don't update live, old listings have no pickup window or handover until edited, nothing sets `EXPIRED` on the server, the Maps button is a text search (Phase 5).

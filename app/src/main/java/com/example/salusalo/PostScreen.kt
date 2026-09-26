@@ -469,7 +469,7 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                                 }
 
                                 appendLine()
-                                appendLine("QUANTITY & CLAIMS")
+                                appendLine("QUANTITY")
 
                                 if (count == null || count <= 0) {
                                     appendLine("Enter a quantity greater than zero.")
