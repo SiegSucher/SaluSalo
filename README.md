@@ -2,14 +2,14 @@
 
 Salu-Salo is an Android app for sharing surplus food within a community to reduce food waste. Donors post surplus food with a photo, quantity, pickup location and expiry date. Recipients browse the available listings and reserve some or all of a listing for pickup. The UI uses Philippine pesos (₱) and Philippine sample locations.
 
-**Status (2026-09-26):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
+**Status (2026-09-26):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Fixes to the demo parts of Phase 2 (real donor names, listing details, up to 4 photos, editing, saved listings; `docs/PROJECT_STATUS.md` §11) passed on two phones the same day, with the migration `20260929_phase2_listing_details.sql`. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
 
 ## Features
 
 Working against the live backend:
 
 - **Accounts:** email/password or Google sign-up and sign-in, password-reset email, password change and sign-out through Firebase Authentication, with an optional "Keep me signed in". Each account gets a Supabase profile the first time it signs in; its display name and photo are saved there.
-- **Food listings:** post a listing with a name, photo, category, quantity, pickup location and expiry date. Browse the feed of available, unexpired listings, and view or delete your own.
+- **Food listings:** post a listing with a name, up to 4 photos, category, quantity, price, pickup location, expiry date, pickup window, handover, allergens and storage notes. Browse the feed of available, unexpired listings, newest first, with each donor's display name. Edit or delete your own listings, and bookmark other people's in Saved Listings.
 - **Reservations:** reserve part or all of another user's listing. The recipient can cancel until the donor marks the reservation claimed. The donor sees the recipient's display name, but not their email or phone number. The server updates the remaining quantity atomically.
 - **Activity:** the My Listings, My Reservations, My Donations, Purchases and Claims tabs, with totals of completed reservations. Listings can have a price, which is paid at pickup (no online payments).
 - **Messages:** message a listing's donor from its details screen or from a reservation; live chat and a Messages inbox with unread counts. Participants see each other's display name only.
@@ -76,6 +76,7 @@ Skip this section if you use the project's existing Supabase backend.
    5. `20260926_phase4_messaging_notifications.sql`: conversations, messages, alerts and notification preferences, their RPCs and triggers, and the Realtime publication for `messages` and `notifications`.
    6. `20260927_activity_prices.sql`: listing prices and the price locked into each reservation. Don't run the Phase 3 files again after it.
    7. `20260928_profile_updates.sql`: the functions that save your own profile name and photo.
+   8. `20260929_phase2_listing_details.sql`: the listing details and extra photos, editing through `update_my_food_post`, donor names and saved listings. Don't run `20260923_phase2_food_posts.sql` again after it.
 2. **Third-Party Auth.** In Supabase, open **Authentication → Third-Party Auth** and add a Firebase integration for the project ID `salusalo`.
 3. **Custom claim.** Every Firebase user needs the custom claim `role: authenticated`. A trusted Admin SDK or Cloud Function must add it; that code is not in this repository. Existing users must sign in again or refresh their ID token after the claim is added.
 
@@ -99,14 +100,14 @@ Features are tested by hand. The two-account reservation test (Account A / Accou
 app/src/main/java/com/example/salusalo/
 ├── MainActivity.kt      Auth screens, navigation state, Home feed, food details and Reserve
 ├── ActivityScreen.kt    Activity tabs: My Listings, My Reservations, My Donations, Purchases, Claims
-├── PostScreen.kt        Create Listing
+├── PostScreen.kt        Create Listing and Edit Listing
 ├── ProfileScreen.kt     Profile (with ProfileSections.kt)
 ├── AlertScreen.kt       Alerts
 ├── ChatScreen.kt        Chat and the Messages inbox
 ├── FoodActions.kt       Preview-only pickup and checkout dialogs
 ├── data/                Repositories and the Supabase client
 ├── model/               Serializable data classes for the Supabase tables
-├── viewmodel/           Food, Reservation, Message and Notification ViewModels
+├── viewmodel/           Food, Saved listing, Reservation, Message and Notification ViewModels
 └── ui/theme/            Template theme (not currently used)
 supabase/
 ├── migrations/          SQL migrations, applied by hand

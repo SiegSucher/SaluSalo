@@ -34,7 +34,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostDraft
+import com.example.salusalo.model.FoodPostEdit
+import com.example.salusalo.model.parseTimestamp
+import com.example.salusalo.viewmodel.EditResult
+import com.example.salusalo.model.ListingHandover
+import com.example.salusalo.model.isExpired
 import com.example.salusalo.viewmodel.FoodViewModel
 import java.math.BigDecimal
 import java.time.Instant
@@ -54,8 +62,8 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
     val scope = rememberCoroutineScope()
     val myPosts by foodViewModel.myPosts.collectAsStateWithLifecycle()
     val createdPost by foodViewModel.createdPost.collectAsStateWithLifecycle()
-    val backendError by foodViewModel.error.collectAsStateWithLifecycle()
-    val backendLoading by foodViewModel.loading.collectAsStateWithLifecycle()
+    val createError by foodViewModel.createError.collectAsStateWithLifecycle()
+    val backendSaving by foodViewModel.saving.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { foodViewModel.loadMyPosts() }
 
@@ -65,14 +73,10 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
     var price by rememberSaveable { mutableStateOf("") }
     var quantity by rememberSaveable { mutableStateOf("") }
     var unit by rememberSaveable { mutableStateOf("") }
-    var location by rememberSaveable {
-        mutableStateOf("Del Rosarrio, Balilihan")
-    }
+    var location by rememberSaveable { mutableStateOf("") }
     var distribution by rememberSaveable {
-        mutableStateOf("Meet at pickup location")
+        mutableStateOf(ListingHandover.MEET_AT_PICKUP_LOCATION.label)
     }
-    var partial by rememberSaveable { mutableStateOf(true) }
-    var maximum by rememberSaveable { mutableStateOf("") }
     var allergens by rememberSaveable { mutableStateOf("") }
     var storage by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
@@ -91,6 +95,7 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
     var saving by remember { mutableStateOf(false) }
     var showLocal by rememberSaveable { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<com.example.salusalo.model.FoodPost?>(null) }
+    var editing by remember { mutableStateOf<com.example.salusalo.model.FoodPost?>(null) }
 
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
@@ -149,12 +154,12 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
     fun validate(): String {
         val count = quantity.toIntOrNull()
         val amount = price.toBigDecimalOrNull()
-        val limit = maximum.toIntOrNull()
         val now = System.currentTimeMillis()
 
         return when {
             photos.isEmpty() -> "Add at least one food photo."
             name.isBlank() -> "Enter the food name."
+            textLength(name) > 160 -> "The food name must be 160 characters or fewer."
             category.isBlank() -> "Select a category."
             count == null || count <= 0 -> "Enter a whole quantity greater than zero."
             unit.isBlank() -> "Select a unit."
@@ -166,13 +171,13 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
             // Matches the food_posts price check in the database.
             !donation && amount != null && amount > BigDecimal("99999.99") -> "Enter a price of at most ₱99,999.99."
             location.isBlank() -> "Enter the pickup location."
+            textLength(location) > 300 -> "The pickup location must be 300 characters or fewer."
             expiry <= now -> "Choose a future expiration date and time."
             pickupStart <= now -> "Choose a future pickup start time."
             pickupEnd <= pickupStart -> "Pickup must end after it starts."
             pickupEnd > expiry -> "Pickup must end on or before expiration."
-            partial && maximum.isNotBlank() &&
-                    (limit == null || limit < 1 || limit > count) ->
-                "The recipient maximum must be between 1 and $count."
+            textLength(allergens) > 300 -> "Allergens must be 300 characters or fewer."
+            textLength(storage) > 300 -> "Storage notes must be 300 characters or fewer."
             else -> ""
         }
     }
@@ -184,10 +189,13 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
             foodViewModel.clearCreatedPost()
         }
     }
-    LaunchedEffect(backendLoading) {
-        if (!backendLoading && createdPost == null && saving && backendError != null) {
-            saving = false
-            error = backendError ?: "Could not publish the listing."
+    LaunchedEffect(createError) {
+        createError?.let { message ->
+            if (saving) {
+                saving = false
+                error = message
+            }
+            foodViewModel.clearCreateError()
         }
     }
     Column(
@@ -241,6 +249,7 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                     Text(name, fontWeight = FontWeight.Bold)
                     Text("$quantity $unit • ${if (donation) "Free" else "₱$price per unit"}")
                     Text("Pickup: $location")
+                    Text("Photos: ${photos.size}")
                     Text("Reference: ${savedId.take(8)}")
                     Text(
                         "Your listing is now published to the community feed.",
@@ -379,65 +388,10 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                     }
 
                     PostChoice(
-                        "Distribution mode",
+                        "Handover",
                         distribution,
-                        listOf(
-                            "Meet at pickup location",
-                            "Collect from provider"
-                        ),
+                        ListingHandover.entries.map { it.label },
                         { distribution = it }
-                    )
-                }
-
-                PostPanel(pale = true) {
-                    Text(
-                        "Smart options",
-                        color = PostGreen,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "Allow partial claims",
-                            modifier = Modifier.weight(1f)
-                        )
-                        Switch(
-                            checked = partial,
-                            onCheckedChange = { partial = it }
-                        )
-                    }
-
-                    Text(
-                        "Recipients can request part of the available quantity.",
-                        fontSize = 12.sp
-                    )
-
-                    PostField(
-                        "Maximum per recipient (optional)",
-                        if (partial) maximum else "",
-                        { maximum = it },
-                        keyboard = KeyboardType.Number,
-                        enabled = partial
-                    )
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "Whole batch only",
-                            modifier = Modifier.weight(1f)
-                        )
-                        Switch(
-                            checked = !partial,
-                            onCheckedChange = { partial = !it }
-                        )
-                    }
-
-                    Text(
-                        if (partial) {
-                            "Leave the maximum blank for no additional limit."
-                        } else {
-                            "One recipient must request the full batch."
-                        },
-                        fontSize = 12.sp
                     )
                 }
 
@@ -473,7 +427,6 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                     TextButton(
                         onClick = {
                             val count = quantity.toIntOrNull()
-                            val limit = maximum.toIntOrNull()
                             val amount = price.toBigDecimalOrNull()
                             val now = System.currentTimeMillis()
 
@@ -516,7 +469,7 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                                 }
 
                                 appendLine()
-                                appendLine("QUANTITY & CLAIMS")
+                                appendLine("QUANTITY")
 
                                 if (count == null || count <= 0) {
                                     appendLine("Enter a quantity greater than zero.")
@@ -524,41 +477,6 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                                     val unitLabel = unit.ifBlank { "units" }
 
                                     appendLine("Available: $count $unitLabel.")
-
-                                    when {
-                                        !partial -> {
-                                            appendLine(
-                                                "Whole batch only: one recipient must " +
-                                                        "request all $count $unitLabel."
-                                            )
-                                        }
-
-                                        maximum.isBlank() -> {
-                                            appendLine(
-                                                "Partial claims allowed. One recipient " +
-                                                        "could request up to the full quantity."
-                                            )
-                                        }
-
-                                        limit == null || limit < 1 || limit > count -> {
-                                            appendLine(
-                                                "Set the maximum between 1 and $count, " +
-                                                        "or leave it blank."
-                                            )
-                                        }
-
-                                        else -> {
-                                            val minimumRecipients =
-                                                ((count.toLong() + limit - 1) / limit).toInt()
-
-                                            appendLine("Maximum per recipient: $limit $unitLabel.")
-                                            appendLine(
-                                                "Distributing the entire batch would require " +
-                                                        "at least $minimumRecipients recipient(s), " +
-                                                        "assuming this limit applies per person."
-                                            )
-                                        }
-                                    }
                                 }
 
                                 appendLine()
@@ -627,9 +545,6 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                                         "Add the exact pickup address or a recognizable landmark."
                                     }
                                 )
-                                appendLine(
-                                    "Recipient distances cannot be calculated from this form yet."
-                                )
 
                                 appendLine()
                                 appendLine("DETAILS TO REVIEW")
@@ -671,14 +586,15 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                 }
 
                 PostButton(
-                    text = if (saving || backendLoading) "Posting…" else "Post Listing",
-                    enabled = !saving,
+                    text = if (saving || backendSaving) "Posting…" else "Post Listing",
+                    enabled = !saving && !backendSaving,
                     onClick = {
                         error = validate()
 
                         if (error.isBlank()) {
-                            saving = true
-                            foodViewModel.createPost(
+                            // Only an accepted request is waited for, so the
+                            // button can never stay on "Posting…".
+                            saving = foodViewModel.createPost(
                                 FoodPostDraft(
                                     name = name,
                                     description = description,
@@ -688,9 +604,14 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                                     pickupLocation = location,
                                     expirationDate = Instant.ofEpochMilli(expiry).toString(),
                                     // validate() has checked the price; a donation is free.
-                                    price = if (donation) 0.0 else price.toBigDecimal().toDouble()
+                                    price = if (donation) 0.0 else price.toBigDecimal().toDouble(),
+                                    pickupStart = Instant.ofEpochMilli(pickupStart).toString(),
+                                    pickupEnd = Instant.ofEpochMilli(pickupEnd).toString(),
+                                    handover = ListingHandover.fromLabel(distribution),
+                                    allergens = allergens,
+                                    storageNotes = storage
                                 ),
-                                Uri.parse(photos.first())
+                                photos.map { Uri.parse(it) }
                             )
                         }
                     }
@@ -717,10 +638,13 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                         Text("${post.quantity} ${post.unit} • ${post.category}")
                         Text(post.pickupLocation, fontSize = 12.sp)
                         Text("Expires: ${post.expirationDate.replace("T", " ").take(16)}", fontSize = 12.sp)
-                        Text("Status: ${post.status}", fontSize = 12.sp, color = PostGreen)
+                        Text("Status: ${if (post.isExpired()) "Expired" else post.status.name}", fontSize = 12.sp, color = PostGreen)
                         TextButton(onClick = {
-                            info = "${post.description ?: "No description provided."}\n\nEditing posts will be added to this existing form in a later small update."
+                            info = post.description ?: "No description provided."
                         }) { Text("View details") }
+                        if (!post.isExpired()) {
+                            TextButton(onClick = { editing = post }) { Text("Edit", color = PostGreen) }
+                        }
                         TextButton(onClick = { pendingDelete = post }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
                     }
                 }
@@ -732,14 +656,24 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text("Delete listing?") },
-            text = { Text("This removes the food post and its uploaded image.") },
+            text = { Text("This permanently removes this listing and its photos.") },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(enabled = !backendSaving, onClick = {
                     foodViewModel.deletePost(post)
                     pendingDelete = null
                 }) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
+        )
+    }
+    editing?.let { post ->
+        EditListingDialog(
+            post = post,
+            foodViewModel = foodViewModel,
+            onClose = { message ->
+                editing = null
+                if (message != null) info = message
+            }
         )
     }
     if (info.isNotBlank()) {
@@ -760,6 +694,265 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
         )
     }
 }
+
+/**
+ * Edits one of the signed-in user's own, unexpired listings through
+ * update_my_food_post(). Quantity, unit and photos can't be changed.
+ * [onClose] gets "Listing updated." after a save, or null when cancelled.
+ */
+@Composable
+fun EditListingDialog(
+    post: FoodPost,
+    foodViewModel: FoodViewModel,
+    onClose: (String?) -> Unit
+) {
+    val context = LocalContext.current
+    val editResult by foodViewModel.editResult.collectAsStateWithLifecycle()
+    val backendSaving by foodViewModel.saving.collectAsStateWithLifecycle()
+
+    var donation by rememberSaveable(post.id) { mutableStateOf(post.price <= 0.0) }
+    var name by rememberSaveable(post.id) { mutableStateOf(post.name) }
+    var category by rememberSaveable(post.id) { mutableStateOf(post.category) }
+    var price by rememberSaveable(post.id) {
+        mutableStateOf(
+            if (post.price > 0.0) BigDecimal.valueOf(post.price).setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()
+            else ""
+        )
+    }
+    var description by rememberSaveable(post.id) { mutableStateOf(post.description.orEmpty()) }
+    var location by rememberSaveable(post.id) { mutableStateOf(post.pickupLocation) }
+    var expiry by rememberSaveable(post.id) { mutableStateOf(epochMillis(post.expirationDate)) }
+    var pickupStart by rememberSaveable(post.id) { mutableStateOf(epochMillis(post.pickupStart)) }
+    var pickupEnd by rememberSaveable(post.id) { mutableStateOf(epochMillis(post.pickupEnd)) }
+    var handover by rememberSaveable(post.id) {
+        mutableStateOf(ListingHandover.fromCode(post.handover)?.label.orEmpty())
+    }
+    var allergens by rememberSaveable(post.id) { mutableStateOf(post.allergens.orEmpty()) }
+    var storage by rememberSaveable(post.id) { mutableStateOf(post.storageNotes.orEmpty()) }
+    var error by rememberSaveable(post.id) { mutableStateOf("") }
+    var waiting by rememberSaveable(post.id) { mutableStateOf(false) }
+
+    // Every accepted save ends with "Listing updated." or an error.
+    LaunchedEffect(editResult) {
+        val result = editResult ?: return@LaunchedEffect
+        foodViewModel.clearEditResult()
+        if (!waiting) return@LaunchedEffect
+        waiting = false
+        when (result) {
+            EditResult.Updated -> onClose("Listing updated.")
+            is EditResult.Failed -> error = result.message
+        }
+    }
+
+    fun chooseDateTime(current: Long, onSelected: (Long) -> Unit) {
+        val calendar = Calendar.getInstance()
+        if (current > 0L) calendar.timeInMillis = current
+        DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                calendar.set(year, month, day)
+                TimePickerDialog(
+                    context,
+                    { _, hour, minute ->
+                        calendar.set(Calendar.HOUR_OF_DAY, hour)
+                        calendar.set(Calendar.MINUTE, minute)
+                        calendar.set(Calendar.SECOND, 0)
+                        calendar.set(Calendar.MILLISECOND, 0)
+                        onSelected(calendar.timeInMillis)
+                    },
+                    calendar.get(Calendar.HOUR_OF_DAY),
+                    calendar.get(Calendar.MINUTE),
+                    false
+                ).show()
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
+    // The same checks as update_my_food_post(). Unlike Create Listing, the
+    // pickup window may already have started, and old listings may have none.
+    fun validate(): String {
+        val amount = price.toBigDecimalOrNull()
+        return when {
+            name.isBlank() -> "Enter the food name."
+            textLength(name) > 160 -> "The food name must be 160 characters or fewer."
+            category.isBlank() -> "Select a category."
+            !donation && (amount == null || amount.signum() <= 0 || amount.scale() > 2) ->
+                "Enter a price greater than zero, with up to two decimal places."
+            !donation && amount != null && amount > BigDecimal("99999.99") -> "Enter a price of at most ₱99,999.99."
+            location.isBlank() -> "Enter the pickup location."
+            textLength(location) > 300 -> "The pickup location must be 300 characters or fewer."
+            expiry <= System.currentTimeMillis() -> "Choose a future expiration date and time."
+            (pickupStart == 0L) != (pickupEnd == 0L) -> "Choose both pickup times, or neither."
+            pickupStart != 0L && pickupEnd <= pickupStart -> "Pickup must end after it starts."
+            pickupEnd != 0L && pickupEnd > expiry -> "Pickup must end on or before expiration."
+            textLength(allergens) > 300 -> "Allergens must be 300 characters or fewer."
+            textLength(storage) > 300 -> "Storage notes must be 300 characters or fewer."
+            else -> ""
+        }
+    }
+
+    Dialog(
+        onDismissRequest = { if (!waiting) onClose(null) },
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(PostCream)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(enabled = !waiting, onClick = { onClose(null) }) {
+                    Text("Cancel", color = PostGreen)
+                }
+                Text(
+                    "Edit Listing",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PostDark
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .imePadding()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    "Quantity, unit and photos can't be changed.",
+                    fontSize = 12.sp
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = donation,
+                        onClick = { donation = true },
+                        label = { Text("I want to donate") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = !donation,
+                        onClick = { donation = false },
+                        label = { Text("I want to sell") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                PostPanel {
+                    PostField("Food name", name, { name = it })
+                    PostChoice(
+                        "Category",
+                        category,
+                        listOf(
+                            "Bread & pastries",
+                            "Vegetables",
+                            "Fruit",
+                            "Cooked meals",
+                            "Packaged food",
+                            "Other"
+                        ),
+                        { category = it }
+                    )
+                    PostField(
+                        label = if (donation) "Price — free donation" else "Price per unit (₱)",
+                        value = if (donation) "0.00" else price,
+                        onChange = { price = it },
+                        keyboard = KeyboardType.Decimal,
+                        enabled = !donation
+                    )
+                    PostField("Description (optional)", description, { description = it })
+                    PostDateButton("Expiration", expiry) {
+                        chooseDateTime(expiry) { expiry = it }
+                    }
+                    PostField(
+                        "Pickup location / exact meeting point",
+                        location,
+                        { location = it }
+                    )
+                    PostDateButton("Pickup starts", pickupStart) {
+                        chooseDateTime(pickupStart) { pickupStart = it }
+                    }
+                    PostDateButton("Pickup ends", pickupEnd) {
+                        chooseDateTime(pickupEnd) { pickupEnd = it }
+                    }
+                    if (pickupStart != 0L || pickupEnd != 0L) {
+                        TextButton(onClick = { pickupStart = 0L; pickupEnd = 0L }) {
+                            Text("Clear pickup times", color = PostGreen)
+                        }
+                    }
+                    PostChoice(
+                        "Handover",
+                        handover,
+                        ListingHandover.entries.map { it.label },
+                        { handover = it }
+                    )
+                }
+
+                PostPanel {
+                    PostField("Allergens (optional)", allergens, { allergens = it })
+                    PostField("Storage notes (optional)", storage, { storage = it })
+                    Text(
+                        "Blank allergen information means not provided, " +
+                                "not allergen-free.",
+                        fontSize = 11.sp
+                    )
+                }
+
+                if (error.isNotBlank()) {
+                    Text(
+                        error,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 13.sp
+                    )
+                }
+
+                PostButton(
+                    text = if (waiting) "Saving…" else "Save changes",
+                    enabled = !waiting && !backendSaving,
+                    onClick = {
+                        error = validate()
+                        if (error.isBlank()) {
+                            foodViewModel.clearEditResult()
+                            waiting = foodViewModel.updatePost(
+                                post.id,
+                                FoodPostEdit(
+                                    name = name,
+                                    description = description,
+                                    category = category,
+                                    // validate() has checked the price; a donation is free.
+                                    price = if (donation) 0.0 else price.toBigDecimal().toDouble(),
+                                    pickupLocation = location,
+                                    expirationDate = Instant.ofEpochMilli(expiry).toString(),
+                                    pickupStart = pickupStart.takeIf { it != 0L }?.let { Instant.ofEpochMilli(it).toString() },
+                                    pickupEnd = pickupEnd.takeIf { it != 0L }?.let { Instant.ofEpochMilli(it).toString() },
+                                    handover = ListingHandover.fromLabel(handover),
+                                    allergens = allergens,
+                                    storageNotes = storage
+                                )
+                            )
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+private fun epochMillis(timestamp: String?): Long =
+    parseTimestamp(timestamp)?.toEpochMilli() ?: 0L
+
+/** Characters as the database counts them (char_length), not UTF-16 units. */
+private fun textLength(value: String): Int = value.trim().let { it.codePointCount(0, it.length) }
 
 private fun postTime(value: Long): String {
     if (value == 0L) return "Select date and time"
@@ -868,9 +1061,6 @@ private fun PostField(
         label.startsWith("Pickup location") ->
             "e.g., Main entrance of the barangay hall, Del Rosarrio, Balilihan"
 
-        label.startsWith("Maximum") ->
-            "e.g., 2 — each recipient can request up to 2 units"
-
         label.startsWith("Allergens") ->
             "e.g., Contains wheat, milk, and eggs"
 
@@ -922,7 +1112,7 @@ private fun PostChoice(
     val example = when (label) {
         "Category" -> "e.g., Bread & pastries"
         "Unit" -> "e.g., packs"
-        "Distribution mode" -> "e.g., Collect from provider"
+        "Handover" -> "e.g., Collect from provider"
         else -> "Select an option"
     }
 

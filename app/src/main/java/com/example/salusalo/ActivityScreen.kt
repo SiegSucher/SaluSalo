@@ -1,5 +1,7 @@
 package com.example.salusalo
 
+import com.example.salusalo.model.isExpired
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -69,8 +71,11 @@ fun ActivityScreen(
     val reservationLoading by reservationViewModel.loading.collectAsStateWithLifecycle()
     val foodError by foodViewModel.error.collectAsStateWithLifecycle()
     val message by reservationViewModel.message.collectAsStateWithLifecycle()
-    val busy = foodLoading || reservationLoading
+    val foodSaving by foodViewModel.saving.collectAsStateWithLifecycle()
+    val busy = foodLoading || reservationLoading || foodSaving
     var notice by rememberSaveable { mutableStateOf("") }
+    var editing by remember { mutableStateOf<FoodPost?>(null) }
+    var editNotice by remember { mutableStateOf("") }
 
     // Existing alert links use the old names; map them without editing navigation.
     var tab by rememberSaveable(initialTab) {
@@ -91,7 +96,14 @@ fun ActivityScreen(
         foodViewModel.loadMyPosts()
         reservationViewModel.refresh()
     }
-    LaunchedEffect(Unit) { refresh() }
+    LaunchedEffect(Unit) {
+        refresh()
+        while (true) {
+            kotlinx.coroutines.delay(15000)
+            reservationViewModel.refresh(silent = true)
+            foodViewModel.loadMyPosts()
+        }
+    }
     LaunchedEffect(message) {
         message?.let {
             notice = it
@@ -104,7 +116,7 @@ fun ActivityScreen(
     }
 
     val transactions = (incoming.map { ActivityTransaction(it, true) } +
-            requests.map { ActivityTransaction(it, false) })
+        requests.map { ActivityTransaction(it, false) })
         .distinctBy { it.entry.reservation.id }
         .sortedByDescending { it.entry.reservation.updatedAt ?: it.entry.reservation.createdAt.orEmpty() }
     val selectedPost = posts.firstOrNull { it.id == selectedPostId }
@@ -133,13 +145,15 @@ fun ActivityScreen(
         it.entry.reservation.status != ReservationStatus.RESERVED && when (historyFilter) {
             "Completed" -> it.entry.reservation.status == ReservationStatus.CLAIMED
             "Cancelled" -> it.entry.reservation.status == ReservationStatus.CANCELLED
+            "Pickup expired" -> it.entry.reservation.cancellationReason == "PICKUP_EXPIRED"
             else -> true
         }
     }
     val visiblePosts = posts.sortedByDescending { it.createdAt.orEmpty() }.filter { post ->
         // A fully reserved listing still needs to be managed until pickup.
-        val active = post.status == FoodPostStatus.AVAILABLE || post.status == FoodPostStatus.RESERVED ||
-                incoming.any { it.reservation.foodPostId == post.id && it.reservation.status == ReservationStatus.RESERVED }
+        val active = (!post.isExpired() &&
+            (post.status == FoodPostStatus.AVAILABLE || post.status == FoodPostStatus.RESERVED)) ||
+            incoming.any { it.reservation.foodPostId == post.id && it.reservation.status == ReservationStatus.RESERVED }
         if (listingFilter == "Active") active else !active
     }
 
@@ -199,7 +213,7 @@ fun ActivityScreen(
                     else -> "Your past transactions"
                 }, color = ADark, fontSize = 19.sp, fontWeight = FontWeight.Bold)
                 if (tab == "My Listings") ActivityFilters(listOf("Active", "Closed"), listingFilter) { listingFilter = it }
-                if (tab == "History") ActivityFilters(listOf("All", "Completed", "Cancelled"), historyFilter) { historyFilter = it }
+                if (tab == "History") ActivityFilters(listOf("All", "Completed", "Cancelled", "Pickup expired"), historyFilter) { historyFilter = it }
             }
             when (tab) {
                 "My Listings" -> {
@@ -209,7 +223,7 @@ fun ActivityScreen(
                         ActivityCard {
                             ActivityFoodHeader(post, if (post.price > 0) "For sale • ${formatPeso(post.price)} per unit" else "Donation • Free")
                             Text("${post.quantity} ${post.unit} remaining", color = AGray)
-                            ActivityBadge(if (count > 0) "$count awaiting pickup" else post.status.name.lowercase().replaceFirstChar { it.uppercase() })
+                            ActivityBadge(if (count > 0) "$count awaiting pickup" else if (post.isExpired()) "Expired" else post.status.name.lowercase().replaceFirstChar { it.uppercase() })
                             Text("Expires: ${activityTime(post.expirationDate)}", fontSize = 12.sp, color = AGray)
                             ActivityButton(if (count > 0) "Manage requests" else "View listing") { selectedPostId = post.id }
                         }
@@ -245,13 +259,23 @@ fun ActivityScreen(
                     Text("Pickup: ${post.pickupLocation}")
                     Text("Expires: ${activityTime(post.expirationDate)}")
                     post.description?.takeIf { it.isNotBlank() }?.let { Text(it) }
+                    if (!post.isExpired()) {
+                        OutlinedButton(
+                            enabled = !busy,
+                            onClick = {
+                                editing = post
+                                selectedPostId = null
+                            }
+                        ) { Text("Edit listing") }
+                    }
                     Text("Requests for this listing", fontWeight = FontWeight.Bold)
                     if (related.isEmpty()) Text(if (reservationLoading) "Loading requests…" else "No requests loaded. Use Refresh to check again.", color = AGray)
                     related.forEach { transaction ->
                         OutlinedButton(onClick = { openTransaction(transaction) }, modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.fillMaxWidth()) {
                                 Text(transaction.entry.recipientName ?: "Recipient")
-                                Text("${transaction.entry.reservation.quantity} ${post.unit} • ${activityStatus(transaction.entry.reservation.status)}", fontSize = 12.sp)
+                                PickupDeadlineStatus(transaction.entry.reservation)
+                                Text("${transaction.entry.reservation.quantity} ${post.unit} • ${activityReservationStatus(transaction.entry.reservation)}", fontSize = 12.sp)
                             }
                         }
                     }
@@ -279,7 +303,8 @@ fun ActivityScreen(
                     } else {
                         if (reservation.unitPrice > 0) "Buyer" else "Donation recipient"
                     })
-                    ActivityBadge(activityStatus(reservation.status))
+                    ActivityBadge(activityReservationStatus(reservation))
+                    PickupDeadlineStatus(reservation)
                     Text("Quantity: ${reservation.quantity} ${entry.foodPost.unit}")
                     if (reservation.unitPrice > 0) {
                         Text("Price per unit: ${formatPeso(reservation.unitPrice)}")
@@ -318,8 +343,8 @@ fun ActivityScreen(
             title = { Text(when (action) { "claim" -> "Confirm food collected?"; "cancel" -> "Cancel this request?"; else -> "Delete listing?" }) },
             text = { Text(when (action) {
                 "claim" -> "Confirm only after you have handed the food to the recipient. " +
-                        (if ((selectedTransaction?.entry?.reservation?.unitPrice ?: 0.0) > 0) "Also confirm that payment was received at pickup. " else "") +
-                        "This moves the transaction to History."
+                    (if ((selectedTransaction?.entry?.reservation?.unitPrice ?: 0.0) > 0) "Also confirm that payment was received at pickup. " else "") +
+                    "This moves the transaction to History."
                 "cancel" -> "Your reserved quantity will become available to others."
                 else -> "This permanently removes the listing and its uploaded image."
             }) },
@@ -336,6 +361,28 @@ fun ActivityScreen(
                 }) { Text("Confirm") }
             },
             dismissButton = { TextButton(onClick = { confirmAction = null }) { Text("Go back") } }
+        )
+    }
+    editing?.let { post ->
+        EditListingDialog(
+            post = post,
+            foodViewModel = foodViewModel,
+            onClose = { result ->
+                editing = null
+                if (result != null) {
+                    editNotice = result
+                    foodViewModel.loadMyPosts()
+                    foodViewModel.loadAvailablePosts()
+                }
+            }
+        )
+    }
+    if (editNotice.isNotBlank()) {
+        AlertDialog(
+            onDismissRequest = { editNotice = "" },
+            title = { Text("Edit Listing") },
+            text = { Text(editNotice) },
+            confirmButton = { TextButton(onClick = { editNotice = "" }) { Text("OK") } }
         )
     }
     if (notice.isNotBlank()) AlertDialog(
@@ -389,7 +436,8 @@ private fun ActivityTransactionCard(transaction: ActivityTransaction, action: St
             if (priced) "Purchase • Recipient" else "Donation • Recipient"
         }
         ActivityFoodHeader(entry.foodPost, "$role • ${entry.reservation.quantity} ${entry.foodPost.unit}")
-        ActivityBadge(activityStatus(entry.reservation.status))
+        ActivityBadge(activityReservationStatus(entry.reservation))
+        PickupDeadlineStatus(entry.reservation)
         Text(if (priced) {
             val total = formatPeso(reservationTotal(entry.reservation.unitPrice, entry.reservation.quantity))
             if (entry.reservation.status == ReservationStatus.RESERVED) "$total • Pay at pickup" else "$total • Reservation total"
@@ -406,7 +454,7 @@ private fun ActivityTransactionCard(transaction: ActivityTransaction, action: St
 @Composable
 private fun ActivityBadge(label: String) {
     val color = when (label) {
-        "Cancelled", "Expired" -> Color(0xFFB93828)
+        "Cancelled", "Expired", "Pickup expired" -> Color(0xFFB93828)
         "Reserved • arrange pickup" -> Color(0xFF986000)
         else -> AGreen
     }
@@ -440,3 +488,33 @@ private fun activityTime(value: String): String = runCatching {
     DateTimeFormatter.ofPattern("MMM d, yyyy • h:mm a", Locale.getDefault())
         .withZone(ZoneId.systemDefault()).format(Instant.parse(value))
 }.getOrDefault(value)
+
+private fun activityReservationStatus(reservation: com.example.salusalo.model.Reservation): String =
+    if (reservation.cancellationReason == "PICKUP_EXPIRED") "Pickup expired"
+    else activityStatus(reservation.status)
+
+@Composable
+private fun PickupDeadlineStatus(reservation: com.example.salusalo.model.Reservation) {
+    val deadline = com.example.salusalo.model.parseTimestamp(reservation.pickupDeadline)
+    if (deadline == null) {
+        if (reservation.status == ReservationStatus.RESERVED) Text("No timed deadline • arrange pickup", fontSize = 12.sp)
+        return
+    }
+    var now by remember(reservation.id) { mutableStateOf(Instant.now()) }
+    LaunchedEffect(reservation.id, reservation.status) {
+        if (reservation.status == ReservationStatus.RESERVED) while (true) {
+            now = Instant.now()
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+    val seconds = java.time.Duration.between(now, deadline).seconds
+    val overdue = seconds <= 0
+    val color = if (overdue || seconds <= 600) Color(0xFFB93828) else AGreen
+    Text("Pick up by " + DateTimeFormatter.ofPattern("MMM d, h:mm a", Locale.getDefault())
+        .withZone(ZoneId.systemDefault()).format(deadline), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    if (reservation.status == ReservationStatus.RESERVED) {
+        Text(if (overdue) "Deadline passed • checking release status"
+            else "${seconds / 60}m ${seconds % 60}s remaining",
+            color = color, fontSize = 12.sp)
+    }
+}

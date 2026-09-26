@@ -3,6 +3,11 @@ package com.example.salusalo
 import android.os.Bundle
 import coil3.compose.AsyncImage
 import com.example.salusalo.model.FoodPost
+import com.example.salusalo.model.ListingHandover
+import com.example.salusalo.model.parseTimestamp
+import com.example.salusalo.viewmodel.SavedListingViewModel
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import com.example.salusalo.model.formatPeso
 import com.example.salusalo.model.reservationTotal
 import com.example.salusalo.viewmodel.FoodViewModel
@@ -43,8 +48,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -1259,12 +1262,15 @@ private fun HomeScreen(
     var message by remember { mutableStateOf("") }
     var selectedFood by remember { mutableStateOf<HomeFood?>(null) }
     var sortMenu by remember { mutableStateOf(false) }
-    var sort by rememberSaveable { mutableStateOf("Nearest") }
+    var sort by rememberSaveable { mutableStateOf("Newest") }
     val sessionKey = currentProfile?.id ?: "signed-out"
     val foodViewModel: FoodViewModel = viewModel(key = "food-$sessionKey")
     val reservationViewModel: ReservationViewModel = viewModel(key = "reservation-$sessionKey")
     val messageViewModel: MessageViewModel = viewModel(key = "messages-$sessionKey")
     val notificationViewModel: NotificationViewModel = viewModel(key = "notifications-$sessionKey")
+    val savedListingViewModel: SavedListingViewModel = viewModel(key = "saved-$sessionKey")
+    val savedIds by savedListingViewModel.savedIds.collectAsStateWithLifecycle()
+    val savedMessage by savedListingViewModel.message.collectAsStateWithLifecycle()
     val activeChat by messageViewModel.active.collectAsStateWithLifecycle()
     val chatOpening by messageViewModel.opening.collectAsStateWithLifecycle()
     val messageError by messageViewModel.message.collectAsStateWithLifecycle()
@@ -1279,9 +1285,18 @@ private fun HomeScreen(
     val feedLoading by foodViewModel.loading.collectAsStateWithLifecycle()
     val feedError by foodViewModel.error.collectAsStateWithLifecycle()
 
-    LaunchedEffect(currentProfile?.id) { foodViewModel.loadAvailablePosts() }
+    LaunchedEffect(currentProfile?.id, page) {
+        if (page in listOf("home", "recommended", "all")) {
+            while (true) {
+                foodViewModel.loadAvailablePosts()
+                delay(15000)
+            }
+        }
+    }
     // Alerts load once per session and then arrive live.
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { notificationViewModel.start(it) } }
+    // Bookmarks load once per session, so the icons show the right state at once.
+    LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { savedListingViewModel.start(it) } }
     // Opening a chat marks its message alerts read on the server; mirror that
     // for alerts that arrive while the chat is open.
     LaunchedEffect(activeChat?.id, alerts) {
@@ -1320,37 +1335,29 @@ private fun HomeScreen(
             reservationViewModel.clearSession()
             messageViewModel.clearSession()
             notificationViewModel.clearSession()
+            savedListingViewModel.clearSession()
         }
     }
 
+    // The feed arrives newest first (created_at).
     val foods = remotePosts.map { it.toHomeFood() }
 
-    // A fixed sample recommendation order; no recommendation algorithm yet.
-    val recommendedFoods = foods
-
-    val source = if (page == "recommended") {
-        recommendedFoods
-    } else {
-        foods
-    }
-
-    val visibleFoods = source.filter { food ->
+    val visibleFoods = foods.filter { food ->
         val matchesSearch =
             food.title.contains(search, ignoreCase = true) ||
-                    food.provider.contains(search, ignoreCase = true)
+                    food.donorName.contains(search, ignoreCase = true)
 
         val matchesCategory = when (category) {
             "Donation" -> food.price == "Free"
             "For Sale" -> food.price != "Free"
-            "Nearby" -> food.distanceValue <= 1.5
             "Expiring Soon" -> food.urgent
             else -> true
         }
 
         matchesSearch && matchesCategory
     }.let { results ->
-        if (sort == "Nearest") {
-            results.sortedBy { it.distanceValue }
+        if (sort == "Newest") {
+            results.sortedByDescending { parseTimestamp(it.createdAt) ?: Instant.EPOCH }
         } else {
             results.sortedBy { it.title }
         }
@@ -1421,7 +1428,10 @@ private fun HomeScreen(
                         selectedFood = foods.firstOrNull {
                             it.title == title
                         }
-                    }
+                    },
+                    savedListingViewModel = savedListingViewModel,
+                    // Saved Listings opens a listing by its ID, from the row it just loaded.
+                    onOpenListing = { post -> selectedFood = post.toHomeFood() }
                 )
             } else key(page) {
                 Column(
@@ -1523,48 +1533,11 @@ private fun HomeScreen(
                             }
 
                             Text(
-                                if (page == "recommended") {
-                                    "All recommendations"
-                                } else {
-                                    "All food listings"
-                                },
+                                "All food listings",
                                 fontSize = 19.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .clickable {
-                                message = "Current sample location:\n" +
-                                        "Del Rosarrio, Balilihan"
-                            }
-                            .padding(vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Outlined.LocationOn,
-                            contentDescription = null,
-                            tint = Green,
-                            modifier = Modifier.size(20.dp)
-                        )
-
-                        Spacer(Modifier.width(5.dp))
-
-                        Text(
-                            "Del Rosarrio, Balilihan",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        Icon(
-                            Icons.Outlined.ExpandMore,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
                     }
 
                     Spacer(Modifier.height(12.dp))
@@ -1579,7 +1552,7 @@ private fun HomeScreen(
                             modifier = Modifier.weight(1f),
                             placeholder = {
                                 Text(
-                                    "Search food or providers",
+                                    "Search food or donors",
                                     fontSize = 12.sp
                                 )
                             },
@@ -1607,7 +1580,6 @@ private fun HomeScreen(
                                 message =
                                     "Donation: free food\n" +
                                             "For Sale: paid food\n" +
-                                            "Nearby: within 1.5 km\n" +
                                             "Expiring Soon: urgent pickup or expiry\n\n" +
                                             "Tap a category below to filter the listings."
                             },
@@ -1637,7 +1609,6 @@ private fun HomeScreen(
                             "All",
                             "Donation",
                             "For Sale",
-                            "Nearby",
                             "Expiring Soon"
                         ).forEach { label ->
                             FilterChip(
@@ -1682,7 +1653,7 @@ private fun HomeScreen(
                             Spacer(Modifier.width(6.dp))
 
                             Text(
-                                "Recommended for you",
+                                "Newest listings",
                                 modifier = Modifier.weight(1f),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
@@ -1690,9 +1661,10 @@ private fun HomeScreen(
 
                             TextButton(
                                 onClick = {
-                                    page = "recommended"
+                                    page = "all"
                                     category = "All"
                                     search = ""
+                                    sort = "Newest"
                                 }
                             ) {
                                 Text("See all", fontSize = 12.sp)
@@ -1743,18 +1715,13 @@ private fun HomeScreen(
                                 }
                             }
 
-                            recommendedFoods.take(2).forEach { food ->
+                            foods.take(2).forEach { food ->
                                 RecommendationCard(
                                     title = food.title,
                                     photo = food.photo,
                                     imageUrl = food.imageUrl,
-                                    badge = if (food.distanceValue <= 1.0) {
-                                        "Nearby"
-                                    } else {
-                                        "Popular"
-                                    },
                                     price = food.price,
-                                    distance = food.distance,
+                                    pickupLocation = food.pickupLocation,
                                     status = food.status,
                                     urgent = food.urgent,
                                     onClick = { selectedFood = food }
@@ -1773,13 +1740,11 @@ private fun HomeScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                when {
-                                    page == "recommended" -> "Recommended food"
-                                    category == "Donation" -> "Food for donation"
-                                    category == "For Sale" -> "Food for sale"
-                                    category == "Nearby" -> "Within 1.5 km"
-                                    category == "Expiring Soon" -> "Expiring soon"
-                                    else -> "Available near you"
+                                when (category) {
+                                    "Donation" -> "Food for donation"
+                                    "For Sale" -> "Food for sale"
+                                    "Expiring Soon" -> "Expiring soon"
+                                    else -> "Available food"
                                 },
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
@@ -1809,7 +1774,7 @@ private fun HomeScreen(
                                 expanded = sortMenu,
                                 onDismissRequest = { sortMenu = false }
                             ) {
-                                listOf("Nearest", "Name").forEach { option ->
+                                listOf("Newest", "Name").forEach { option ->
                                     DropdownMenuItem(
                                         text = { Text(option) },
                                         onClick = {
@@ -1844,25 +1809,18 @@ private fun HomeScreen(
 
                     // All matching listings are shown; scroll to see more.
                     visibleFoods.forEach { food ->
-                        key(food.title) {
+                        key(food.id) {
                             AvailableFoodCard(
                                 food = food,
+                                // Your own listings can't be bookmarked.
+                                canSave = food.donorId != currentProfile?.id,
+                                saved = food.id in savedIds,
+                                onToggleSave = { savedListingViewModel.toggle(food.id) },
                                 onClick = { selectedFood = food }
                             )
                         }
 
                         Spacer(Modifier.height(10.dp))
-                    }
-
-                    if (page == "recommended") {
-                        PrimaryButton(
-                            title = "Browse all 10 food listings",
-                            onClick = {
-                                page = "all"
-                                category = "All"
-                                search = ""
-                            }
-                        )
                     }
                 }
             }
@@ -2040,6 +1998,9 @@ private fun HomeScreen(
             FoodDetailsScreen(
                 food = food,
                 isOwnFood = currentProfile?.id != null && food.donorId == currentProfile.id,
+                saved = food.id in savedIds,
+                onToggleSave = { savedListingViewModel.toggle(food.id) },
+                loadExtraPhotos = { foodViewModel.extraPhotoUrls(food.post) },
                 reservationViewModel = reservationViewModel,
                 onReserved = {
                     foodViewModel.loadAvailablePosts()
@@ -2047,7 +2008,8 @@ private fun HomeScreen(
                 onViewRequests = {
                     selectedFood = null
                     activityFocus = null
-                    activityTab = "My Requests"
+                    activityTab = if (submission.savedReservation?.status != null &&
+                        submission.savedReservation?.status != com.example.salusalo.model.ReservationStatus.RESERVED) "History" else "My Requests"
                     page = "activity"
                 },
                 onMessage = { draft -> messageViewModel.openForListing(food.id, draft) },
@@ -2065,6 +2027,15 @@ private fun HomeScreen(
         )
     }
 
+    savedMessage?.let { error ->
+        AlertDialog(
+            onDismissRequest = { savedListingViewModel.clearMessage() },
+            title = { Text("Saved Listings") },
+            text = { Text(error) },
+            confirmButton = { TextButton(onClick = { savedListingViewModel.clearMessage() }) { Text("OK") } }
+        )
+    }
+
     messageError?.let { error ->
         AlertDialog(
             onDismissRequest = { messageViewModel.clearMessage() },
@@ -2076,7 +2047,7 @@ private fun HomeScreen(
 }
 
 private fun FoodPost.toHomeFood(): HomeFood {
-    val expiration = runCatching { Instant.parse(expirationDate) }.getOrNull()
+    val expiration = parseTimestamp(expirationDate)
     val urgent = expiration?.isBefore(Instant.now().plusSeconds(3 * 60 * 60)) == true
     return HomeFood(
         id = id,
@@ -2086,14 +2057,14 @@ private fun FoodPost.toHomeFood(): HomeFood {
         price = if (price > 0) formatPeso(price) else "Free",
         unitPrice = price,
         status = if (urgent) "Expires soon" else "Available",
-        distance = pickupLocation,
-        distanceValue = 0.0,
-        provider = "Food donor",
-        rating = "New",
+        pickupLocation = pickupLocation,
+        donorName = donorName?.takeIf { it.isNotBlank() } ?: "Donor name unavailable",
         photo = R.drawable.food_produce,
         imageUrl = displayImageUrl,
         urgent = urgent,
-        description = description?.takeIf { it.isNotBlank() }
+        description = description?.takeIf { it.isNotBlank() },
+        createdAt = createdAt,
+        post = this
     )
 }
 private data class HomeFood(
@@ -2103,16 +2074,17 @@ private data class HomeFood(
     val quantity: String,
     val price: String,
     val status: String,
-    val distance: String,
-    val distanceValue: Double,
+    val pickupLocation: String,
     // Listing price per unit (0 = free). The amount owed comes from the reservation.
     val unitPrice: Double = 0.0,
-    val provider: String,
-    val rating: String,
+    val donorName: String,
     val photo: Int,
     val imageUrl: String? = null,
     val urgent: Boolean,
-    val description: String? = null
+    val description: String? = null,
+    val createdAt: String? = null,
+    // The listing itself, for the details that the cards don't show.
+    val post: FoodPost
 )
 
 @Composable
@@ -2120,9 +2092,8 @@ private fun RecommendationCard(
     title: String,
     photo: Int,
     imageUrl: String?,
-    badge: String,
     price: String,
-    distance: String,
+    pickupLocation: String,
     status: String,
     urgent: Boolean,
     onClick: () -> Unit
@@ -2167,17 +2138,6 @@ private fun RecommendationCard(
                         contentAlignment = Alignment.Center
                     ) { Text("Image unavailable", fontSize = 10.sp, color = Gray) }
                 }
-
-                Text(
-                    badge,
-                    modifier = Modifier
-                        .padding(7.dp)
-                        .clip(RoundedCornerShape(15.dp))
-                        .background(DarkGreen)
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                    color = Color.White,
-                    fontSize = 10.sp
-                )
             }
 
             Column(Modifier.padding(8.dp)) {
@@ -2198,9 +2158,10 @@ private fun RecommendationCard(
                     )
 
                     Text(
-                        "  •  $distance",
+                        "  •  $pickupLocation",
                         color = Gray,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        maxLines = 1
                     )
                 }
 
@@ -2219,12 +2180,11 @@ private fun RecommendationCard(
 @Composable
 private fun AvailableFoodCard(
     food: HomeFood,
+    canSave: Boolean,
+    saved: Boolean,
+    onToggleSave: () -> Unit,
     onClick: () -> Unit
 ) {
-    var saved by rememberSaveable(food.title) {
-        mutableStateOf(false)
-    }
-
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -2276,8 +2236,8 @@ private fun AvailableFoodCard(
                         fontWeight = FontWeight.Bold
                     )
 
-                    IconButton(
-                        onClick = { saved = !saved },
+                    if (canSave) IconButton(
+                        onClick = onToggleSave,
                         modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
@@ -2317,7 +2277,7 @@ private fun AvailableFoodCard(
                 Spacer(Modifier.height(5.dp))
 
                 Text(
-                    "${food.status}  •  ${food.distance}",
+                    "${food.status}  •  ${food.pickupLocation}",
                     fontSize = 10.sp,
                     lineHeight = 14.sp,
                     color = if (food.urgent) {
@@ -2331,7 +2291,7 @@ private fun AvailableFoodCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Outlined.VerifiedUser,
+                        Icons.Outlined.Person,
                         contentDescription = null,
                         tint = Green,
                         modifier = Modifier.size(13.dp)
@@ -2340,16 +2300,11 @@ private fun AvailableFoodCard(
                     Spacer(Modifier.width(3.dp))
 
                     Text(
-                        food.provider,
+                        food.donorName,
                         fontSize = 9.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Text(
-                        "★ ${food.rating}",
-                        fontSize = 9.sp,
-                        color = Color(0xFF9A7517),
-                        modifier = Modifier.padding(end = 5.dp)
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 5.dp)
                     )
                 }
             }
@@ -2363,6 +2318,9 @@ private fun AvailableFoodCard(
 private fun FoodDetailsScreen(
     food: HomeFood,
     isOwnFood: Boolean,
+    saved: Boolean,
+    onToggleSave: () -> Unit,
+    loadExtraPhotos: suspend () -> List<String?>,
     reservationViewModel: ReservationViewModel,
     onReserved: () -> Unit,
     onViewRequests: () -> Unit,
@@ -2379,9 +2337,6 @@ private fun FoodDetailsScreen(
 
     var quantity by rememberSaveable(food.id) {
         mutableStateOf(1)
-    }
-    var saved by rememberSaveable(food.id) {
-        mutableStateOf(false)
     }
     var expanded by rememberSaveable(food.id) {
         mutableStateOf(false)
@@ -2417,8 +2372,7 @@ private fun FoodDetailsScreen(
         FoodActionsDialog(
             action = foodAction,
             foodTitle = food.title,
-            provider = food.provider,
-            rating = food.rating,
+            provider = food.donorName,
             photo = food.photo,
             imageUrl = food.imageUrl,
             price = food.price,
@@ -2432,15 +2386,19 @@ private fun FoodDetailsScreen(
                 if (currentClaim?.savedReservation != null) onBack()
             },
             onMessage = { draft -> messageDonor(draft) },
-            pickupLocation = food.distance,
+            pickupLocation = food.pickupLocation,
             claimSubmitting = currentClaim?.isSubmitting == true,
             claimReservationId = currentClaim?.savedReservation?.id,
             claimQuantity = currentClaim?.savedReservation?.quantity,
             claimUnitPrice = currentClaim?.savedReservation?.unitPrice ?: 0.0,
             claimError = currentClaim?.error,
-            onConfirmClaim = if (donation) ({
+            expirationDate = food.post.expirationDate,
+            claimDeadline = currentClaim?.savedReservation?.pickupDeadline,
+            claimSavedStatus = currentClaim?.savedReservation?.status?.name,
+            lockedPickupMinutes = currentClaim?.pickupMinutes,
+            onConfirmClaim = if (donation) ({ minutes ->
                 if (!isOwnFood && quantity in 1..available) {
-                    reservationViewModel.submitClaim(food.id, quantity)
+                    reservationViewModel.submitClaim(food.id, quantity, minutes)
                 }
             }) else null,
             onViewRequests = onViewRequests
@@ -2461,11 +2419,23 @@ private fun FoodDetailsScreen(
     }
     val description = food.description ?: "No description provided."
 
-    val allergens = if (food.photo == R.drawable.food_bread) {
-        "Wheat, gluten, sesame"
-    } else {
-        "Not provided — ask the provider"
+    // Listings made before these fields existed, or left blank, have none.
+    // Blank allergens mean "not provided", never "allergen-free".
+    val notProvided = "Not provided — ask the donor"
+    val notSet = "Not set — ask the donor"
+    val post = food.post
+    val allergens = post.allergens?.takeIf { it.isNotBlank() } ?: notProvided
+    val storageNote = post.storageNotes?.takeIf { it.isNotBlank() } ?: notProvided
+    val pickupWindow = listingPickupWindow(post.pickupStart, post.pickupEnd) ?: notSet
+    val handover = ListingHandover.fromCode(post.handover)?.label ?: notSet
+    val expires = parseTimestamp(post.expirationDate)?.let { listingTime(it) } ?: "—"
+
+    // The cover is already signed; photos 2–4 get their own signed URLs here.
+    val extraPhotos by produceState<List<String?>?>(null, post.id) {
+        value = if (post.extraImagePaths.isEmpty()) emptyList() else loadExtraPhotos()
     }
+    val photoCount = 1 + post.extraImagePaths.size
+    val pagerState = rememberPagerState(pageCount = { photoCount })
 
     val orange = Color(0xFFE85B13)
 
@@ -2484,27 +2454,70 @@ private fun FoodDetailsScreen(
                     .fillMaxWidth()
                     .height(210.dp)
             ) {
-                var imageFailed by remember(food.id, food.imageUrl) { mutableStateOf(false) }
-                if (food.imageUrl != null && !imageFailed) {
-                    AsyncImage(
-                        model = food.imageUrl,
-                        contentDescription = food.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                        onError = { imageFailed = true }
+                // Swipe between the photos; each has its own fallback.
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { index ->
+                    if (index == 0) {
+                        var imageFailed by remember(food.id, food.imageUrl) { mutableStateOf(false) }
+                        if (food.imageUrl != null && !imageFailed) {
+                            AsyncImage(
+                                model = food.imageUrl,
+                                contentDescription = food.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                                onError = { imageFailed = true }
+                            )
+                        } else if (food.imageUrl == null) {
+                            Image(
+                                painter = painterResource(food.photo),
+                                contentDescription = food.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize().background(Color(0xFFF2F6E6)),
+                                contentAlignment = Alignment.Center
+                            ) { Text("Image unavailable", fontSize = 12.sp, color = Gray) }
+                        }
+                    } else {
+                        val loaded = extraPhotos
+                        val url = loaded?.getOrNull(index - 1)
+                        var imageFailed by remember(food.id, url) { mutableStateOf(false) }
+                        if (url != null && !imageFailed) {
+                            AsyncImage(
+                                model = url,
+                                contentDescription = "${food.title}, photo ${index + 1}",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                                onError = { imageFailed = true }
+                            )
+                        } else {
+                            // Still signing (loaded == null), or the photo can't be shown.
+                            Box(
+                                modifier = Modifier.fillMaxSize().background(Color(0xFFF2F6E6)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (loaded != null) Text("Image unavailable", fontSize = 12.sp, color = Gray)
+                            }
+                        }
+                    }
+                }
+
+                if (photoCount > 1) {
+                    Text(
+                        "${pagerState.currentPage + 1} / $photoCount",
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 30.dp, end = 16.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 9.dp, vertical = 3.dp),
+                        color = Color.White,
+                        fontSize = 11.sp
                     )
-                } else if (food.imageUrl == null) {
-                    Image(
-                        painter = painterResource(food.photo),
-                        contentDescription = food.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(Color(0xFFF2F6E6)),
-                        contentAlignment = Alignment.Center
-                    ) { Text("Image unavailable", fontSize = 12.sp, color = Gray) }
                 }
 
                 FilledIconButton(
@@ -2524,8 +2537,9 @@ private fun FoodDetailsScreen(
                     )
                 }
 
-                FilledIconButton(
-                    onClick = { saved = !saved },
+                // Your own listing can't be bookmarked.
+                if (!isOwnFood) FilledIconButton(
+                    onClick = onToggleSave,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(16.dp)
@@ -2601,26 +2615,11 @@ private fun FoodDetailsScreen(
                             Spacer(Modifier.width(5.dp))
 
                             Text(
-                                food.provider,
+                                food.donorName,
                                 fontSize = 11.sp,
                                 maxLines = 2
                             )
                         }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White,
-                        shadowElevation = 1.dp
-                    ) {
-                        Text(
-                            "⭐ ${food.rating}",
-                            modifier = Modifier.padding(
-                                horizontal = 10.dp,
-                                vertical = 8.dp
-                            ),
-                            fontSize = 12.sp
-                        )
                     }
                 }
 
@@ -2641,14 +2640,14 @@ private fun FoodDetailsScreen(
                     )
 
                     FoodSummaryItem(
-                        value = food.distance,
-                        caption = "Distance",
+                        value = expires,
+                        caption = "Expires",
                         modifier = Modifier.weight(1f)
                     )
 
                     FoodSummaryItem(
                         value = food.status,
-                        caption = "Pickup",
+                        caption = "Status",
                         modifier = Modifier.weight(1.25f),
                         valueColor = if (food.urgent) orange else Green
                     )
@@ -2718,8 +2717,17 @@ private fun FoodDetailsScreen(
                         FoodInfoRow(
                             icon = Icons.Outlined.Schedule,
                             title = "Pickup Window",
-                            value = food.status,
+                            value = pickupWindow,
                             onClick = { foodAction = "pickup" }
+                        )
+
+                        HorizontalDivider(color = Line)
+
+                        FoodInfoRow(
+                            icon = Icons.Outlined.Handshake,
+                            title = "Handover",
+                            value = handover,
+                            onClick = { messageDonor("Hi! How will the handover for ${food.title} work?") }
                         )
 
                         HorizontalDivider(color = Line)
@@ -2727,7 +2735,7 @@ private fun FoodDetailsScreen(
                         FoodInfoRow(
                             icon = Icons.Outlined.LocationOn,
                             title = "Pickup Address",
-                            value = food.distance,
+                            value = food.pickupLocation,
                             onClick = { foodAction = "location" }
                         )
 
@@ -2757,7 +2765,7 @@ private fun FoodDetailsScreen(
                         FoodInfoRow(
                             icon = Icons.Outlined.AcUnit,
                             title = "Storage Note",
-                            value = "Ask the provider for storage instructions.",
+                            value = storageNote,
                             onClick = { messageDonor("Hi! How should I store ${food.title} after pickup?") }
                         )
 
@@ -2766,7 +2774,7 @@ private fun FoodDetailsScreen(
                         FoodInfoRow(
                             icon = Icons.Outlined.Person,
                             title = if (donation) "Donor" else "Seller",
-                            value = food.provider,
+                            value = food.donorName,
                             onClick = { foodAction = "provider" }
                         )
                     }
@@ -2938,6 +2946,23 @@ private fun FoodDetailsScreen(
             }
         )
     }
+}
+
+private val listingTimeFormat = java.time.format.DateTimeFormatter.ofPattern("MMM d, h:mm a", java.util.Locale.getDefault())
+private val listingClockFormat = java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.getDefault())
+
+/** A listing time in the phone's time zone, e.g. "Sep 27, 6:00 PM". */
+private fun listingTime(instant: Instant): String =
+    listingTimeFormat.format(instant.atZone(java.time.ZoneId.systemDefault()))
+
+/** "Sep 27, 3:00 PM – 5:00 PM", or with both dates when it spans days; null if not set. */
+private fun listingPickupWindow(start: String?, end: String?): String? {
+    val from = parseTimestamp(start) ?: return null
+    val to = parseTimestamp(end) ?: return null
+    val zone = java.time.ZoneId.systemDefault()
+    val sameDay = from.atZone(zone).toLocalDate() == to.atZone(zone).toLocalDate()
+    return listingTime(from) + " – " +
+        if (sameDay) listingClockFormat.format(to.atZone(zone)) else listingTime(to)
 }
 
 @Composable

@@ -17,4 +17,11 @@ class StorageRepository {
         postId: String,
         fileName: String
     ): String = "$firebaseUid/$postId/$fileName"
+
+    /** Listing photo [number] 1–4: 1 is the cover (image.jpg), then photo-2.jpg to photo-4.jpg. */
+    fun listingPhotoPath(
+        firebaseUid: String,
+        postId: String,
+        number: Int
+    ): String = foodImagePath(firebaseUid, postId, if (number == 1) "image.jpg" else "photo-$number.jpg")
 }

@@ -39,7 +39,7 @@ fun FoodActionsDialog(
     action: String,
     foodTitle: String,
     provider: String,
-    rating: String,
+    rating: String = "",
     photo: Int,
     price: String,
     quantity: Int,
@@ -58,13 +58,31 @@ fun FoodActionsDialog(
     claimQuantity: Int? = null,
     claimUnitPrice: Double = 0.0,
     claimError: String? = null,
-    onConfirmClaim: (() -> Unit)? = null,
+    expirationDate: String? = null,
+    claimDeadline: String? = null,
+    claimSavedStatus: String? = null,
+    lockedPickupMinutes: Int? = null,
+    onConfirmClaim: ((Int) -> Unit)? = null,
     onViewRequests: (() -> Unit)? = null
 ) {
+    var selectedPickupMinutes by rememberSaveable(action) { mutableStateOf(30) }
+    var reviewNow by remember { mutableStateOf(java.time.Instant.now()) }
+    LaunchedEffect(action) {
+        while (true) {
+            reviewNow = java.time.Instant.now()
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+    val foodExpiry = com.example.salusalo.model.parseTimestamp(expirationDate)
+    val duration = lockedPickupMinutes ?: selectedPickupMinutes
+    val eligibleDurations = listOf(30, 60, 120).filter { minutes ->
+        foodExpiry?.let { !reviewNow.plusSeconds(minutes * 60L).isAfter(it) } == true
+    }
     val context = LocalContext.current
     val address = pickupLocation?.takeIf { it.isNotBlank() } ?: "Ask the provider for the pickup location"
     val donation = price.equals("Free", ignoreCase = true)
-    val claimSuccessTitle = if (claimUnitPrice > 0) "Reservation confirmed" else "Claim confirmed"
+    val claimSuccessTitle = if (claimSavedStatus != "RESERVED") "Request already recorded"
+        else if (claimUnitPrice > 0) "Reservation confirmed" else "Claim confirmed"
 
     var page by rememberSaveable(action) {
         mutableStateOf(
@@ -130,7 +148,7 @@ fun FoodActionsDialog(
         "chat" -> provider
         "pickup" -> "Choose pickup time"
         "location" -> "Pickup location"
-        "provider" -> "Provider profile"
+        "provider" -> if (donation) "Donor" else "Seller"
         "reserve" -> "Review reservation"
         "checkout" -> if (donation && claimReservationId != null) claimSuccessTitle else if (donation) "Review claim" else "Review purchase"
         else -> "Food details"
@@ -341,21 +359,19 @@ fun FoodActionsDialog(
                                 )
 
                                 Text(address)
-
-                                Text(
-                                    "The sample listing has no exact address " +
-                                            "or map pin yet.",
-                                    fontSize = 13.sp
-                                )
                             }
 
                             ActionButton(
                                 text = "Search area in Maps",
                                 onClick = {
-                                    val uri = Uri.parse(
-                                        "geo:0,0?q=" +
-                                                Uri.encode("$address, Bohol, Philippines")
-                                    )
+                                    // A text search for the address as entered;
+                                    // listings have no map pin.
+                                    val query = if (address.contains("Philippines", ignoreCase = true)) {
+                                        address
+                                    } else {
+                                        "$address, Philippines"
+                                    }
+                                    val uri = Uri.parse("geo:0,0?q=" + Uri.encode(query))
 
                                     try {
                                         context.startActivity(
@@ -427,17 +443,8 @@ fun FoodActionsDialog(
                                     color = ActionGreen
                                 )
 
-                                Text(address, fontSize = 13.sp)
-                                Text("★ $rating — sample rating")
-
-                                Text(
-                                    "This profile uses the selected listing’s " +
-                                            "sample information.",
-                                    fontSize = 12.sp
-                                )
-
                                 ActionButton(
-                                    text = "Message provider",
+                                    text = if (donation) "Message donor" else "Message seller",
                                     onClick = {
                                         if (onMessage != null) {
                                             onMessage("")
@@ -487,10 +494,16 @@ fun FoodActionsDialog(
                                     ActionCard {
                                         Text(claimSuccessTitle, fontSize = 24.sp,
                                             fontWeight = FontWeight.Bold, color = ActionGreen)
-                                        Text("Your food is reserved for pickup. You can find it in Activity → My Requests.")
+                                        Text(if (claimSavedStatus == "RESERVED") "Your food is reserved until the pickup deadline."
+                                            else "This request has already been processed. Open Activity to see its latest status.")
                                         ActionLine("Food", foodTitle)
                                         ActionLine("Quantity", "${claimQuantity ?: quantity} $unit")
-                                        ActionLine("Status", "Awaiting pickup")
+                                        ActionLine("Status", when (claimSavedStatus) {
+                                            "RESERVED" -> "Awaiting pickup"
+                                            "CLAIMED" -> "Collected"
+                                            else -> "Hold ended"
+                                        })
+                                        claimDeadline?.let { ActionLine("Pick up by", pickupTimeText(it)) }
                                         if (claimUnitPrice > 0) {
                                             ActionLine("Amount due", formatPeso(reservationTotal(claimUnitPrice, claimQuantity ?: quantity)))
                                             Text("The saved reservation has a price. Pay at pickup. You can review or cancel it in My Requests.")
@@ -498,7 +511,7 @@ fun FoodActionsDialog(
                                             ActionLine("Cost", "Free")
                                         }
                                         ActionLine("Pickup location", address)
-                                        Text("Contact the provider to agree on pickup time. The provider will mark it collected after handover.")
+                                        Text("Contact the provider for pickup details. The provider confirms collection at handover before the deadline.")
                                         ActionButton(text = "View in Activity", onClick = { onViewRequests?.invoke() })
                                     }
                                 } else {
@@ -508,7 +521,23 @@ fun FoodActionsDialog(
                                         ActionLine("Pickup location", address)
                                         ActionLine("Deadline", status)
                                         ActionLine("Cost", "Free")
-                                        Text("Confirming reserves this quantity for you. Contact the provider to agree on pickup time.")
+                                        Text("Choose how soon you can collect. Your hold starts when the server accepts your claim.")
+                                        Text("Pickup within", fontWeight = FontWeight.Bold)
+                                        listOf(30, 60, 120).forEach { minutes ->
+                                            val label = when (minutes) { 30 -> "30 minutes"; 60 -> "1 hour"; else -> "2 hours" }
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                RadioButton(selected = duration == minutes,
+                                                    enabled = !claimSubmitting && lockedPickupMinutes == null && minutes in eligibleDurations,
+                                                    onClick = { selectedPickupMinutes = minutes })
+                                                Text(label + if (minutes !in eligibleDurations) " • past food expiry" else "")
+                                            }
+                                        }
+                                        if (duration in eligibleDurations) {
+                                            ActionLine("Estimated pickup deadline", pickupTimeText(reviewNow.plusSeconds(duration * 60L).toString()))
+                                        } else {
+                                            Text("No valid selection. Choose a shorter duration or another listing.", color = Color(0xFFB3261E))
+                                        }
+                                        Text("The exact deadline appears after confirmation. Missed pickups release the hold; food that has expired stays unavailable.", fontSize = 12.sp)
                                     }
                                     claimError?.let { error ->
                                         ActionCard {
@@ -519,8 +548,8 @@ fun FoodActionsDialog(
                                         }
                                     }
                                     Button(
-                                        onClick = onConfirmClaim,
-                                        enabled = !claimSubmitting && quantity > 0,
+                                        onClick = { onConfirmClaim(duration) },
+                                        enabled = !claimSubmitting && quantity > 0 && (duration in eligibleDurations || lockedPickupMinutes != null),
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = ActionGreen)
                                     ) {
@@ -835,4 +864,10 @@ private fun ActionFoodPhoto(
             }
         }
     }
+}
+
+private fun pickupTimeText(value: String): String {
+    val instant = com.example.salusalo.model.parseTimestamp(value) ?: return value
+    return java.time.format.DateTimeFormatter.ofPattern("MMM d, h:mm a", Locale.getDefault())
+        .withZone(java.time.ZoneId.systemDefault()).format(instant)
 }

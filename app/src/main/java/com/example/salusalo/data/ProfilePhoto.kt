@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private const val MAX_PROFILE_PHOTO_SIDE = 512
+private const val MAX_LISTING_PHOTO_SIDE = 1600
 
 /**
  * Reads the chosen photo, turns it upright, shrinks it so its longer side is
@@ -18,6 +19,13 @@ private const val MAX_PROFILE_PHOTO_SIDE = 512
  * null when the file cannot be read as an image.
  */
 suspend fun encodeProfilePhoto(context: Context, uri: Uri): ByteArray? =
+    encodeJpegPhoto(context, uri, MAX_PROFILE_PHOTO_SIDE)
+
+/** Same as [encodeProfilePhoto], for listing photos: the longer side is at most 1600 px. */
+suspend fun encodeListingPhoto(context: Context, uri: Uri): ByteArray? =
+    encodeJpegPhoto(context, uri, MAX_LISTING_PHOTO_SIDE)
+
+private suspend fun encodeJpegPhoto(context: Context, uri: Uri, maxSide: Int): ByteArray? =
     withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
 
@@ -28,8 +36,8 @@ suspend fun encodeProfilePhoto(context: Context, uri: Uri): ByteArray? =
         // Decode at roughly the target size first, to keep memory low.
         var sample = 1
         while (
-            bounds.outWidth / (sample * 2) >= MAX_PROFILE_PHOTO_SIDE &&
-            bounds.outHeight / (sample * 2) >= MAX_PROFILE_PHOTO_SIDE
+            bounds.outWidth / (sample * 2) >= maxSide &&
+            bounds.outHeight / (sample * 2) >= maxSide
         ) {
             sample *= 2
         }
@@ -53,7 +61,7 @@ suspend fun encodeProfilePhoto(context: Context, uri: Uri): ByteArray? =
             }
         }.getOrNull() ?: 0f
 
-        val scale = MAX_PROFILE_PHOTO_SIDE.toFloat() / maxOf(decoded.width, decoded.height)
+        val scale = maxSide.toFloat() / maxOf(decoded.width, decoded.height)
         val matrix = Matrix().apply {
             if (scale < 1f) postScale(scale, scale)
             if (rotation != 0f) postRotate(rotation)
