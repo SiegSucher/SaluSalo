@@ -2947,8 +2947,8 @@ private fun FoodDetailsScreen(
     }
 }
 
-private val listingTimeFormat = java.time.format.DateTimeFormatter.ofPattern("MMM d, h:mm a", java.util.Locale.getDefault())
-private val listingClockFormat = java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.getDefault())
+private val listingTimeFormat = java.time.format.DateTimeFormatter.ofPattern("MMM d, h:mm a", java.util.Locale.ENGLISH)
+private val listingClockFormat = java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH)
 
 /** A listing time in the phone's time zone, e.g. "Sep 27, 6:00 PM". */
 private fun listingTime(instant: Instant): String =

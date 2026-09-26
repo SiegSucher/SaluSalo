@@ -499,6 +499,14 @@ fun ProfileSections(
                                                         if (post.price > 0) formatPeso(post.price) else "Free",
                                                 fontSize = 12.sp
                                             )
+                                        } else {
+                                            // A listing this account can no longer see: its
+                                            // name and cover from get_my_saved_listing_names().
+                                            SavedFallbackPhoto(row.fallbackImageUrl, row.fallbackName)
+                                            Text(
+                                                row.fallbackName ?: "Saved listing",
+                                                fontWeight = FontWeight.Bold
+                                            )
                                         }
                                         if (available) {
                                             SectionButton("View listing") {
@@ -982,6 +990,28 @@ private fun SectionToggle(
                 .padding(top = 12.dp)
         )
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/** The cover of a saved listing that no longer loads, or a plain tile. */
+@Composable
+private fun SavedFallbackPhoto(imageUrl: String?, name: String?) {
+    var imageFailed by remember(imageUrl) { mutableStateOf(false) }
+    val modifier = Modifier
+        .fillMaxWidth()
+        .height(170.dp)
+    Surface(shape = RoundedCornerShape(16.dp)) {
+        if (imageUrl != null && !imageFailed) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = name,
+                contentScale = ContentScale.Crop,
+                modifier = modifier,
+                onError = { imageFailed = true }
+            )
+        } else {
+            Box(modifier.background(SectionPale))
+        }
     }
 }
 

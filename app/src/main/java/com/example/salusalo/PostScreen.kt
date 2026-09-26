@@ -959,7 +959,7 @@ private fun postTime(value: Long): String {
     if (value == 0L) return "Select date and time"
     return SimpleDateFormat(
         "MMM d, yyyy • h:mm a",
-        Locale.getDefault()
+        Locale.ENGLISH
     ).format(Date(value))
 }
 

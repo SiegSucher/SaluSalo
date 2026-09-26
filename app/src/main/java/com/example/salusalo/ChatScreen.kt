@@ -374,5 +374,5 @@ private fun formatChatTime(value: String?): String {
     val instant = parseTimestamp(value) ?: return ""
     val zone = ZoneId.systemDefault()
     val pattern = if (instant.atZone(zone).toLocalDate() == LocalDate.now(zone)) "h:mm a" else "MMM d"
-    return DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).withZone(zone).format(instant)
+    return DateTimeFormatter.ofPattern(pattern, Locale.ENGLISH).withZone(zone).format(instant)
 }
