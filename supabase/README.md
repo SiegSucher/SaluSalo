@@ -60,6 +60,17 @@ The migration is safe to run again. **Do not run `20260924_phase3_reservations.s
 
 Run `migrations/20260928_profile_updates.sql` by hand in the SQL Editor after `20260927_activity_prices.sql`. It adds two SECURITY DEFINER functions, `update_my_profile_name(p_name)` and `set_my_profile_image(p_path)`, which change only the caller's own `users` row, found from the token's `sub`. The name is trimmed and must be 1–120 characters; the photo path must be an existing `profile-images` object inside the caller's own folder. They never change `role`, `email` or `firebase_uid`. `users` still has no UPDATE grant or policy for clients, so these functions are the only way the app changes a profile. The migration is safe to run again.
 
+## Listing details, editing and saved listings
+
+Run `migrations/20260929_phase2_listing_details.sql` by hand in the SQL Editor after `20260928_profile_updates.sql`, **before** installing the app build that uses it (Create Listing sends the new columns and would fail without them). It is safe to run again.
+
+- **New `food_posts` columns**, all optional, so older listings stay readable: `pickup_start`, `pickup_end` (both or neither; the end after the start and on or before `expiration_date`), `handover` (`MEET_AT_PICKUP_LOCATION` or `COLLECT_FROM_PROVIDER`), `allergens` and `storage_notes` (up to 300 characters each) and `extra_image_paths` (up to 3 more `food-images` paths; `image_url` stays the cover).
+- **Photo paths.** The insert policy is recreated with one extra rule: `image_url` and every extra path must be inside the caller's own `<firebaseUid>/<postId>/` folder and contain no `..`.
+- **No direct updates.** The Phase 2 policy "Users may update their own food posts" is dropped and UPDATE on `food_posts` is revoked from `authenticated`. Listings now change only by insert, the reservation functions and `update_my_food_post(...)`. **Do not run `20260923_phase2_food_posts.sql` again after this file**: it would restore the UPDATE grant and policy.
+- **`update_my_food_post(...)`** (SECURITY DEFINER) edits the caller's own, unexpired listing: name, description, category, price, pickup location, expiry, pickup window, handover, allergens and storage notes. It locks the row, and never changes quantity, unit, status, donor, photos or `created_at`. Existing reservations keep their `unit_price`.
+- **`get_listing_donor_names(uuid[])`** (SECURITY DEFINER) returns only the donor's name, and only for listings the caller may see under the `food_posts` SELECT policy (available and unexpired, their own, or one they reserved). `users` RLS is not widened.
+- **`saved_listings`** (bookmarks): the caller's own rows only (select, insert, delete; no update; nothing for `anon`). A listing can be saved only if the caller can see it and it is not their own. Rows are deleted with their listing or user.
+
 ## Safety checks (`tests/`)
 
 The files in `tests/` are not migrations and change nothing. `tests/phase4_live_safety_check.sql` checks that the live Phase 4 rules still refuse what they should. Paste it into the SQL Editor (role `postgres`) and run it. It pretends to be the two participants of the most recent chat and the newest other account, tries forbidden actions, and reports each check as PASS, FAIL or SKIP. It always ends with an error on purpose (`SAFETY CHECK FINISHED: …`); the error rolls back everything the check did. It needs at least one chat with messages, and a third account for the outsider checks.
