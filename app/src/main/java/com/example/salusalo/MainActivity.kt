@@ -1426,14 +1426,13 @@ private fun HomeScreen(
                     notificationViewModel = notificationViewModel,
                     remoteProfile = currentProfile,
                     onProfileUpdated = onProfileUpdated,
-                    onOpenFood = { title ->
-                        selectedFood = foods.firstOrNull {
-                            it.title == title
-                        }
-                    },
+                    reservationViewModel = reservationViewModel,
                     savedListingViewModel = savedListingViewModel,
-                    // Saved Listings opens a listing by its ID, from the row it just loaded.
-                    onOpenListing = { post -> selectedFood = post.toHomeFood() }
+                    // Saved Listings and the Successful claims/donations records open
+                    // a listing by its ID: the feed's copy if it has one, else the row's.
+                    onOpenListing = { post ->
+                        selectedFood = (remotePosts.firstOrNull { it.id == post.id } ?: post).toHomeFood()
+                    }
                 )
             } else key(page) {
                 Column(

@@ -3,6 +3,9 @@ package com.example.salusalo
 import com.example.salusalo.viewmodel.SavedListingViewModel
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.viewmodel.NotificationViewModel
+import com.example.salusalo.viewmodel.ReservationViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.salusalo.model.ReservationStatus
 import coil3.compose.AsyncImage
 import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.encodeProfilePhoto
@@ -59,8 +62,8 @@ private data class ProfileReview(
 fun ProfileScreen(
     onAlerts: () -> Unit,
     onLogout: () -> Unit,
-    onOpenFood: (String) -> Unit,
     notificationViewModel: NotificationViewModel,
+    reservationViewModel: ReservationViewModel,
     remoteProfile: UserProfile? = null,
     onProfileUpdated: (UserProfile) -> Unit = {},
     savedListingViewModel: SavedListingViewModel,
@@ -71,6 +74,16 @@ fun ProfileScreen(
     val preferences = remember {
         context.getSharedPreferences("salusalo_profile", 0)
     }
+
+    // Successful Claims and Donations are this account's claimed reservations,
+    // as recipient and as donor; together they equal Activity's Completed.
+    val myReservations by reservationViewModel.myReservations.collectAsStateWithLifecycle()
+    val donorReservations by reservationViewModel.donorReservations.collectAsStateWithLifecycle()
+    val reservationsLoaded by reservationViewModel.loaded.collectAsStateWithLifecycle()
+    val reservationsFailed by reservationViewModel.loadFailed.collectAsStateWithLifecycle()
+    val successfulClaims = myReservations.filter { it.reservation.status == ReservationStatus.CLAIMED }
+    val successfulDonations = donorReservations.filter { it.reservation.status == ReservationStatus.CLAIMED }
+    LaunchedEffect(Unit) { reservationViewModel.refresh() }
 
     // Name, photo and member-since date come only from the Supabase profile.
     val userRepository = remember { UserRepository() }
@@ -319,6 +332,7 @@ fun ProfileScreen(
 
         // Statistics.
         ProfilePanel {
+            Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -326,12 +340,16 @@ fun ProfileScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ProfileStat(
-                    Icons.Outlined.Spa, "38", "Successful\nClaims"
+                    Icons.Outlined.Spa,
+                    if (reservationsLoaded) successfulClaims.size.toString() else "—",
+                    "Successful\nClaims"
                 ) {
                     page = "claims"
                 }
                 ProfileStat(
-                    Icons.Outlined.CardGiftcard, "24", "Successful\nDonations"
+                    Icons.Outlined.CardGiftcard,
+                    if (reservationsLoaded) successfulDonations.size.toString() else "—",
+                    "Successful\nDonations"
                 ) {
                     page = "donations"
                 }
@@ -351,6 +369,13 @@ fun ProfileScreen(
                 ) {
                     page = "membership"
                 }
+            }
+            Text(
+                "Verified badge, rating and response rate are demo values",
+                modifier = Modifier.padding(top = 6.dp),
+                fontSize = 10.sp,
+                color = PGray
+            )
             }
         }
 
@@ -601,11 +626,12 @@ fun ProfileScreen(
                 recommendations = updatedRecommendations
                 pickupReminders = updatedReminders
             },
-            onOpenFood = { title ->
-                page = ""
-                onOpenFood(title)
-            },
             onClose = { page = "" },
+            successfulClaims = successfulClaims,
+            successfulDonations = successfulDonations,
+            recordsLoaded = reservationsLoaded,
+            recordsFailed = reservationsFailed,
+            onReloadRecords = { reservationViewModel.refresh() },
             notificationViewModel = notificationViewModel,
             savedListingViewModel = savedListingViewModel,
             onOpenListing = { post ->
