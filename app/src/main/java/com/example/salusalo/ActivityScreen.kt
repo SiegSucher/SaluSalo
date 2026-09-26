@@ -1,5 +1,6 @@
 package com.example.salusalo
 
+import com.example.salusalo.model.isExpired
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -87,6 +88,9 @@ fun ActivityScreen(
     val myReservations by reservationViewModel.myReservations.collectAsStateWithLifecycle()
     val donorReservations by reservationViewModel.donorReservations.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<FoodPost?>(null) }
+    var editing by remember { mutableStateOf<FoodPost?>(null) }
+    var editNotice by remember { mutableStateOf("") }
+    val foodSaving by foodViewModel.saving.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         foodViewModel.loadMyPosts()
@@ -228,6 +232,9 @@ fun ActivityScreen(
     val myListingRecords = myPosts
         .sortedByDescending { it.createdAt.orEmpty() }
         .map { post ->
+            // Nothing on the server marks a listing EXPIRED; it is worked out
+            // from expiration_date, so Active Listings leaves it out.
+            val expired = post.isExpired()
             ActivityRecord(
                 id = post.id,
                 tab = "My Listings",
@@ -236,9 +243,9 @@ fun ActivityScreen(
                 distance = post.pickupLocation,
                 posted = post.createdAt?.let { "Posted ${formatActivityTimestamp(it)}" }
                     ?: "Posted recently",
-                status = post.status.name.lowercase()
+                status = if (expired) "Expired" else post.status.name.lowercase()
                     .replaceFirstChar { it.uppercase() },
-                timeLabel = "Expires",
+                timeLabel = if (expired) "Expired on" else "Expires",
                 timeValue = formatActivityTimestamp(post.expirationDate),
                 uri = post.displayImageUrl,
                 details = buildString {
@@ -727,6 +734,14 @@ fun ActivityScreen(
                         fontSize = 11.sp,
                         color = AGray
                     )
+                    record.ownedPost?.takeIf { !it.isExpired() }?.let { post ->
+                        OutlinedButton(onClick = {
+                            editing = post
+                            selectedId = null
+                        }) {
+                            Text("Edit listing")
+                        }
+                    }
                     record.reservationId?.let { reservationId ->
                         OutlinedButton(onClick = {
                             messageViewModel.openForReservation(reservationId)
@@ -756,15 +771,33 @@ fun ActivityScreen(
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text("Delete listing?") },
-            text = { Text("This permanently removes this listing and its uploaded image.") },
+            text = { Text("This permanently removes this listing and its photos.") },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(enabled = !foodSaving, onClick = {
                     foodViewModel.deletePost(post)
                     pendingDelete = null
                     selectedId = null
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
+        )
+    }
+    editing?.let { post ->
+        EditListingDialog(
+            post = post,
+            foodViewModel = foodViewModel,
+            onClose = { result ->
+                editing = null
+                if (result != null) editNotice = result
+            }
+        )
+    }
+    if (editNotice.isNotBlank()) {
+        AlertDialog(
+            onDismissRequest = { editNotice = "" },
+            title = { Text("Edit Listing") },
+            text = { Text(editNotice) },
+            confirmButton = { TextButton(onClick = { editNotice = "" }) { Text("OK") } }
         )
     }
     if (notice.isNotBlank()) {
