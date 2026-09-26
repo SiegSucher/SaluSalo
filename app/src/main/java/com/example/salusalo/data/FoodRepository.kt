@@ -70,7 +70,8 @@ class FoodRepository(
             unit = draft.unit,
             imageUrl = imagePath,
             pickupLocation = draft.pickupLocation.trim(),
-            expirationDate = draft.expirationDate
+            expirationDate = draft.expirationDate,
+            price = draft.price
         )
 
         // Remove the uploaded image only when the insert itself fails. Once the

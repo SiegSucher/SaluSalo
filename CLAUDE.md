@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Salu-Salo** is an Android app for sharing surplus food within a community to reduce food waste. Donors post surplus food with a photo, quantity, pickup location and expiry. Recipients browse the available listings and reserve part or all of the quantity for pickup. The UI uses ₱ and Philippine sample locations.
 
 - **Kotlin + Jetpack Compose (Material 3).** Single `MainActivity`, single `:app` module, package `com.example.salusalo`.
-- **Firebase Authentication.** Email/password sign-up, sign-in, password reset and sign-out.
+- **Firebase Authentication.** Email/password sign-up, sign-in, password reset, password change and sign-out, plus Google sign-in through Credential Manager (`data/GoogleSignIn.kt`; server client ID `R.string.default_web_client_id` from `google-services.json`, never hard-coded). "Keep me signed in" is a device-only setting checked on a fresh start (`MainActivity.onCreate`).
 - **Supabase.** Postgres (via PostgREST and RPCs), Storage and Realtime, through supabase-kt 3.5 on Ktor with the OkHttp engine (Realtime needs WebSockets, which the Android engine lacks). Images load with Coil 3 `AsyncImage`.
 - **Supabase trusts Firebase via Third-Party Auth.** `data/SupabaseClientProvider.kt` sends the current Firebase ID token as the Supabase access token.
   - Every Firebase user needs the custom claim `role: authenticated`. A trusted Admin SDK or Cloud Function sets it; that code is **not in this repo**.
@@ -19,6 +19,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Phase 2 — Food Listings: complete.
 - Phase 3 — Reservations: complete.
 - Phase 4 — Messaging and Notifications: complete (signed off 2026-09-25). Chat per listing, in-app alerts, Realtime, preferences in Supabase. Built, migration applied, and tested on two phones, including the two preference fixes and live alerts after more than 1 hour; the live safety check passed. The password-reset email was not tested (`PROJECT_STATUS.md` §8).
+- Activity Purchases, Claims and listing prices (between Phases 4 and 5, not part of Phase 5): **in code on branch `claude/activity-purchases-claims`, not built, migration `20260927_activity_prices.sql` not applied, not tested** (`PROJECT_STATUS.md` §9).
+- Phase 1 demo fixes (Google sign-in, Keep me signed in, profile name and photo in Supabase, password change; not part of Phase 5): **in code on branch `claude/phase1-demo-fixes`, built (2026-09-26), migration `20260928_profile_updates.sql` not applied, not tested** (`PROJECT_STATUS.md` §10).
 - Phase 5 — Maps, Reviews, Reports: not started.
 - Phase 6 — Admin and Final Release: not started.
 - Read `docs/PROJECT_STATUS.md` first. It has the detailed status, the test results and the two-account manual test.
@@ -57,13 +59,13 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
 
 **Layers**
 - `data/`: plain repository classes that use the `SupabaseClientProvider.client` singleton.
-  - `UserRepository` finds or creates the caller's `users` row, keyed by `FirebaseAuth.currentUser.uid`.
+  - `UserRepository` finds or creates the caller's `users` row, keyed by `FirebaseAuth.currentUser.uid`. It also changes the name and photo through the profile functions, uploads photos to `profile-images` (a new `<uid>/profile-<millis>.jpg` each time, shrunk by `data/ProfilePhoto.kt`), and changes the password (reauthenticate, then update). `supabaseErrorText()` shows only a `RestException`'s short `error` text, never the full message.
   - `FoodRepository` handles `food_posts` and image upload. `withSignedImageUrl(bucket)`, a top-level function in `FoodRepository.kt`, turns the stored path into a 1-hour signed URL. If signing fails, only that post loses its image; the list still loads.
   - `ReservationRepository` handles reservation RPCs and reads. It signs the images of the listings its reservations reference with the same helper.
   - `MessageRepository` (conversation RPCs, messages) and `NotificationRepository` (alerts, preferences). `realtimeInserts()` in `data/RealtimeInserts.kt` streams inserted rows through a Realtime channel.
   - `StorageRepository` builds storage paths.
 - `model/`: `@Serializable` DTOs, with `@SerialName` for snake_case columns.
-  - `FoodPost`: its `displayImageUrl` is `@Transient` (a signed URL, never stored).
+  - `FoodPost`: its `displayImageUrl` is `@Transient` (a signed URL, never stored). `price` is per unit, 0 = free. `formatPeso()` and `reservationTotal()` (same file) format money with `BigDecimal.valueOf`; never use `BigDecimal(double)`.
   - `Reservation`, `ReservationDisplay`, `DonorReservationRow`.
   - `UserProfile`.
   - `Conversation`, `ConversationSummary`, `ChatMessage` (`model/Conversation.kt`, with `parseTimestamp()`); `AppNotification`, `NotificationType`, `NotificationPreferences`.
@@ -76,7 +78,7 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
   - `NotificationViewModel`: alerts, `unreadCount`, preferences. `start(profileId)` keeps alerts live for the session and re-sends the Realtime token every 5 minutes (Realtime does not refresh the Firebase token itself).
 - UI: large files in the root package.
   - `MainActivity.kt`: auth screens, Home feed, `RecommendationCard`, `AvailableFoodCard`, `FoodDetailsScreen` with Reserve.
-  - `ActivityScreen.kt`: tabs My Listings, My Reservations, My Donations, Purchases, Claims. It shows reservation results and errors in a "Reservation" dialog, and reloads the reservation lists when their tab is tapped.
+  - `ActivityScreen.kt`: tabs My Listings, My Reservations (open and cancelled), My Donations, Purchases (claimed, priced), Claims (claimed, free), and totals computed from claimed reservations. It shows reservation results and errors in a "Reservation" dialog, and reloads the reservation lists when their tab is tapped.
   - `PostScreen.kt`: Create Listing.
   - `ProfileScreen.kt` and `ProfileSections.kt`: profile.
   - `AlertScreen.kt`: real alerts (Phase 4).
@@ -92,7 +94,9 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
 **Supabase objects** (in `supabase/migrations/`)
 - Tables `users`, `food_posts` and `reservations`, each with RLS enabled and `anon` revoked.
 - Helper functions: `is_salusalo_firebase_jwt()`, `current_salusalo_profile_id()`, `is_reservation_recipient()`.
-- SECURITY DEFINER RPCs: `create_reservation`, `cancel_reservation`, `claim_reservation`, `get_donor_reservations`.
+- Profile functions (`20260928_profile_updates.sql`): `update_my_profile_name(p_name)` and `set_my_profile_image(p_path)`, SECURITY DEFINER, caller's own row from the token only.
+- SECURITY DEFINER RPCs: `create_reservation`, `cancel_reservation`, `claim_reservation`, `get_donor_reservations` (returns `unit_price` since `20260927_activity_prices.sql`; do not re-run the Phase 3 files after it).
+- Prices: `food_posts.price` and `reservations.unit_price`. `unit_price` is set only by the `reservations_set_unit_price` trigger from the listing's price; never send or adjust it from the app. Pay at pickup only, no online payments.
 - Phase 4: tables `conversations`, `messages`, `notifications`, `notification_preferences`; RPCs `start_listing_conversation`, `open_reservation_conversation`, `send_message`, `mark_conversation_read`, `mark_notifications_read`, `get_my_conversations`; internal `notify_user()` and the `reservations_notify` trigger; `messages` and `notifications` in the `supabase_realtime` publication.
 - `food-images` object path: `<firebaseUid>/<postId>/image.<ext>`. `food_posts.image_url` stores this **path**, so the UI must use `displayImageUrl`.
 
@@ -109,6 +113,8 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
 - Donors see recipient **names only**, via `get_donor_reservations()`. Conversation participants see each other's **name only**, via `get_my_conversations()`. Do not widen `users` RLS.
 - **Messages and alerts change only through the Phase 4 RPCs and triggers.** Clients have SELECT only on `conversations`, `messages` and `notifications`; never insert them directly. `notify_user()` must stay non-executable for clients.
 - Client-created profiles are always `RECIPIENT` (enforced by RLS). The client never sets `role`.
+- **`users` rows change only through `update_my_profile_name` and `set_my_profile_image`.** Clients have SELECT and INSERT only; never add an UPDATE grant or policy on `users`, and never let these functions change `role`, `email` or `firebase_uid`.
+- `profile-images` stays private and owner-only; a photo path must be inside the owner's Firebase-UID folder.
 - Keep `food-images` private and display images through signed URLs. Upload only under the uploader's own Firebase-UID folder.
 - Never add a Supabase service-role key or Firebase Admin credentials to the app, docs or commits.
 - A schema or RLS change needs a **new** migration file plus a note in `supabase/README.md`. Tell the user it must be run manually.
@@ -160,3 +166,5 @@ Details, test results and line references are in `docs/PROJECT_STATUS.md`.
      1. A notification preference switched back on was never saved. supabase-kt's `Json` leaves out values equal to their default, so `true` was missing from the upsert. The fix puts `@EncodeDefault` on the four booleans in `NotificationPreferences`.
      2. The switches showed on before the saved settings loaded. They now show "Loading your alert settings…" and Save stays disabled until then.
    - Not fixed: the unused `FoodRepository.updateFoodPost()` has the same problem with dropped defaults. Do not turn on `encodeDefaults` globally; that would change the inserts of other models.
+6. **Activity Purchases, Claims and listing prices** (`PROJECT_STATUS.md` §9), implemented in code on 2026-09-25 on branch `claude/activity-purchases-claims`. The SQL was tested on a local Postgres and the Kotlin was type-checked. Not built with AGP, the migration was not applied to the live project, nothing tested on a device. Run the migration **before** installing the build (Create Listing sends `price`). My Reservations no longer lists claimed reservations; they are in Purchases or Claims.
+7. **Phase 1 demo fixes** (`PROJECT_STATUS.md` §10), implemented in code on 2026-09-26 on branch `claude/phase1-demo-fixes` (from `claude/activity-purchases-claims`; merge after it). The SQL was tested on a local Postgres and the Kotlin was type-checked, with stubs for Credential Manager and the new Firebase calls. Built with AGP on 2026-09-26 after pinning `googleid` 1.2.0 (1.2.1 is built with Kotlin 2.4 metadata, which Kotlin 2.2.10 cannot read); the migration was not applied, nothing tested on a device. The new `app/google-services.json` (Google enabled, debug SHA-1 added, Android and web OAuth clients) is committed on this branch; pull before changing anything. Google sign-in with the email of an unverified email/password account makes that account Google-only (§10.5).

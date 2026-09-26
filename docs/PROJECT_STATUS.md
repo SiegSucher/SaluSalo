@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-09-25 (Phase 4 signed off, §8). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
+_Last updated: 2026-09-25 (Phase 4 signed off, §8; Purchases, Claims and listing prices in code, not yet built or tested, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — in code, not yet built or tested, §10). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -21,6 +21,8 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Phase 2: Food Listings | `food_posts`, create listing with image upload to `food-images`, feed, My Listings, delete | **Complete.** Do not redo. Regression passed on 2026-09-25 for both accounts: Home/feed, create listing, delete listing ([results log](#results-log)). |
 | Phase 3: Reservations | Reserve, cancel and claim with atomic quantity; recipient and donor views | **Complete.** Signed off by the developer on 2026-09-25. The A/B reservation test, the missing-image fallback/feed check, and the cancel, claim and Recommended for You tests passed; the remaining checks without an individual test record are listed under the [results log](#results-log). The changes since `d4f65fe` were committed on 2026-09-25 (§6). The known-issue fixes made after sign-off (§3.5) were built and manually tested on 2026-09-25. |
 | Phase 4: Messaging and Notifications | Chat per listing (recipient ↔ donor), in-app alerts for messages and reservation changes, live updates through Supabase Realtime, notification preferences stored in Supabase (§8) | **Complete.** Signed off by the developer on 2026-09-25. Migration applied to the live project. At `266325b` the one-phone A/B test and regression passed, except saving a preference switched back on. At `c7323b8` the two preference fixes and all the live two-phone checks passed, including live alerts after more than 1 hour, and a new account signed up. The live safety check (negative tests) passed 21 of 21. Not tested: the password-reset email, whose code Phase 4 did not change (§8). |
+| Activity: Purchases, Claims, listing prices (between Phases 4 and 5; not part of Phase 5) | Stored listing prices, the price locked into each reservation, real Purchases and Claims tabs, real Activity totals (§9) | **Implemented in code on 2026-09-25. Not built with AGP, migration not applied, not tested on a device.** The SQL was tested on a local Postgres 16; the Kotlin was type-checked (§9.5). |
+| Phase 1 demo fixes: accounts, profile, security (fixes to finished Phase 1 features; not part of Phase 5) | Google sign-in, a working "Keep me signed in", honest sign-in texts, profile name and photo saved to Supabase, real password change, real Member since; location, Privacy and Signed-in devices removed (§10) | **Implemented in code on 2026-09-26 on branch `claude/phase1-demo-fixes`; built with AGP on 2026-09-26 (`googleid` 1.2.0, new `google-services.json`). Migration not applied, not tested on a device.** The SQL was tested on a local Postgres 16; the Kotlin was type-checked (§10.6). |
 | Phase 5: Maps, Reviews, Reports | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 | Phase 6: Admin and Final Release | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 
@@ -59,11 +61,11 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 - **Supabase tokens.** `SupabaseClientProvider` sends the Firebase ID token to Supabase, and RLS checks it via `is_salusalo_firebase_jwt()`.
 - **Storage.** The private buckets `food-images` and `profile-images` are created by `20260921_phase1_foundation.sql`.
 - **Not part of the implemented scope** (current placeholders):
-  - The Google, Apple and Facebook buttons only show a message.
-  - "Keep me signed in" has no effect.
-  - Profile name/location edits, the profile photo and settings are saved only to local SharedPreferences. Reviews are sample data.
+  - The Google, Apple and Facebook buttons only show a message. **Since §10 (in code, not tested): real Google sign-in; Apple and Facebook removed.**
+  - "Keep me signed in" has no effect. **Since §10 (in code, not tested): it works.**
+  - Profile name/location edits, the profile photo and settings are saved only to local SharedPreferences. Reviews are sample data. **Since §10 (in code, not tested): the name and photo are saved to Supabase and the location is removed; other settings are still local, reviews still sample data.**
   - Only the displayed profile **name** comes from Supabase.
-  - `StorageRepository.profileImagePath()` is unused.
+  - `StorageRepository.profileImagePath()` is unused. **Since §10 it is used for profile photos.**
 
 ### Phase 2: what exists (summary)
 
@@ -75,7 +77,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 - **Not part of the implemented scope:**
   - **No edit UI.** `FoodRepository.updateFoodPost()` exists but is unused.
   - **Only the first selected photo is uploaded**, even though up to four can be picked.
-  - **Form fields that are collected but not saved:** price ("I want to sell"), pickup start/end, distribution mode, partial claims and maximum per recipient, allergens, storage notes.
+  - **Form fields that are collected but not saved:** price ("I want to sell"; saved since §9, not yet tested), pickup start/end, distribution mode, partial claims and maximum per recipient, allergens, storage notes.
   - **Hard-coded display values:** every listing shows "Free", provider "Food donor", rating "New", and uses a fixed distance of 0 for the "Nearby" filter.
 
 ---
@@ -273,7 +275,7 @@ Phase 3 was signed off on 2026-09-25. These sections are kept as the record of t
 | My Listings: own listings | Tab `"My Listings"`. Data flows `getUserFoodPosts()` → `FoodViewModel.myPosts` → `myListingRecords` (L249–274). Delete action. |
 
 - The tab list is at L505–511.
-- Sample `"Reservations"` and `"My Listings"` records are filtered out (L310–312). The "Purchases" and "Claims" tabs still show demo data.
+- Sample `"Reservations"` and `"My Listings"` records are filtered out (L310–312). The "Purchases" and "Claims" tabs showed demo data until §9 (in code, not yet tested).
 
 **What remains for this item**
 
@@ -499,7 +501,7 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 2. **Live reply:** A opens the thread and replies. B, with the chat open, sees the reply appear without refreshing. A's thread shows no unread count after opening.
 3. **Prefilled questions:** B taps the Allergens row on A's listing: the chat opens with "Hi! What allergens does <listing> contain?" in the input.
 4. **Own listing:** A opens their own listing: the button reads "Your listing", and tapping it (or Allergens/Storage) shows "You cannot message yourself…".
-5. **Reservation alerts:** B reserves part of A's listing → A gets "New reservation" in Alerts. B cancels → A gets "Reservation cancelled". B reserves again and A marks it claimed → B gets "Reservation claimed". Tapping a reservation alert opens Activity on My Donations (A) or My Reservations (B).
+5. **Reservation alerts:** B reserves part of A's listing → A gets "New reservation" in Alerts. B cancels → A gets "Reservation cancelled". B reserves again and A marks it claimed → B gets "Reservation claimed". Tapping a reservation alert opens Activity on My Donations (A). Since §9 (not yet tested), B's "Reservation claimed" alert opens that reservation in Purchases or Claims instead of My Reservations.
 6. **Chat from Activity:** A → Activity → My Donations → record → "Message recipient", and B → My Reservations → record → "Message donor": both land in the same thread as step 1.
 7. **Preferences:** A → Profile → Preferences → Notifications → turns off "New messages" → Save ("Preferences saved to your account."). B sends a message: it arrives in A's chat, but A gets no new MESSAGE alert. Turn it back on and Save, leave the page and reopen it: the switch is still on (§8.7 bug 1). While the page loads, it shows "Loading your alert settings…" rather than switches (§8.7 bug 2). Repeat both checks in Alerts → settings icon.
 8. **Mark read:** Alerts → "Mark shown as read": the unread count and the bell badge go to 0 and stay 0 after reopening the app.
@@ -545,18 +547,19 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 | Area | Path | Notes |
 |---|---|---|
 | Main activity, auth, navigation, Home, food details | `app/src/main/java/com/example/salusalo/MainActivity.kt` | `MainActivity`, `SaluSaloApp()` (auth + top-level `screen`), `WelcomeScreen`, `SignInScreen`, `HomeScreen()` (`page` + bottom bar), `RecommendationCard`, `AvailableFoodCard`, `FoodDetailsScreen` |
-| Activity tabs | `app/src/main/java/com/example/salusalo/ActivityScreen.kt` | My Listings, My Reservations, My Donations, Purchases (demo), Claims (demo); `RecordPhoto` |
+| Activity tabs | `app/src/main/java/com/example/salusalo/ActivityScreen.kt` | My Listings, My Reservations (open and cancelled), My Donations, Purchases and Claims (claimed reservations, §9); real totals; `RecordPhoto` |
 | Food post model | `app/src/main/java/com/example/salusalo/model/FoodPost.kt` | `FoodPost` (with `@Transient displayImageUrl`), `NewFoodPost`, `FoodPostDraft`, `FoodPostStatus` |
 | Reservation model | `app/src/main/java/com/example/salusalo/model/Reservation.kt` | `Reservation`, `ReservationStatus`, `ReservationDisplay`, `DonorReservationRow` |
 | Food repository | `app/src/main/java/com/example/salusalo/data/FoodRepository.kt` | Feed, own posts, create/delete, `withSignedImageUrl()` |
 | Reservation repository | `app/src/main/java/com/example/salusalo/data/ReservationRepository.kt` | RPC calls, `getMyReservations()`, `getReservationsForMyFoodPosts()` |
 | Reservation ViewModel | `app/src/main/java/com/example/salusalo/viewmodel/ReservationViewModel.kt` | `myReservations`, `donorReservations`, `message`, `reserve` / `cancel` / `claim` / `refresh` |
 | Food ViewModel | `app/src/main/java/com/example/salusalo/viewmodel/FoodViewModel.kt` | `availablePosts`, `myPosts`, `createPost`, `deletePost` |
-| Auth / profile | `app/src/main/java/com/example/salusalo/data/UserRepository.kt` | Find-or-create profile; `ProfileException` |
+| Auth / profile | `app/src/main/java/com/example/salusalo/data/UserRepository.kt` | Find-or-create profile; `ProfileException`; since §10 `updateMyName`, `uploadProfilePhoto`, `profilePhotoUrl`, `changePassword`, `supabaseErrorText` |
+| Auth / profile | `app/src/main/java/com/example/salusalo/data/GoogleSignIn.kt`, `data/ProfilePhoto.kt` | Google ID token through Credential Manager; profile photo shrinking (§10) |
 | Auth / profile | `app/src/main/java/com/example/salusalo/model/UserProfile.kt` | `UserProfile`, `UserRole`, `NewUserProfile` |
 | Auth / profile | `app/src/main/java/com/example/salusalo/data/SupabaseClientProvider.kt` | Supabase client using the Firebase ID token |
-| Auth / profile | `app/src/main/java/com/example/salusalo/ProfileScreen.kt`, `ProfileSections.kt` | Name and notification preferences from Supabase; everything else local or demo |
-| Storage paths | `app/src/main/java/com/example/salusalo/data/StorageRepository.kt` | `foodImagePath()`, unused `profileImagePath()` |
+| Auth / profile | `app/src/main/java/com/example/salusalo/ProfileScreen.kt`, `ProfileSections.kt` | Name, photo, member since, notification preferences and password change are real (§10, not yet tested); stats, reviews, verification, saved listings and report are still demo |
+| Storage paths | `app/src/main/java/com/example/salusalo/data/StorageRepository.kt` | `foodImagePath()`, `profileImagePath()` (`<uid>/profile-<millis>.jpg` since §10) |
 | Create listing | `app/src/main/java/com/example/salusalo/PostScreen.kt` | Create Listing form, "My posts", `PostPhoto` |
 | Messaging (Phase 4) | `ChatScreen.kt`, `data/MessageRepository.kt`, `data/RealtimeInserts.kt`, `model/Conversation.kt`, `viewmodel/MessageViewModel.kt` | Chat dialog and Messages inbox; RPC calls; Realtime insert stream |
 | Alerts (Phase 4) | `AlertScreen.kt`, `data/NotificationRepository.kt`, `model/AppNotification.kt`, `viewmodel/NotificationViewModel.kt` | Real alerts, unread counts, preferences |
@@ -616,11 +619,11 @@ Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow; n
 - **No realtime updates outside Phase 4.** Since §3.5 (verified on 2026-09-25) the Home feed reloads after a cancel. Claim does not change the feed. Apart from Phase 4's open chat and alerts (§8), nothing updates in real time across devices.
 - **Placeholder or hard-coded UI values:**
   - the greeting "Good evening, Mika". **Changed on 2026-09-25 (§3.5, commit `851e8cb`): it now uses the signed-in profile's first name and the time of day. Built; the evening greeting was seen in the Phase 4 test on 2026-09-25.**
-  - the location "Del Rosarrio, Balilihan";
+  - the location "Del Rosarrio, Balilihan". **The profile location was removed in code on 2026-09-26 (§10; not yet tested).** The Home and Activity location pickers still show sample places.
   - "Browse all 10 food listings";
-  - Activity metrics 48 / 128;
-  - sample Purchases, Claims and reviews (sample Alerts were replaced by real alerts in Phase 4);
-  - "Nearby" and "For Sale" filters that rely on fixed distance and price values.
+  - Activity metrics 48 / 128. **Replaced in code on 2026-09-25 by real totals (§9); not yet built or tested.**
+  - sample Purchases, Claims and reviews (sample Alerts were replaced by real alerts in Phase 4). **The sample Purchases and Claims were replaced in code on 2026-09-25 (§9); not yet built or tested.** Sample reviews remain.
+  - The "Nearby" filter relies on a fixed distance. The "For Sale" filter matched nothing, because every live listing was "Free"; since §9 it matches listings with a price (not yet tested).
 - **Read access after cancel.** `is_reservation_recipient()` ignores reservation status, so a recipient keeps read access to a post after cancelling.
 - **Signed URL expiry.** Signed image URLs expire after 1 hour and are not refreshed while a screen stays open.
 - **Raw error messages.** User-facing errors are raw exception messages from supabase-kt and Firebase. How readable the RPC error text is has not been checked.
@@ -717,3 +720,169 @@ The cloud session that wrote Phase 4 has no Android SDK, and Google's Maven repo
    - If loading fails, the page keeps showing "Loading…" until it is reopened; the error is not shown there.
 
 **Not fixed (noted only).** The unused `FoodRepository.updateFoodPost()` sends a whole `FoodPost` through the same serializer. Any field equal to its default would be left out of the update. Fix it before anything calls it.
+
+---
+
+## 9. Activity: Purchases, Claims and listing prices
+
+**Status (2026-09-25): implemented in code on branch `claude/activity-purchases-claims` (from `master` at `5eaee72`). Not built with AGP, the migration has not been applied to the live project, and nothing has been tested on a device.** This is not Phase 5: no reviews, ratings, maps, reports or online payments. Payment is always in person at pickup.
+
+### 9.1 What the tabs show (the developer chose "split by stage")
+
+- **My Reservations:** the recipient's reservations that are still `RESERVED`, and `CANCELLED` ones. **Changed from Phase 3**, where it also listed `CLAIMED` ones.
+- **Purchases:** the recipient's `CLAIMED` reservations with a price (`unit_price > 0`). Card: "3 packs • ₱135.30". Details: "Price: ₱45.10 per unit", "Total: ₱135.30, paid at pickup.", closing line "This is your live purchase, paid at pickup."
+- **Claims:** the recipient's `CLAIMED` free reservations. Card: "2 pcs • Free". Details: "Free food you picked up.", closing line "This is free food you picked up."
+- A reservation moves from My Reservations to Purchases or Claims when the donor marks it claimed. Each reservation appears in exactly one recipient tab.
+- **My Donations:** unchanged, plus the total ("• ₱135.30" or "• Free") and, for priced reservations, "Price: … per unit" and "Collect … at pickup." in the details.
+- Tapping Purchases or Claims reloads the reservation lists, like My Reservations and My Donations.
+- **"Reservation claimed" alert:** opens Activity on Claims, and once the reloaded list shows the reservation as claimed, switches to Purchases if it has a price and opens its details. If it cannot be found, Activity stays on Claims.
+- The six sample Purchases and Claims records were removed. The other demo UI is unchanged.
+- **Completed / Items Rescued** are computed from data Activity already loads: the number of `CLAIMED` reservations where the user is the recipient plus those on the user's listings, and the sum of their quantities (each unit — pack, piece, kg — counts as one item). The notices explain this.
+
+### 9.2 Prices (`supabase/migrations/20260927_activity_prices.sql`)
+
+- `food_posts.price numeric(10,2) not null default 0`, check 0–99,999.99. 0 = free donation; existing listings become free.
+- `reservations.unit_price numeric(10,2) not null default 0`, same check. Set only by the BEFORE INSERT trigger `reservations_set_unit_price` (function `set_reservation_unit_price()`, SECURITY DEFINER, not executable by clients), which always overwrites it with the listing's price. `create_reservation` already holds `FOR UPDATE` on the listing, so the price is the one in effect when the quantity was checked. A later price change does not change existing reservations.
+- `get_donor_reservations()` dropped and recreated with `unit_price` (still `stable security definer set search_path = public`, recipient names only, executable by `authenticated` only).
+- Unchanged: the Phase 3 RPCs (still the only way to write reservations), the Phase 4 trigger and RPCs, and all RLS. The migration is safe to run again. Running the Phase 3 files again after it fails (`supabase/README.md`).
+- The app never sends a reservation price. Totals come from the reservation's `unit_price × quantity`, computed with `BigDecimal.valueOf(unitPrice).multiply(BigDecimal(quantity))` and shown with two decimals (`formatPeso()`, `reservationTotal()` in `model/FoodPost.kt`).
+
+### 9.3 App changes
+
+- `model/FoodPost.kt`: `FoodPost.price` (default 0.0 when reading); `NewFoodPost.price` has no default, so 0.0 is always sent; `FoodPostDraft.price`; the money helpers.
+- `model/Reservation.kt`: `unitPrice` on `Reservation` and `DonorReservationRow`.
+- `PostScreen.kt`: Donation saves 0, For Sale saves the validated price; new error "Enter a price of at most ₱99,999.99."
+- `MainActivity.kt`: Home cards show "₱45.10" or "Free", so the "For Sale" and "Donation" chips now match live listings. Food details show the price, and the note under Reserve reads "Pay ₱<unit price × chosen quantity> at pickup. The app takes no payments." for a priced listing (free: unchanged).
+- `viewmodel/ReservationViewModel.kt`: after reserving a priced listing the message is "Reservation created. Pay ₱<total> at pickup.", from the `unit_price` the database returned (free: "Reservation created. Please coordinate pickup with the donor.").
+- `ActivityScreen.kt`, `AlertScreen.kt`: §9.1.
+- **Order:** run the migration before installing this build. Until the `price` column exists, Create Listing fails.
+
+### 9.4 Two-phone test (Account A = donor on phone 1, Account B = recipient on phone 2)
+
+Preconditions: run `20260927_activity_prices.sql` in the SQL Editor (check: `select table_name, column_name from information_schema.columns where column_name in ('price','unit_price') and table_schema = 'public';` returns `food_posts.price` and `reservations.unit_price`). Build this branch and install it on both phones.
+
+**A, part 1**
+1. [Regression] Sign in as A. Home shows "Good <morning/afternoon/evening>, <A's first name> 👋".
+2. [New] Post → For Sale, name `PRICE TEST`, a photo, any category, quantity `5`, unit `packs`, price `45.10`, future dates → Post Listing. Back on Home, its card shows "₱45.10".
+3. [New] Post → Donation, name `FREE TEST`, a photo, quantity `4`, unit `pcs` → Post Listing. Its card shows "Free".
+4. [New] Post → For Sale, price `100000` → Post Listing shows "Enter a price of at most ₱99,999.99." Leave without posting.
+5. [New] Home chips: "For Sale" lists `PRICE TEST` and not `FREE TEST`; "Donation" lists `FREE TEST` and not `PRICE TEST`.
+6. [New] Activity: write down Completed and Items Rescued (A0, A1). Tap Completed: "<A0> completed: your reservations that donors marked claimed, plus claimed reservations on your listings." The Purchases and Claims tabs show no sample records.
+
+**B, part 1**
+7. [New] Sign in as B. Activity: write down Completed and Items Rescued (B0, B1).
+8. [New] Home → `PRICE TEST`: the price box shows "₱45.10" / "For sale". Set quantity 3: the line under Reserve reads "Pay ₱135.30 at pickup. The app takes no payments." Reserve → dialog "Reserved": "Reservation created. Pay ₱135.30 at pickup."
+9. [Regression] Home → `FREE TEST`: "This is a free donation. Please be respectful and pick up on time." Quantity 2 → Reserve → "Reservation created. Please coordinate pickup with the donor."
+10. [New] Activity → My Reservations: "`PRICE TEST` 3 packs • ₱135.30", status Reserved; details "Your reservation.", "Price: ₱45.10 per unit", "Pay ₱135.30 at pickup.", closing "This is your live reservation.", buttons Cancel and "Message donor". `FREE TEST`: "2 pcs • Free". Purchases and Claims are empty.
+
+**A, part 2**
+11. [New] Activity → My Donations: `PRICE TEST` "3 packs • ₱135.30"; details "Recipient: <B's name>", "Reservation for your listing.", "Price: ₱45.10 per unit", "Collect ₱135.30 at pickup.". `FREE TEST` "2 pcs • Free" with no price lines. [Regression] Alerts has two "New reservation" alerts.
+12. [New] Price lock: in the SQL Editor run `update public.food_posts set price = 99 where name = 'PRICE TEST' returning name, price;` → 1 row, `99.00`. Tap My Donations again: still "₱135.30".
+13. [Regression] Open `PRICE TEST` in My Donations → "Mark claimed" → "Reservation" dialog "Reservation marked as claimed.". Same for `FREE TEST`.
+14. [New] Completed = A0 + 2, Items Rescued = A1 + 5.
+
+**B, part 2**
+15. [Regression] Alerts shows two "Reservation claimed" alerts ("The donor marked your reservation of PRICE TEST as claimed." and the same for FREE TEST).
+16. [New] Tap the `PRICE TEST` alert: Activity opens on **Purchases** with its details open: "3 packs • ₱135.30", "Status: Claimed", "Picked up: <time>", "Price: ₱45.10 per unit", "Total: ₱135.30, paid at pickup.", "This is your live purchase, paid at pickup." Only Close and "Message donor" (no Cancel). The total is not ₱297.00, so the reserved price was kept.
+17. [New] Back to Alerts, tap the `FREE TEST` alert: Activity opens on **Claims** with "2 pcs • Free", "Free food you picked up.", "This is free food you picked up."
+18. [New] My Reservations no longer lists these two. Completed = B0 + 2, Items Rescued = B1 + 5.
+19. [New] Home (open Post, then Back, to reload): `PRICE TEST` shows "₱99.00". Reserve 1 → "Reservation created. Pay ₱99.00 at pickup." [Regression] Activity → My Reservations → it → Cancel → "Reservation cancelled. The quantity is available again."; it stays in My Reservations as Cancelled, "1 packs • ₱99.00".
+20. [Regression] Purchases → `PRICE TEST` → "Message donor" → send "Thanks!". On A's phone, the chat badge goes up without refreshing; A opens the thread and replies; B sees the reply live.
+
+**A, part 3**
+21. [Regression] Alerts has "Reservation cancelled" for `PRICE TEST`; tapping it opens My Donations.
+22. [Regression] Delete `PRICE TEST` and `FREE TEST` in Activity → My Listings; they leave Home and My Listings. Sign out, sign in again.
+
+### 9.5 How this was checked (2026-09-25)
+
+- **SQL:** all migrations run in order on a local PostgreSQL 16 with stand-ins for Supabase's roles and `auth.jwt()`, then `20260927_activity_prices.sql` run twice more without errors. A two-account test confirmed: the price check rejects −1 and 100000; a donor's own insert saves a price; `create_reservation` returns `unit_price` 45.10 for a priced listing and 0.00 for a free one; clients still cannot insert reservations; after the donor changed the price to 99 the earlier reservation kept 45.10 and a new one got 99.00; a directly supplied `unit_price` is overwritten; `get_donor_reservations()` returns names and `unit_price`; claim and cancel still work and still create the Phase 4 alerts; clients cannot execute the trigger function; `anon` cannot execute `get_donor_reservations()`. Running `20260924_phase3_donor_recipient_names.sql` afterwards fails with "cannot change return type of existing function", as documented.
+- **Kotlin:** all app sources compiled with kotlinc 2.2.10 and the Compose and serialization plugins against the supabase-kt 3.5.0 JVM jars and Compose desktop jars, with small stand-ins for Android and Firebase APIs: no errors; the only warning is the deprecated `FormatListBulleted` that was already there. A small JVM check: `formatPeso(45.1)` = ₱45.10, 0.1 + 0.2 = ₱0.30, `reservationTotal(45.1, 3)` = ₱135.30, `NewFoodPost` encodes `"price":0.0`, and `unit_price: 45.10` decodes. This is not an Android build.
+- **Not done:** AGP build, live migration, any device test (§9.4).
+
+---
+
+## 10. Phase 1 demo fixes: accounts, profile, security
+
+**Status (2026-09-26): implemented in code on branch `claude/phase1-demo-fixes` (from `claude/activity-purchases-claims` at `32915d1`; merge after the Purchases/Claims pull request). Built with AGP on 2026-09-26 (§10.6); the migration has not been applied and nothing has been tested on a device.** The new `google-services.json` is committed (§10.2). Fixes to finished Phase 1 features, found in the developer's audit; not part of Phase 5.
+
+### 10.1 What changed
+
+- **Google sign-in** (`data/GoogleSignIn.kt`, `MainActivity.kt`). One "Continue with Google" button on the Sign In and Create Account tabs; Apple and Facebook are removed. Credential Manager (`androidx.credentials` 1.6.0, `googleid` 1.2.0; 1.2.1 is built with Kotlin 2.4 metadata, which this project's Kotlin 2.2.10 cannot read) returns a Google ID token for the server client ID `R.string.default_web_client_id`, which the Google Services plugin generates from `google-services.json` (never hard-coded). Firebase signs in with `GoogleAuthProvider.getCredential(idToken, null)`, then the app opens Home as after sign-up (`openAuthenticatedHome(refreshFirebaseToken = true)`), creating the profile with the Google name and email.
+  - Cancelling the picker shows nothing. No Google account: "No Google account was found on this phone. Add one in your phone's Settings, then try again." Firebase errors use the existing texts (for example "An account already exists for this email address."). Anything else: "Google sign-in failed. Please try again." The no-account and failure messages add a second line "Details: <message>" so setup errors (wrong SHA-1 or client ID) can be read without logcat.
+  - A new Google account without the role claim gets "We could not load your profile. Check your internet connection and try again." and stays signed in to Firebase, as after an email sign-up. After the role script runs, tapping Google again works.
+  - Logging out also clears the Credential Manager state (best effort).
+- **Keep me signed in.** Stored on the device (`salusalo_session`, `keep_signed_in`). Sign In tab (email or Google): the checkbox value; sign-up and Google from the Create Account tab: kept. When unchecked, a fresh start of the app (for example after swiping it away from Recents) signs out and shows the Welcome screen. Rotation and restores by Android keep the session.
+- **Honest texts.** Welcome page 1 left card: "Find surplus food" / "Browse food shared in your community."; page 2: "Add a photo, quantity, and pickup location."; page 3 body: "Hold food for pickup, message the provider, and collect it at the agreed place.", right card "Message before pickup" / "Chat with the donor to arrange pickup."; sign-in footer: "Agree on pickup details in the chat and check the food before you take it." The illustrations are unchanged.
+- **Display name** saved through `update_my_profile_name`. Account Details shows the sign-in email read-only ("Email (used to sign in)"). Texts: "Enter your name.", "Your name must be 120 characters or fewer.", "Saved to your account."; errors show the database's short text, or "Your name could not be saved. Check your internet connection and try again." for network errors. The new profile goes up to the app, so the Home greeting and Profile header change at once. The "Mika" default and the device-only name are gone.
+- **Profile location removed:** the header line, the Location field, the Preferences → Privacy page and its switch.
+- **Profile photo.** Shrunk to at most 512 px (upright, using EXIF), JPEG, off the main thread; uploaded to the private `profile-images` bucket at a new path each time (`<uid>/profile-<millis>.jpg`, no upsert, because overwriting one path can leave the CDN serving the old picture); saved through `set_my_profile_image`; the previous file is then deleted (best effort), and a failed save deletes the new upload. Shown with a 1-hour signed URL, falling back to the initial. Texts: "Profile photo updated.", "This photo could not be read. Please choose another photo.", "Your photo could not be uploaded. Check your internet connection and try again." (or the database's short error).
+- **Account Security.** The false "not connected to authentication" text and the Signed-in devices page are removed. Change password: "Current password", "New password", "Confirm new password", button "Change password". Checks: "Enter your current password.", "Your password must be at least 6 characters.", "Your passwords do not match.". Reauthentication failure: "Your current password is incorrect."; weak new password: "Choose a stronger new password." (mapped separately, so it is never reported as a wrong current password); "Too many attempts. Please wait a few minutes and try again."; otherwise "Your password could not be changed. Check your internet connection and try again."; success: "Your password was changed.". A Google-only account sees "This account signs in with Google, so it has no password to change."
+- **Member since** from `users.created_at`: the stat shows e.g. "Sep 2026", the Membership page "Member since September 2026". The "sample value" text is gone.
+- **Settings captions:** "Edit your display name", "Change your password", "Notifications and app settings"; Profile menu "Notification and app preferences".
+- **Unchanged (later tasks):** Buy Now / Claim Now, Home and listing demos, the other Profile stats, Ratings & Reviews, the Identity Verified badge and verification pages, Saved Listings, Report a concern, notification sound and app preferences, Activity.
+
+### 10.2 Setup (developer)
+
+1. **Firebase console:** Authentication → Sign-in method → enable **Google** (choose a support email). Project settings → Your apps → the Android app `com.example.salusalo` → **Add fingerprint** with the debug SHA-1 (`./gradlew signingReport`, or `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`). Download the new `google-services.json` and commit it to this branch as `app/google-services.json`. It must now contain an OAuth client; without it `R.string.default_web_client_id` does not exist and the build fails. **Done on 2026-09-26:** Google enabled, the debug SHA-1 added, and the new `google-services.json` (Android and web OAuth clients) committed to this branch.
+2. **Supabase:** run `supabase/migrations/20260927_activity_prices.sql` (if not yet run), then `supabase/migrations/20260928_profile_updates.sql`, by hand in the SQL Editor. Check: `select proname from pg_proc where proname in ('update_my_profile_name','set_my_profile_image');` returns 2 rows.
+3. Build and install on both phones.
+
+### 10.3 Database (`supabase/migrations/20260928_profile_updates.sql`)
+
+`update_my_profile_name(p_name)` and `set_my_profile_image(p_path)`: SECURITY DEFINER, `set search_path = public`, executable by `authenticated` only. Both find the caller's row from `auth.jwt() ->> 'sub'` after `is_salusalo_firebase_jwt()`, never from an argument, and change only `name` or `profile_image_url` (never `role`, `email` or `firebase_uid`). The name is trimmed and must be 1–120 characters. The photo path must start with `<sub>/`, contain no `..`, be at most 512 characters and exist in `profile-images`. `users` still has no UPDATE grant or policy for clients. Safe to run again.
+
+### 10.4 Two-phone test
+
+**Preconditions:** §10.2 done. A (phone 1) and B (phone 2) are existing email/password accounts. A has a reservation on one of B's listings (so B's My Donations shows "Recipient: <A's name>") and a chat with B. A is signed in only on phone 1. G is a Google account on phone 1 (phone Settings → Accounts) that has **no** Salu-Salo account yet and no role claim. Write down A's current name and password. Do not use a Google account whose email already has an email/password Salu-Salo account (§10.5).
+
+**A (phone 1)**
+1. [New] Signed out, swipe through Welcome: page 1 left card "Find surplus food" / "Browse food shared in your community."; page 2 left card "Add a photo, quantity, and pickup location."; page 3 "Hold food for pickup, message the provider, and collect it at the agreed place." with the right card "Message before pickup" / "Chat with the donor to arrange pickup.".
+2. [New] Sign In tab: under "or continue with" there is one button, "Continue with Google" (no Apple or Facebook); the same on Create Account. Footer: "Your safety matters" / "Agree on pickup details in the chat and check the food before you take it."
+3. [New] Sign in as A with "Keep me signed in" **checked**. Swipe the app away from Recents and open it again: Home opens.
+4. [New] Profile → Log out. Sign in as A with it **unchecked**. Rotate the phone: still Home. Swipe the app away from Recents and open it again: the Welcome screen shows.
+5. [Regression] Sign in as A with it checked.
+6. [New] Profile: no location line under the name. The Member Since stat shows the month A signed up, e.g. "Sep 2026"; tapping it shows "Member since September 2026" and "Account name: <A's name>", with no "sample value" text.
+7. [New] Profile → Account Settings: "Display name" shows A's name; "Email (used to sign in)" shows A's email, greyed out and not editable. Clear the name → Save account details → "Enter your name.". Type "  Ana Test  " → Save → "Saved to your account.". Back: the Profile header shows "Ana Test"; Home says "Good <morning/afternoon/evening>, Ana 👋".
+8. [New] Profile → camera button → choose photo 1: a spinner, then "Profile photo updated."; the circle shows photo 1. Log out and sign in again (checked): photo 1 still shows.
+9. [New] Camera button → choose a different photo 2: "Profile photo updated."; the circle shows photo 2, not photo 1.
+10. [New] Account Settings → Account security → Change password:
+    - a wrong current password, new "abc123" twice → "Your current password is incorrect.";
+    - the right current password, new "abc12" twice → "Your password must be at least 6 characters.";
+    - the right current password, two different new passwords → "Your passwords do not match.";
+    - the right current password, a new password P2 twice → "Your password was changed." and the fields are empty.
+11. [New] Log out. Sign in with the old password → "The email address or password is incorrect.". Sign in with P2 → Home.
+12. [New] Profile → bell icon at the top (opens Settings): "Account details / Edit your display name", "Security / Change your password", "Preferences / Notifications and app settings". Preferences has no Privacy; Security has only "Change password"; there is no Signed-in devices page and no "The app is not connected to authentication yet" text.
+
+**B (phone 2)**
+13. [New] Home → chat icon (Messages): the thread with A shows "Ana Test"; opening it shows "Ana Test".
+14. [New] Activity → My Donations → A's reservation → "Recipient: Ana Test".
+15. [Regression] In the chat with A, send "Name check".
+
+**A (phone 1)**
+16. [Regression] The chat badge and a message alert appear without refreshing. Open the chat and reply "Got it"; B sees it live.
+17. [Regression] Open one of B's listings → Reserve 1 → "Reservation created…". Activity → My Reservations → it → Cancel → "Reservation cancelled. The quantity is available again."
+18. [New] Account Settings → set the name back to A's original name → "Saved to your account.". Optionally change the password back (current P2, new = the old password). Log out.
+
+**G (phone 1, signed out)**
+19. [New] Sign In → Continue with Google → close the account picker: no dialog, still on Sign In.
+20. [New] Continue with Google → choose G → "We could not load your profile. Check your internet connection and try again." (no role claim yet). A "Details:" line instead means a setup problem (§10.2).
+21. [New] Run the role script for G (outside this repo). Continue with Google → G → Home greets G's Google first name. Profile → Account Settings: the email field shows G's Gmail address.
+22. [New] Account Settings → Account security → Change password: "This account signs in with Google, so it has no password to change."
+23. [New] Log out → Continue with Google → the account picker appears again → G → Home. Log out.
+
+**Regression (Phases 1–4, and §9 if not yet tested):** sign-up of a new email account (with the role script); the password-reset email; create and delete a listing with a photo; the Home feed; the §4 A/B reservation test (reserve, cancel, claim); the §4 Phase 4 chat and alerts test; the §9.4 test.
+
+### 10.5 Known limits
+
+- **Google sign-in can take over an unverified email account.** Signing in with Google using the email of an existing email/password account whose email was never verified makes Firebase drop that account's password: it keeps its UID and profile but becomes Google-only. The test uses a Google account with no Salu-Salo account for this reason.
+- After a password change, Firebase ends that account's session on any other phone within about an hour. The app does not notice, so that phone shows load errors until someone signs in again.
+- The profile photo is visible only to its owner (the Phase 1 `profile-images` policy allows only the owner's folder). There is no way to remove a photo, only to replace it. Deleting the previous file is best effort, so an old file can remain.
+- Other people see a new name on their next load, not live.
+- "Keep me signed in" is per device and applies only to a fresh start.
+
+### 10.6 How this was checked (2026-09-26)
+
+- **SQL:** all migrations run in order on a local PostgreSQL 16 with stand-ins for Supabase's roles, `auth.jwt()` and `storage.objects`, then `20260928_profile_updates.sql` twice more without errors. Confirmed: a user renames themselves and the name is saved trimmed ("  Ana Test \n" → "Ana Test"); blank, null and 121-character names are refused ("Enter your name.", "Your name must be 120 characters or fewer."), 120 characters are accepted; photo paths in another user's folder, with `..`, with a lookalike prefix (`uidAX/…`), null, or for a missing object are refused; an own existing path is saved; `role`, `email` and `firebase_uid` do not change and other users are untouched; a direct `update public.users` is still permission denied; a token from another issuer gets "Not authenticated"; `anon` gets permission denied; `get_donor_reservations()` and `get_my_conversations()` show the new name; `supabase/tests/phase4_live_safety_check.sql` passed 21 of 21 on the local data.
+- **Kotlin:** all sources compiled with kotlinc 2.2.10 and the Compose and serialization plugins, against the supabase-kt 3.5.0 JVM jars and Compose desktop jars. Google's Maven repository is blocked in this session, so `androidx.credentials` 1.6.0, `googleid` 1.2.1, the new Firebase calls (`GoogleAuthProvider`, `EmailAuthProvider`, `reauthenticate`, `updatePassword`, `providerData`, `FirebaseAuthWeakPasswordException`) and the Android graphics and `ExifInterface` APIs were checked only against hand-written stubs of their signatures. No errors; only the three deprecation warnings that were already there. This is not an Android build.
+- **AGP build (2026-09-26, the developer's PC):** with `googleid` 1.2.1, `compileDebugKotlin` failed: "Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.4.0, expected version is 2.2.0." `googleid` 1.2.0 (metadata 2.1.0) builds: `assembleDebug` BUILD SUCCESSFUL, with only the three old deprecation warnings. `gradle/libs.versions.toml` now pins 1.2.0.
+- **Not done:** the live migration, any device test.

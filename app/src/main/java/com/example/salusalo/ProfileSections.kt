@@ -11,6 +11,11 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.salusalo.viewmodel.NotificationViewModel
+import com.example.salusalo.data.PasswordChangeException
+import com.example.salusalo.data.UserRepository
+import com.example.salusalo.data.supabaseErrorText
+import com.example.salusalo.model.UserProfile
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -31,10 +36,9 @@ private val SectionDark = Color(0xFF213027)
 @Composable
 fun ProfileSections(
     initialPage: String,
-    currentName: String,
-    currentLocation: String,
-    onAccountSaved: (String, String) -> Unit,
-    onPreferencesSaved: (Boolean, Boolean, Boolean) -> Unit,
+    profile: UserProfile?,
+    onProfileUpdated: (UserProfile) -> Unit,
+    onPreferencesSaved: (Boolean, Boolean) -> Unit,
     onOpenFood: (String) -> Unit,
     onClose: () -> Unit,
     notificationViewModel: NotificationViewModel
@@ -51,8 +55,11 @@ fun ProfileSections(
     val page = route.substringBefore("|")
     val itemName = route.substringAfter("|", "")
 
+    val userRepository = remember { UserRepository() }
+    val scope = rememberCoroutineScope()
+    val currentName = profile?.name.orEmpty()
     var name by rememberSaveable { mutableStateOf(currentName) }
-    var location by rememberSaveable { mutableStateOf(currentLocation) }
+    var savingName by remember { mutableStateOf(false) }
     var feedback by rememberSaveable { mutableStateOf("") }
 
     var recommendations by rememberSaveable {
@@ -60,9 +67,6 @@ fun ProfileSections(
     }
     var reminders by rememberSaveable {
         mutableStateOf(prefs.getBoolean("pickupReminders", true))
-    }
-    var showLocation by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("showLocation", true))
     }
     var sound by rememberSaveable {
         mutableStateOf(prefs.getBoolean("notificationSound", true))
@@ -93,9 +97,11 @@ fun ProfileSections(
         mutableStateOf(prefs.getBoolean("demoVerificationRequested", false))
     }
 
-    var otherSession by rememberSaveable { mutableStateOf(true) }
+    // Passwords are kept only while this page is open.
+    var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var changingPassword by remember { mutableStateOf(false) }
 
     var savedExamples by rememberSaveable {
         mutableStateOf(
@@ -125,12 +131,11 @@ fun ProfileSections(
         prefs.edit()
             .putBoolean("recommendations", recommendations)
             .putBoolean("pickupReminders", reminders)
-            .putBoolean("showLocation", showLocation)
             .putBoolean("notificationSound", sound)
             .putBoolean("compactPreview", compact)
             .apply()
 
-        onPreferencesSaved(recommendations, reminders, showLocation)
+        onPreferencesSaved(recommendations, reminders)
         feedback = "Preferences saved on this device."
     }
 
@@ -144,12 +149,10 @@ fun ProfileSections(
         "saved" -> "Saved Listings"
         "preferences" -> "Preferences"
         "notifications" -> "Notification Preferences"
-        "privacy" -> "Privacy"
         "app" -> "App Preferences"
         "account" -> "Account Details"
         "security" -> "Account Security"
         "password" -> "Change Password"
-        "sessions" -> "Signed-in Devices"
         "settings" -> "Settings"
         "safety" -> "Trust & Safety"
         "report" -> "Report a Concern"
@@ -275,7 +278,6 @@ fun ProfileSections(
                                     )
                                     Text("Food: $itemName")
                                     Text("Account: $currentName")
-                                    Text("Pickup area: $currentLocation")
                                     Text("Example reference: DEMO-104")
                                     Text(
                                         "This is a demonstration history record. " +
@@ -489,11 +491,6 @@ fun ProfileSections(
                                 ) { navigate("notifications") }
 
                                 SectionLink(
-                                    "Privacy",
-                                    "Control the location shown on your profile"
-                                ) { navigate("privacy") }
-
-                                SectionLink(
                                     "App preferences",
                                     "Choose a compact or comfortable preview"
                                 ) { navigate("app") }
@@ -562,34 +559,6 @@ fun ProfileSections(
                                 }
                             }
 
-                            "privacy" -> {
-                                SectionCard {
-                                    SectionToggle(
-                                        "Show location on my profile",
-                                        showLocation
-                                    ) { showLocation = it }
-
-                                    Text(
-                                        "Turning this off hides the location in " +
-                                                "your Profile header after saving."
-                                    )
-                                }
-
-                                SectionCard(pale = true) {
-                                    Text("Profile preview",
-                                        fontWeight = FontWeight.Bold)
-                                    Text(currentName)
-                                    Text(
-                                        if (showLocation) currentLocation
-                                        else "Location hidden"
-                                    )
-                                }
-
-                                SectionButton("Save privacy preference") {
-                                    savePreferences()
-                                }
-                            }
-
                             "app" -> {
                                 SectionCard {
                                     SectionToggle(
@@ -630,138 +599,154 @@ fun ProfileSections(
                                         value = name,
                                         onValueChange = { name = it },
                                         label = { Text("Display name") },
-                                        placeholder = { Text("e.g., Mika Suarez") },
+                                        singleLine = true,
                                         modifier = Modifier.fillMaxWidth()
                                     )
+                                    // The sign-in email comes from the account and cannot be edited here.
                                     OutlinedTextField(
-                                        value = location,
-                                        onValueChange = { location = it },
-                                        label = { Text("Location") },
-                                        placeholder = {
-                                            Text("e.g., Del Rosarrio, Balilihan")
-                                        },
+                                        value = profile?.email.orEmpty(),
+                                        onValueChange = {},
+                                        label = { Text("Email (used to sign in)") },
+                                        singleLine = true,
+                                        enabled = false,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 }
 
-                                SectionButton("Save account details") {
-                                    if (name.isBlank() || location.isBlank()) {
-                                        feedback = "Enter your name and location."
-                                    } else {
-                                        prefs.edit()
-                                            .putString("name", name.trim())
-                                            .putString("location", location.trim())
-                                            .apply()
-
-                                        onAccountSaved(name.trim(), location.trim())
-                                        feedback = "Profile details saved on this device."
+                                SectionButton(
+                                    "Save account details",
+                                    enabled = !savingName && profile != null
+                                ) {
+                                    val trimmed = name.trim()
+                                    when {
+                                        trimmed.isEmpty() -> feedback = "Enter your name."
+                                        trimmed.length > 120 ->
+                                            feedback = "Your name must be 120 characters or fewer."
+                                        else -> {
+                                            savingName = true
+                                            feedback = ""
+                                            scope.launch {
+                                                runCatching { userRepository.updateMyName(trimmed) }
+                                                    .onSuccess { updated ->
+                                                        name = updated.name
+                                                        onProfileUpdated(updated)
+                                                        feedback = "Saved to your account."
+                                                    }
+                                                    .onFailure { error ->
+                                                        feedback = supabaseErrorText(
+                                                            error,
+                                                            "Your name could not be saved. Check " +
+                                                                    "your internet connection and try again."
+                                                        )
+                                                    }
+                                                savingName = false
+                                            }
+                                        }
                                     }
                                 }
 
                                 SectionLink(
                                     "Account security",
-                                    "Password and signed-in device previews"
+                                    "Change your password"
                                 ) { navigate("security") }
                             }
 
                             "security" -> {
-                                SectionCard(pale = true) {
-                                    Text("Account Security",
-                                        fontWeight = FontWeight.Bold)
-                                    Text(
-                                        "The app is not connected to authentication " +
-                                                "yet. The controls below demonstrate " +
-                                                "the proposed security screens."
-                                    )
-                                }
-
                                 SectionLink(
                                     "Change password",
-                                    "Preview password validation"
+                                    "Update the password you sign in with"
                                 ) { navigate("password") }
-
-                                SectionLink(
-                                    "Signed-in devices",
-                                    "Inspect example sessions"
-                                ) { navigate("sessions") }
                             }
 
                             "password" -> {
-                                Text(
-                                    "Demo only. Use a made-up password; " +
-                                            "nothing is saved or sent.",
-                                    fontSize = 12.sp
-                                )
-
-                                SectionCard {
-                                    OutlinedTextField(
-                                        value = newPassword,
-                                        onValueChange = { newPassword = it },
-                                        label = { Text("New demo password") },
-                                        visualTransformation = PasswordVisualTransformation(),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    OutlinedTextField(
-                                        value = confirmPassword,
-                                        onValueChange = { confirmPassword = it },
-                                        label = { Text("Confirm demo password") },
-                                        visualTransformation = PasswordVisualTransformation(),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-
-                                SectionButton("Preview password change") {
-                                    feedback = when {
-                                        newPassword.length < 8 ->
-                                            "Use at least 8 characters for this demo."
-                                        newPassword != confirmPassword ->
-                                            "The passwords do not match."
-                                        else -> {
-                                            newPassword = ""
-                                            confirmPassword = ""
-                                            "Preview passed. No account password was changed."
-                                        }
-                                    }
-                                }
-                            }
-
-                            "sessions" -> {
-                                SectionCard {
-                                    Text("Current device",
-                                        fontWeight = FontWeight.Bold)
-                                    Text("Android phone • Example session")
-                                    Text("This is a sample device list.")
-                                }
-
-                                if (otherSession) {
-                                    SectionCard {
-                                        Text("Chrome on Windows",
-                                            fontWeight = FontWeight.Bold)
-                                        Text("Example additional session")
-
-                                        SectionButton("Remove demo session") {
-                                            otherSession = false
-                                        }
+                                if (!userRepository.hasPassword()) {
+                                    SectionCard(pale = true) {
+                                        Text(
+                                            "This account signs in with Google, " +
+                                                    "so it has no password to change."
+                                        )
                                     }
                                 } else {
-                                    Text("The example additional session was removed.")
+                                    SectionCard {
+                                        OutlinedTextField(
+                                            value = currentPassword,
+                                            onValueChange = { currentPassword = it },
+                                            label = { Text("Current password") },
+                                            singleLine = true,
+                                            visualTransformation = PasswordVisualTransformation(),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        OutlinedTextField(
+                                            value = newPassword,
+                                            onValueChange = { newPassword = it },
+                                            label = { Text("New password") },
+                                            singleLine = true,
+                                            visualTransformation = PasswordVisualTransformation(),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        OutlinedTextField(
+                                            value = confirmPassword,
+                                            onValueChange = { confirmPassword = it },
+                                            label = { Text("Confirm new password") },
+                                            singleLine = true,
+                                            visualTransformation = PasswordVisualTransformation(),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    SectionButton(
+                                        "Change password",
+                                        enabled = !changingPassword
+                                    ) {
+                                        // Same rules and texts as sign-up.
+                                        when {
+                                            currentPassword.isEmpty() ->
+                                                feedback = "Enter your current password."
+                                            newPassword.length < 6 ->
+                                                feedback = "Your password must be at least 6 characters."
+                                            newPassword != confirmPassword ->
+                                                feedback = "Your passwords do not match."
+                                            else -> {
+                                                changingPassword = true
+                                                feedback = ""
+                                                scope.launch {
+                                                    runCatching {
+                                                        userRepository.changePassword(
+                                                            currentPassword,
+                                                            newPassword
+                                                        )
+                                                    }.onSuccess {
+                                                        currentPassword = ""
+                                                        newPassword = ""
+                                                        confirmPassword = ""
+                                                        feedback = "Your password was changed."
+                                                    }.onFailure { error ->
+                                                        feedback = (error as? PasswordChangeException)?.message
+                                                            ?: "Your password could not be changed. Check " +
+                                                            "your internet connection and try again."
+                                                    }
+                                                    changingPassword = false
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
                             "settings" -> {
                                 SectionLink(
                                     "Account details",
-                                    "Edit your profile name and location"
+                                    "Edit your display name"
                                 ) { navigate("account") }
 
                                 SectionLink(
                                     "Security",
-                                    "Password and device previews"
+                                    "Change your password"
                                 ) { navigate("security") }
 
                                 SectionLink(
                                     "Preferences",
-                                    "Notifications, privacy, and app settings"
+                                    "Notifications and app settings"
                                 ) { navigate("preferences") }
 
                                 SectionLink(
@@ -861,9 +846,10 @@ fun ProfileSections(
 
                             "membership" -> {
                                 SectionCard {
-                                    Text("Member since March 2023",
-                                        fontWeight = FontWeight.Bold)
-                                    Text("This date is a sample value from the design.")
+                                    Text(
+                                        "Member since ${formatMemberSince(profile?.createdAt, "MMMM yyyy")}",
+                                        fontWeight = FontWeight.Bold
+                                    )
                                     Text("Account name: $currentName")
                                 }
 

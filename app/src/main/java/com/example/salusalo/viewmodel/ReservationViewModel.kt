@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.salusalo.data.ReservationRepository
 import com.example.salusalo.model.ReservationDisplay
+import com.example.salusalo.model.formatPeso
+import com.example.salusalo.model.reservationTotal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -23,8 +25,14 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     fun refresh() = request { refreshLists() }
 
     fun reserve(foodPostId: String, quantity: Int) = request {
-        repository.createReservation(foodPostId, quantity)
-        _message.value = "Reservation created. Please coordinate pickup with the donor."
+        val reservation = repository.createReservation(foodPostId, quantity)
+        // unit_price is set by the database from the listing's current price, so
+        // this is the amount actually owed even if the listing changed meanwhile.
+        _message.value = if (reservation.unitPrice > 0) {
+            "Reservation created. Pay ${formatPeso(reservationTotal(reservation.unitPrice, reservation.quantity))} at pickup."
+        } else {
+            "Reservation created. Please coordinate pickup with the donor."
+        }
         _myReservations.value = repository.getMyReservations()
     }
 

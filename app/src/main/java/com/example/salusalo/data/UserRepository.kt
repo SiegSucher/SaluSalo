@@ -2,13 +2,28 @@ package com.example.salusalo.data
 
 import com.example.salusalo.model.NewUserProfile
 import com.example.salusalo.model.UserProfile
+import com.google.firebase.FirebaseTooManyRequestsException
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
+import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
+import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.tasks.await
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.coroutines.cancellation.CancellationException
 
-class UserRepository {
+class UserRepository(
+    private val storageRepository: StorageRepository = StorageRepository()
+) {
     private val supabase = SupabaseClientProvider.client
     private val firebaseAuth = FirebaseAuth.getInstance()
+    private val profileImages = supabase.storage.from("profile-images")
 
     /**
      * Gets the current Firebase user, then finds or creates that user's one
@@ -56,6 +71,90 @@ class UserRepository {
         return findProfile(firebaseUid) ?: throw ProfileException.NotFound
     }
 
+    /**
+     * Changes the signed-in user's display name. The database function finds
+     * the row from the token and trims and checks the name (1-120 characters).
+     */
+    suspend fun updateMyName(name: String): UserProfile =
+        supabase.postgrest.rpc("update_my_profile_name", buildJsonObject {
+            put("p_name", name.trim())
+        }).decodeAs()
+
+    /**
+     * Uploads a new profile photo (already a JPEG) under the user's own folder,
+     * points the profile at it, then removes the previous photo. Each upload
+     * uses a new path, so the old picture is never served from a cache.
+     */
+    suspend fun uploadProfilePhoto(jpeg: ByteArray): UserProfile {
+        val firebaseUid = firebaseAuth.currentUser?.uid ?: throw ProfileException.NotSignedIn
+        val previousPath = getCurrentProfile().profileImageUrl
+        val path = storageRepository.profileImagePath(firebaseUid)
+
+        profileImages.upload(path, jpeg) { upsert = false }
+
+        val updated = try {
+            supabase.postgrest.rpc("set_my_profile_image", buildJsonObject {
+                put("p_path", path)
+            }).decodeAs<UserProfile>()
+        } catch (error: Exception) {
+            // The profile still points at the old photo; drop the unused upload.
+            runCatching { profileImages.delete(path) }
+            throw error
+        }
+
+        if (!previousPath.isNullOrBlank() && previousPath != path) {
+            runCatching { profileImages.delete(previousPath) }
+        }
+        return updated
+    }
+
+    /** A 1-hour signed URL for the user's own profile photo, or null. */
+    suspend fun profilePhotoUrl(path: String?): String? = profileImages.signedUrlOrNull(path)
+
+    /** True when the signed-in Firebase account has an email/password sign-in. */
+    fun hasPassword(): Boolean =
+        firebaseAuth.currentUser?.providerData.orEmpty()
+            .any { it.providerId == EmailAuthProvider.PROVIDER_ID }
+
+    /**
+     * Checks [currentPassword] by reauthenticating, then sets [newPassword].
+     * Throws [PasswordChangeException] with a message for the user.
+     */
+    suspend fun changePassword(currentPassword: String, newPassword: String) {
+        val user = firebaseAuth.currentUser ?: throw ProfileException.NotSignedIn
+        val email = user.email ?: throw ProfileException.MissingEmail
+
+        try {
+            user.reauthenticate(EmailAuthProvider.getCredential(email, currentPassword)).await()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            throw PasswordChangeException(
+                when (error) {
+                    is FirebaseAuthInvalidCredentialsException -> "Your current password is incorrect."
+                    is FirebaseTooManyRequestsException -> TOO_MANY_ATTEMPTS
+                    else -> PASSWORD_NOT_CHANGED
+                }
+            )
+        }
+
+        try {
+            user.updatePassword(newPassword).await()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            throw PasswordChangeException(
+                // FirebaseAuthWeakPasswordException is a kind of invalid-credentials
+                // error, so it is checked first; here it is never about the current password.
+                when (error) {
+                    is FirebaseAuthWeakPasswordException -> "Choose a stronger new password."
+                    is FirebaseTooManyRequestsException -> TOO_MANY_ATTEMPTS
+                    else -> PASSWORD_NOT_CHANGED
+                }
+            )
+        }
+    }
+
     private suspend fun findProfile(firebaseUid: String): UserProfile? =
         supabase.from("users")
             .select {
@@ -70,6 +169,20 @@ class UserRepository {
             .decodeList<UserProfile>()
             .firstOrNull()
 }
+
+private const val TOO_MANY_ATTEMPTS = "Too many attempts. Please wait a few minutes and try again."
+private const val PASSWORD_NOT_CHANGED =
+    "Your password could not be changed. Check your internet connection and try again."
+
+class PasswordChangeException(message: String) : Exception(message)
+
+/**
+ * The short error text from Supabase (for example "Enter your name." raised by
+ * the database), or [fallback] for network and other errors. Only the short
+ * text is shown: the full exception message can include the URL and headers.
+ */
+fun supabaseErrorText(error: Throwable, fallback: String): String =
+    (error as? RestException)?.error?.takeIf { it.isNotBlank() } ?: fallback
 
 sealed class ProfileException(message: String) : Exception(message) {
     data object NotSignedIn : ProfileException("No Firebase user is signed in.")

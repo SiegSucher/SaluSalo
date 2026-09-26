@@ -11,7 +11,9 @@ data class Reservation(
     val quantity: Int,
     val status: ReservationStatus,
     @SerialName("created_at") val createdAt: String? = null,
-    @SerialName("updated_at") val updatedAt: String? = null
+    @SerialName("updated_at") val updatedAt: String? = null,
+    /** The listing's price per unit when this reservation was made; set by the database. */
+    @SerialName("unit_price") val unitPrice: Double = 0.0
 )
 
 @Serializable
@@ -32,8 +34,9 @@ internal data class DonorReservationRow(
     val status: ReservationStatus,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
-    @SerialName("recipient_name") val recipientName: String
+    @SerialName("recipient_name") val recipientName: String,
+    @SerialName("unit_price") val unitPrice: Double = 0.0
 ) {
-    fun toReservation() = Reservation(id, foodPostId, recipientId, quantity, status, createdAt, updatedAt)
+    fun toReservation() = Reservation(id, foodPostId, recipientId, quantity, status, createdAt, updatedAt, unitPrice)
 }
 

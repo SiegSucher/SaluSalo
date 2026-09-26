@@ -12,7 +12,20 @@
           "package_name": "com.example.salusalo"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "648966058795-agdu8uigb6ihh7rsflerj8sorpimek6s.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.salusalo",
+            "certificate_hash": "439353ad98c254139eefad106bf721b9a41a376e"
+          }
+        },
+        {
+          "client_id": "648966058795-3ktc8ohcemice1dji04abo1dsba78am6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCYEwggSLs3ohJSYTSEgvYs8Y546xXyHT0"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "648966058795-3ktc8ohcemice1dji04abo1dsba78am6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

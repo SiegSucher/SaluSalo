@@ -36,6 +36,7 @@ import kotlinx.coroutines.withContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.salusalo.model.FoodPostDraft
 import com.example.salusalo.viewmodel.FoodViewModel
+import java.math.BigDecimal
 import java.time.Instant
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -162,6 +163,8 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                             amount.signum() <= 0 ||
                             amount.scale() > 2
                     ) -> "Enter a price greater than zero, with up to two decimal places."
+            // Matches the food_posts price check in the database.
+            !donation && amount != null && amount > BigDecimal("99999.99") -> "Enter a price of at most ₱99,999.99."
             location.isBlank() -> "Enter the pickup location."
             expiry <= now -> "Choose a future expiration date and time."
             pickupStart <= now -> "Choose a future pickup start time."
@@ -683,7 +686,9 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                                     quantity = quantity.toInt(),
                                     unit = unit,
                                     pickupLocation = location,
-                                    expirationDate = Instant.ofEpochMilli(expiry).toString()
+                                    expirationDate = Instant.ofEpochMilli(expiry).toString(),
+                                    // validate() has checked the price; a donation is free.
+                                    price = if (donation) 0.0 else price.toBigDecimal().toDouble()
                                 ),
                                 Uri.parse(photos.first())
                             )

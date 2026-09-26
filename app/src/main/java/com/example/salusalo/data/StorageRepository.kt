@@ -5,8 +5,12 @@ package com.example.salusalo.data
  * Keeping Firebase UIDs as the first folder prevents ambiguous ownership.
  */
 class StorageRepository {
-    fun profileImagePath(firebaseUid: String): String =
-        "$firebaseUid/profile.jpg"
+    // Each photo gets a new name: overwriting one path can leave the storage
+    // CDN serving the old picture for a while.
+    fun profileImagePath(
+        firebaseUid: String,
+        uploadedAtMillis: Long = System.currentTimeMillis()
+    ): String = "$firebaseUid/profile-$uploadedAtMillis.jpg"
 
     fun foodImagePath(
         firebaseUid: String,
