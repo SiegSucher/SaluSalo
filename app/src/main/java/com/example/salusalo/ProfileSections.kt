@@ -11,6 +11,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.salusalo.viewmodel.NotificationViewModel
+import com.example.salusalo.viewmodel.SavedListingViewModel
+import com.example.salusalo.model.FoodPost
+import com.example.salusalo.model.FoodPostStatus
+import com.example.salusalo.model.formatPeso
+import com.example.salusalo.model.isExpired
+import androidx.compose.foundation.background
+import coil3.compose.AsyncImage
 import com.example.salusalo.data.PasswordChangeException
 import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.supabaseErrorText
@@ -41,7 +48,9 @@ fun ProfileSections(
     onPreferencesSaved: (Boolean, Boolean) -> Unit,
     onOpenFood: (String) -> Unit,
     onClose: () -> Unit,
-    notificationViewModel: NotificationViewModel
+    notificationViewModel: NotificationViewModel,
+    savedListingViewModel: SavedListingViewModel,
+    onOpenListing: (FoodPost) -> Unit
 ) {
     val context = LocalContext.current
     val prefs = remember {
@@ -103,15 +112,11 @@ fun ProfileSections(
     var confirmPassword by remember { mutableStateOf("") }
     var changingPassword by remember { mutableStateOf(false) }
 
-    var savedExamples by rememberSaveable {
-        mutableStateOf(
-            arrayListOf(
-                "Bread Assortment",
-                "Fresh Produce Box",
-                "Pastries Assortment"
-            )
-        )
-    }
+    val savedRows by savedListingViewModel.saved.collectAsStateWithLifecycle()
+    val savedLoading by savedListingViewModel.loading.collectAsStateWithLifecycle()
+    val savedLoadFailed by savedListingViewModel.loadFailed.collectAsStateWithLifecycle()
+    // Saved Listings reloads each time it opens; bookmarks don't update live.
+    LaunchedEffect(page) { if (page == "saved") savedListingViewModel.load() }
 
     fun navigate(destination: String) {
         feedback = ""
@@ -158,7 +163,7 @@ fun ProfileSections(
         "report" -> "Report a Concern"
         "reviews" -> "Ratings & Reviews"
         "membership" -> "Membership"
-        "record", "food" -> itemName
+        "record" -> itemName
         else -> "Profile"
     }
 
@@ -429,58 +434,69 @@ fun ProfileSections(
 
                             "saved" -> {
                                 Text(
-                                    "Example saved listings. These are separate " +
-                                            "from the homepage bookmark buttons.",
+                                    "Listings you bookmarked, newest first.",
                                     fontSize = 12.sp
                                 )
 
-                                if (savedExamples.isEmpty()) {
-                                    SectionCard {
-                                        Text("No example bookmarks remaining.")
-                                        SectionButton("Restore examples") {
-                                            savedExamples = arrayListOf(
-                                                "Bread Assortment",
-                                                "Fresh Produce Box",
-                                                "Pastries Assortment"
+                                when {
+                                    savedRows.isEmpty() && savedLoading ->
+                                        Text("Loading your saved listings…", fontSize = 13.sp)
+
+                                    savedRows.isEmpty() && savedLoadFailed ->
+                                        Text(
+                                            "Your saved listings could not be loaded. " +
+                                                    "Check your internet connection and try again.",
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+
+                                    savedRows.isEmpty() ->
+                                        SectionCard {
+                                            Text(
+                                                "You have no saved listings yet. Tap the " +
+                                                        "bookmark on a listing to save it here."
                                             )
                                         }
-                                    }
                                 }
 
-                                savedExamples.forEach { food ->
+                                savedRows.forEach { row ->
+                                    val post = row.foodPost
+                                    // Gone, fully reserved or expired: it can only be removed.
+                                    val available = post != null &&
+                                            post.status == FoodPostStatus.AVAILABLE &&
+                                            !post.isExpired()
                                     SectionCard {
-                                        SectionFoodPhoto(food)
-                                        Text(food, fontWeight = FontWeight.Bold)
-
-                                        SectionButton("View listing") {
-                                            navigate("food|$food")
+                                        if (post != null) {
+                                            SavedListingPhoto(post)
+                                            Text(post.name, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                post.donorName?.takeIf { it.isNotBlank() }
+                                                    ?: "Donor name unavailable",
+                                                fontSize = 12.sp
+                                            )
+                                            Text(
+                                                "${post.quantity} ${post.unit} • " +
+                                                        if (post.price > 0) formatPeso(post.price) else "Free",
+                                                fontSize = 12.sp
+                                            )
                                         }
-
-                                        TextButton(
-                                            onClick = {
-                                                savedExamples = ArrayList(
-                                                    savedExamples.filter { it != food }
-                                                )
+                                        if (available) {
+                                            SectionButton("View listing") {
+                                                onOpenListing(post!!)
                                             }
+                                        } else {
+                                            Text(
+                                                "No longer available",
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                        TextButton(
+                                            onClick = { savedListingViewModel.remove(row.foodPostId) }
                                         ) {
-                                            Text("Remove example bookmark")
+                                            Text("Remove")
                                         }
                                     }
-                                }
-                            }
-
-                            "food" -> {
-                                SectionFoodPhoto(itemName)
-                                SectionCard {
-                                    Text(itemName, fontWeight = FontWeight.Bold)
-                                    Text("Example saved food listing")
-                                    Text(
-                                        "Open the listing to see its available " +
-                                                "quantity, provider, and pickup details."
-                                    )
-                                }
-                                SectionButton("Open Food Details") {
-                                    onOpenFood(itemName)
                                 }
                             }
 
@@ -946,6 +962,39 @@ private fun SectionToggle(
                 .padding(top = 12.dp)
         )
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/** A saved listing's cover, with the same fallbacks as the Home cards. */
+@Composable
+private fun SavedListingPhoto(post: FoodPost) {
+    val imageUrl = post.displayImageUrl
+    var imageFailed by remember(post.id, imageUrl) { mutableStateOf(false) }
+    val modifier = Modifier
+        .fillMaxWidth()
+        .height(170.dp)
+    Surface(shape = RoundedCornerShape(16.dp)) {
+        if (imageUrl != null && !imageFailed) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = post.name,
+                contentScale = ContentScale.Crop,
+                modifier = modifier,
+                onError = { imageFailed = true }
+            )
+        } else if (post.imageUrl.isNullOrBlank()) {
+            Image(
+                painter = painterResource(R.drawable.food_produce),
+                contentDescription = post.name,
+                contentScale = ContentScale.Crop,
+                modifier = modifier
+            )
+        } else {
+            Box(
+                modifier = modifier.background(SectionPale),
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) { Text("Image unavailable", fontSize = 12.sp) }
+        }
     }
 }
 
