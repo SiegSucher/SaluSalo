@@ -1,8 +1,17 @@
 package com.example.salusalo
 
 import com.example.salusalo.viewmodel.NotificationViewModel
-import android.content.Intent
+import coil3.compose.AsyncImage
+import com.example.salusalo.data.UserRepository
+import com.example.salusalo.data.encodeProfilePhoto
+import com.example.salusalo.data.supabaseErrorText
 import com.example.salusalo.model.UserProfile
+import androidx.compose.ui.layout.ContentScale
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -50,7 +59,8 @@ fun ProfileScreen(
     onLogout: () -> Unit,
     onOpenFood: (String) -> Unit,
     notificationViewModel: NotificationViewModel,
-    remoteProfile: UserProfile? = null
+    remoteProfile: UserProfile? = null,
+    onProfileUpdated: (UserProfile) -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -58,43 +68,27 @@ fun ProfileScreen(
         context.getSharedPreferences("salusalo_profile", 0)
     }
 
-    var displayName by rememberSaveable {
-        mutableStateOf(preferences.getString("name", "Mika") ?: "Mika")
+    // Name, photo and member-since date come only from the Supabase profile.
+    val userRepository = remember { UserRepository() }
+    val scope = rememberCoroutineScope()
+    val displayName = remoteProfile?.name.orEmpty()
+    val memberSince = formatMemberSince(remoteProfile?.createdAt, "MMM yyyy")
+    val photoPath = remoteProfile?.profileImageUrl
+    // Each upload has a new path, so keying on the path fetches a fresh URL.
+    val photoUrl by produceState<String?>(null, photoPath) {
+        value = userRepository.profilePhotoUrl(photoPath)
     }
-    var location by rememberSaveable {
-        mutableStateOf(
-            preferences.getString("location", "Del Rosarrio, Balilihan")
-                ?: "Del Rosarrio, Balilihan"
-        )
-    }
-    var photo by rememberSaveable {
-        mutableStateOf(preferences.getString("photo", "") ?: "")
-    }
-
-    LaunchedEffect(remoteProfile) {
-        remoteProfile?.let { profile ->
-            displayName = profile.name
-            if (!profile.profileImageUrl.isNullOrBlank()) {
-                photo = profile.profileImageUrl
-            }
-        }
-    }
+    var photoFailed by remember(photoUrl) { mutableStateOf(false) }
+    var uploadingPhoto by remember { mutableStateOf(false) }
 
     var page by rememberSaveable { mutableStateOf("") }
     var notice by rememberSaveable { mutableStateOf("") }
-
-    var editName by rememberSaveable { mutableStateOf("") }
-    var editLocation by rememberSaveable { mutableStateOf("") }
-    var accountError by rememberSaveable { mutableStateOf("") }
 
     var recommendations by rememberSaveable {
         mutableStateOf(preferences.getBoolean("recommendations", true))
     }
     var pickupReminders by rememberSaveable {
         mutableStateOf(preferences.getBoolean("pickupReminders", true))
-    }
-    var showLocation by rememberSaveable {
-        mutableStateOf(preferences.getBoolean("showLocation", true))
     }
 
     val reviews = remember {
@@ -126,23 +120,31 @@ fun ProfileScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-                photo = uri.toString()
-                preferences.edit().putString("photo", photo).apply()
-            } catch (_: SecurityException) {
-                notice = "This photo could not be saved. Please choose another photo."
+            uploadingPhoto = true
+            scope.launch {
+                val jpeg = runCatching { encodeProfilePhoto(context, uri) }.getOrNull()
+                if (jpeg == null) {
+                    notice = "This photo could not be read. Please choose another photo."
+                } else {
+                    runCatching { userRepository.uploadProfilePhoto(jpeg) }
+                        .onSuccess { profile ->
+                            onProfileUpdated(profile)
+                            notice = "Profile photo updated."
+                        }
+                        .onFailure { error ->
+                            notice = supabaseErrorText(
+                                error,
+                                "Your photo could not be uploaded. Check your " +
+                                        "internet connection and try again."
+                            )
+                        }
+                }
+                uploadingPhoto = false
             }
         }
     }
 
     fun openAccount() {
-        editName = displayName
-        editLocation = location
-        accountError = ""
         page = "account"
     }
 
@@ -171,8 +173,16 @@ fun ProfileScreen(
                         .background(PPale),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (photo.isNotBlank()) {
-                        PostPhoto(photo)
+                    // Same fallback as the food cards: the initial when there is
+                    // no photo or it cannot be loaded.
+                    if (photoUrl != null && !photoFailed) {
+                        AsyncImage(
+                            model = photoUrl,
+                            contentDescription = "Profile photo",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                            onError = { photoFailed = true }
+                        )
                     } else {
                         Text(
                             displayName.take(1).uppercase(),
@@ -181,13 +191,20 @@ fun ProfileScreen(
                             color = PGreen
                         )
                     }
+                    if (uploadingPhoto) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(30.dp),
+                            color = PGreen,
+                            strokeWidth = 2.dp
+                        )
+                    }
                 }
 
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .size(32.dp)
-                        .clickable {
+                        .clickable(enabled = !uploadingPhoto && remoteProfile != null) {
                             photoPicker.launch(arrayOf("image/*"))
                         },
                     shape = CircleShape,
@@ -226,24 +243,6 @@ fun ProfileScreen(
                         tint = PGreen,
                         modifier = Modifier.size(20.dp)
                     )
-                }
-
-                if (showLocation) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        Icon(
-                            Icons.Outlined.LocationOn,
-                            contentDescription = null,
-                            tint = PGreen,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(Modifier.width(3.dp))
-                        Text(
-                            location,
-                            fontSize = 11.sp,
-                            lineHeight = 14.sp,
-                            color = PGray
-                        )
-                    }
                 }
 
                 Surface(
@@ -344,7 +343,7 @@ fun ProfileScreen(
                     page = "response"
                 }
                 ProfileStat(
-                    Icons.Outlined.CalendarMonth, "Mar 2023", "Member\nSince"
+                    Icons.Outlined.CalendarMonth, memberSince, "Member\nSince"
                 ) {
                     page = "membership"
                 }
@@ -529,7 +528,7 @@ fun ProfileScreen(
             ProfileMenuRow(
                 Icons.Outlined.Tune,
                 "Preferences",
-                "Notification, privacy, and app preferences"
+                "Notification and app preferences"
             ) {
                 page = "preferences"
             }
@@ -592,16 +591,11 @@ fun ProfileScreen(
     if (page.isNotBlank()) {
         ProfileSections(
             initialPage = page,
-            currentName = displayName,
-            currentLocation = location,
-            onAccountSaved = { updatedName, updatedLocation ->
-                displayName = updatedName
-                location = updatedLocation
-            },
-            onPreferencesSaved = { updatedRecommendations, updatedReminders, updatedLocationVisibility ->
+            profile = remoteProfile,
+            onProfileUpdated = onProfileUpdated,
+            onPreferencesSaved = { updatedRecommendations, updatedReminders ->
                 recommendations = updatedRecommendations
                 pickupReminders = updatedReminders
-                showLocation = updatedLocationVisibility
             },
             onOpenFood = { title ->
                 page = ""
@@ -814,3 +808,13 @@ private fun ProfileToggle(
         )
     }
 }
+
+/** users.created_at in the phone's time zone, e.g. "Sep 2026"; "—" if unknown. */
+internal fun formatMemberSince(createdAt: String?, pattern: String): String =
+    createdAt?.let {
+        runCatching {
+            OffsetDateTime.parse(it)
+                .atZoneSameInstant(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern(pattern, Locale.ENGLISH))
+        }.getOrNull()
+    } ?: "—"
