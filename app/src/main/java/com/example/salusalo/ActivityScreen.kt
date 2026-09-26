@@ -3,7 +3,6 @@ package com.example.salusalo
 import com.example.salusalo.model.isExpired
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -23,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.example.salusalo.model.FoodPost
+import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.ReservationStatus
 import com.example.salusalo.model.formatPeso
 import com.example.salusalo.model.reservationTotal
@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -64,10 +63,8 @@ private data class ActivityRecord(
     val status: String,
     val timeLabel: String,
     val timeValue: String,
-    val photo: Int? = null,
     val uri: String? = null,
     val details: String = "",
-    val sample: Boolean = true,
     val ownedPost: FoodPost? = null,
     val reservationId: String? = null,
     val donorCanClaim: Boolean = false
@@ -82,7 +79,7 @@ fun ActivityScreen(
     messageViewModel: MessageViewModel,
     unreadAlerts: Int = 0,
     initialTab: String = "My Listings",
-    // A reservation to open, from a "Reservation claimed" alert.
+    // A reservation to open, from a "Reservation claimed" or "Listing removed" alert.
     focusReservationId: String? = null,
     onFocusHandled: () -> Unit = {}
 ) {
@@ -102,6 +99,8 @@ fun ActivityScreen(
     // Show reservation results (cancel, claim, or a failed load) on this screen,
     // then clear them so they do not reappear later in the food details dialog.
     val reservationMessage by reservationViewModel.message.collectAsStateWithLifecycle()
+    val reservationSaving by reservationViewModel.saving.collectAsStateWithLifecycle()
+    val reservationsLoadFailed by reservationViewModel.loadFailed.collectAsStateWithLifecycle()
     var reservationNotice by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(reservationMessage) {
         reservationMessage?.let {
@@ -117,120 +116,8 @@ fun ActivityScreen(
     var activeOnly by rememberSaveable { mutableStateOf(false) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var notice by rememberSaveable { mutableStateOf("") }
-    var location by rememberSaveable {
-        mutableStateOf("Quezon City, Metro Manila")
-    }
-    var locationMenu by remember { mutableStateOf(false) }
-
-    val sampleRecords = remember {
-        listOf(
-            ActivityRecord(
-                id = "listing1",
-                tab = "My Listings",
-                title = "Pastries Assortment",
-                quantity = "12 pcs",
-                distance = "1.1 km away",
-                posted = "Posted May 17, 2025 • 9:15 AM",
-                status = "Pending",
-                timeLabel = "Expires in",
-                timeValue = "5 hrs 40 mins",
-                photo = R.drawable.food_pastries,
-                details = "Example listing awaiting confirmation."
-            ),
-            ActivityRecord(
-                id = "listing2",
-                tab = "My Listings",
-                title = "Bread Assortment",
-                quantity = "15 pcs",
-                distance = "0.9 km away",
-                posted = "Posted May 16, 2025 • 4:30 PM",
-                status = "Confirmed",
-                timeLabel = "Pick up by",
-                timeValue = "Today, 7:00 PM",
-                photo = R.drawable.food_bread,
-                details = "Example confirmed pickup for a bread donation."
-            ),
-            ActivityRecord(
-                id = "listing3",
-                tab = "My Listings",
-                title = "Mixed Vegetables",
-                quantity = "5 kg",
-                distance = "2.5 km away",
-                posted = "Posted May 15, 2025 • 10:20 AM",
-                status = "Completed",
-                timeLabel = "Completed on",
-                timeValue = "May 15, 2025",
-                photo = R.drawable.food_vegetables,
-                details = "Example completed vegetable distribution."
-            ),
-            ActivityRecord(
-                id = "listing4",
-                tab = "My Listings",
-                title = "Packed Rice Meals",
-                quantity = "10 meals",
-                distance = "0.8 km away",
-                posted = "Posted May 13, 2025 • 11:50 AM",
-                status = "Expired",
-                timeLabel = "Expired on",
-                timeValue = "May 14, 2025",
-                photo = R.drawable.food_meals,
-                details = "Example listing that passed its expiration."
-            ),
-            ActivityRecord(
-                id = "listing5",
-                tab = "My Listings",
-                title = "Pastries Assortment",
-                quantity = "8 pcs",
-                distance = "1.1 km away",
-                posted = "Posted May 10, 2025 • 8:00 AM",
-                status = "Cancelled",
-                timeLabel = "Cancelled on",
-                timeValue = "May 10, 2025",
-                photo = R.drawable.food_pastries,
-                details = "Example listing cancelled by its provider."
-            ),
-            // The third active example appears through See all
-            // and the Active Listings arrow.
-            ActivityRecord(
-                id = "listing6",
-                tab = "My Listings",
-                title = "Fresh Produce Box",
-                quantity = "3 boxes",
-                distance = "0.6 km away",
-                posted = "Posted May 17, 2025 • 8:30 AM",
-                status = "Confirmed",
-                timeLabel = "Pick up by",
-                timeValue = "Today, 6:00 PM",
-                photo = R.drawable.food_produce
-            ),
-            ActivityRecord(
-                "reservation1", "Reservations", "Packed Rice Meals",
-                "2 meals", "0.8 km away",
-                "Reserved May 17, 2025 • 9:30 AM",
-                "Confirmed", "Pick up by", "Today, 7:00 PM",
-                R.drawable.food_meals,
-                details = "Provider: Community Kitchen\nExample reservation #RK78A2"
-            ),
-            ActivityRecord(
-                "reservation2", "Reservations", "Bread Assortment",
-                "5 pcs", "0.9 km away",
-                "Reserved May 17, 2025 • 10:00 AM",
-                "Pending", "Requested for", "Today, 5:00 PM",
-                R.drawable.food_bread,
-                details = "Provider: Local Bakery"
-            ),
-            ActivityRecord(
-                "reservation3", "Reservations", "Fresh Produce Box",
-                "1 box", "0.6 km away",
-                "Reserved May 16, 2025 • 3:00 PM",
-                "Cancelled", "Cancelled on", "May 16, 2025",
-                R.drawable.food_produce
-            )
-        )
-    }
-
-    // Food posts are the real Phase 2 records; the reservation tabs below are
-    // live too. Only the samples filtered out of allRecords remain.
+    // Every record comes from Supabase: this account's listings (removed ones
+    // are left out by the repository) and its reservations as recipient and donor.
     val myListingRecords = myPosts
         .sortedByDescending { it.createdAt.orEmpty() }
         .map { post ->
@@ -256,7 +143,6 @@ fun ActivityScreen(
                         append("\nDescription: $it")
                     }
                 },
-                sample = false,
                 ownedPost = post
             )
         }
@@ -297,8 +183,14 @@ fun ActivityScreen(
                 priced ->
                     "Your reservation.\nPrice: ${formatPeso(reservation.unitPrice)} per unit\nPay $total at pickup."
                 else -> "Your reservation."
+            } + when {
+                reservation.cancelledByListingRemoval ->
+                    "\nListing: Removed by the donor\nCancelled because the donor removed this listing."
+                post.status == FoodPostStatus.REMOVED ->
+                    "\nListing: Removed by the donor\nThe donor has since removed this listing."
+                else -> ""
             },
-            sample = false, reservationId = reservation.id, donorCanClaim = false
+            reservationId = reservation.id, donorCanClaim = false
         )
     }
 
@@ -318,15 +210,14 @@ fun ActivityScreen(
             timeLabel = "Pickup", timeValue = post.pickupLocation,
             uri = post.displayImageUrl,
             details = "Recipient: ${entry.recipientName ?: "Unknown"}\nReservation for your listing." +
-                if (priced) "\nPrice: ${formatPeso(reservation.unitPrice)} per unit\nCollect $total at pickup." else "",
-            sample = false, reservationId = reservation.id, donorCanClaim = true
+                (if (priced) "\nPrice: ${formatPeso(reservation.unitPrice)} per unit\nCollect $total at pickup." else "") +
+                if (post.status == FoodPostStatus.REMOVED) "\nListing: Removed by you\nYou removed this listing." else "",
+            reservationId = reservation.id, donorCanClaim = true
         )
     }
 
     // Keep live listings and recipient/donor reservation destinations separate.
-    val allRecords = sampleRecords.filter {
-        it.tab != "My Listings" && it.tab != "Reservations"
-    } + myListingRecords + myReservationRecords + donorReservationRecords
+    val allRecords = myListingRecords + myReservationRecords + donorReservationRecords
     val filtered = if (activeOnly) {
         myListingRecords.filter { it.status == "Available" }
     } else {
@@ -421,58 +312,6 @@ fun ActivityScreen(
                                         .background(AOrange)
                                 )
                             }
-                        }
-                    }
-                }
-            }
-
-            item {
-                Box {
-                    Row(
-                        modifier = Modifier
-                            .clickable { locationMenu = true }
-                            .padding(vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Outlined.LocationOn,
-                            contentDescription = null,
-                            tint = AGreen,
-                            modifier = Modifier.size(21.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            location,
-                            modifier = Modifier.weight(1f, fill = false),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = ADark
-                        )
-                        Spacer(Modifier.width(7.dp))
-                        Icon(
-                            Icons.Outlined.ExpandMore,
-                            contentDescription = "Choose display location",
-                            tint = ADark,
-                            modifier = Modifier.size(21.dp)
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = locationMenu,
-                        onDismissRequest = { locationMenu = false }
-                    ) {
-                        listOf(
-                            "Quezon City, Metro Manila",
-                            "Del Rosarrio, Balilihan",
-                            "Hanopol Este, Balilihan"
-                        ).forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(option) },
-                                onClick = {
-                                    location = option
-                                    locationMenu = false
-                                }
-                            )
                         }
                     }
                 }
@@ -656,6 +495,16 @@ fun ActivityScreen(
                 }
             }
 
+            if (reservationsLoadFailed && tab != "My Listings") {
+                item {
+                    Text(
+                        ReservationViewModel.LOAD_FAILED,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
             items(displayed, key = { it.id }) { record ->
                 ReferenceActivityCard(record) {
                     selectedId = record.id
@@ -667,9 +516,7 @@ fun ActivityScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
-                            notice = "Share surplus food by creating a listing. " +
-                                    "The activity examples and historical dates on " +
-                                    "this screen reproduce your reference design."
+                            notice = "Share surplus food by creating a listing."
                         },
                     color = APale,
                     border = BorderStroke(1.dp, ALine),
@@ -731,19 +578,6 @@ fun ActivityScreen(
                     Text(record.posted)
                     Text("${record.timeLabel}: ${record.timeValue}")
                     if (record.details.isNotBlank()) Text(record.details, fontSize = 12.sp)
-                    Text(
-                        when {
-                            record.sample ->
-                                "Demonstration record. Dates, distances, and statuses are sample values."
-                            record.ownedPost != null -> "This is your live Supabase listing."
-                            record.donorCanClaim -> "This is a live reservation on your listing."
-                            record.tab == "Purchases" -> "This is your live purchase, paid at pickup."
-                            record.tab == "Claims" -> "This is free food you picked up."
-                            else -> "This is your live reservation."
-                        },
-                        fontSize = 11.sp,
-                        color = AGray
-                    )
                     record.ownedPost?.takeIf { !it.isExpired() }?.let { post ->
                         OutlinedButton(onClick = {
                             editing = post
@@ -766,9 +600,13 @@ fun ActivityScreen(
                 when {
                     record.ownedPost != null -> TextButton(onClick = { pendingDelete = record.ownedPost }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
                     record.reservationId != null && record.status == "Reserved" && record.donorCanClaim ->
-                        TextButton(onClick = { reservationViewModel.claim(record.reservationId); selectedId = null }) { Text("Mark claimed") }
+                        TextButton(enabled = !reservationSaving, onClick = {
+                            if (reservationViewModel.claim(record.reservationId)) selectedId = null
+                        }) { Text("Mark claimed") }
                     record.reservationId != null && record.status == "Reserved" ->
-                        TextButton(onClick = { reservationViewModel.cancel(record.reservationId); selectedId = null }) { Text("Cancel", color = MaterialTheme.colorScheme.error) }
+                        TextButton(enabled = !reservationSaving, onClick = {
+                            if (reservationViewModel.cancel(record.reservationId)) selectedId = null
+                        }) { Text("Cancel", color = MaterialTheme.colorScheme.error) }
                 }
             },
             dismissButton = {
@@ -1011,7 +849,6 @@ private fun RecordPhoto(
 ) {
     Box(modifier.clip(RoundedCornerShape(10.dp))) {
         val uri = record.uri
-        val photo = record.photo
 
         if (!uri.isNullOrBlank()) {
             var failed by remember(uri) { mutableStateOf(false) }
@@ -1030,13 +867,9 @@ private fun RecordPhoto(
                     contentAlignment = Alignment.Center
                 ) { Text("Image unavailable", fontSize = 9.sp, color = AGray) }
             }
-        } else if (photo != null) {
-            Image(
-                painter = painterResource(photo),
-                contentDescription = record.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+        } else {
+            // No photo: a plain tile.
+            Box(Modifier.fillMaxSize().background(APale))
         }
     }
 }
@@ -1108,7 +941,7 @@ private fun ActivityMetric(
 
 private fun formatActivityTimestamp(value: String): String =
     runCatching { java.time.Instant.parse(value) }
-        .map { java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy • h:mm a", Locale.getDefault()).withZone(java.time.ZoneId.systemDefault()).format(it) }
+        .map { java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy • h:mm a", Locale.ENGLISH).withZone(java.time.ZoneId.systemDefault()).format(it) }
         .getOrElse { value }
 
 const val DELETE_LISTING_TEXT =
