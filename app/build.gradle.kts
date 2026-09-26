@@ -68,6 +68,10 @@ dependencies {
     // The BoM keeps all Firebase libraries on compatible versions.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    // Google sign-in through Credential Manager; the ID token is passed to Firebase Auth.
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.postgrest)
     implementation(libs.supabase.storage)

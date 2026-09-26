@@ -15,6 +15,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.Instant
 import java.time.LocalTime
 import com.example.salusalo.data.UserRepository
+import com.example.salusalo.data.clearGoogleCredentialState
+import com.example.salusalo.data.requestGoogleIdToken
+import android.content.Context
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
+import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.auth.GoogleAuthProvider
 import com.example.salusalo.data.profileErrorMessage
 import com.example.salusalo.model.UserProfile
 import android.util.Patterns
@@ -54,7 +61,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -88,6 +94,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // "Keep me signed in" unchecked: end the session when the app starts
+        // fresh (for example after being swiped away), but not on rotation or
+        // when Android restores the app, which pass a saved state.
+        if (savedInstanceState == null) {
+            val auth = FirebaseAuth.getInstance()
+            if (!keepSignedIn(this) && auth.currentUser != null) {
+                auth.signOut()
+                clearLocalAccountData(this)
+            }
+        }
+
         enableEdgeToEdge(
             statusBarStyle = androidx.activity.SystemBarStyle.light(
                 android.graphics.Color.TRANSPARENT,
@@ -116,6 +133,24 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// Device-only "Keep me signed in" choice. It survives sign-out, so the next
+// fresh start can act on the choice made at the last sign-in.
+private fun sessionPreferences(context: Context) =
+    context.getSharedPreferences("salusalo_session", 0)
+
+private fun keepSignedIn(context: Context): Boolean =
+    sessionPreferences(context).getBoolean("keep_signed_in", true)
+
+private fun setKeepSignedIn(context: Context, keep: Boolean) {
+    sessionPreferences(context).edit().putBoolean("keep_signed_in", keep).apply()
+}
+
+// Remove local, account-specific data before another user can sign in on this device.
+private fun clearLocalAccountData(context: Context) {
+    context.getSharedPreferences("salusalo_profile", 0).edit().clear().apply()
+    context.getSharedPreferences("salusalo_local_posts", 0).edit().clear().apply()
+}
+
 @Composable
 private fun SaluSaloApp() {
     var screen by rememberSaveable { mutableStateOf("welcome") }
@@ -130,11 +165,9 @@ private fun SaluSaloApp() {
     fun logOut() {
         firebaseAuth.signOut()
         currentProfile = null
-
-        // Remove local, account-specific placeholder data before another user
-        // can sign in on this device.
-        context.getSharedPreferences("salusalo_profile", 0).edit().clear().apply()
-        context.getSharedPreferences("salusalo_local_posts", 0).edit().clear().apply()
+        clearLocalAccountData(context)
+        // Also forget the Google account chosen in Credential Manager (best effort).
+        appScope.launch { clearGoogleCredentialState(context) }
         screen = "signin"
     }
     fun openAuthenticatedHome(
@@ -157,6 +190,38 @@ private fun SaluSaloApp() {
                 message = profileErrorMessage(error)
             }
             isAuthenticating = false
+        }
+    }
+
+    fun signInWithGoogle(keep: Boolean) {
+        isAuthenticating = true
+        appScope.launch {
+            try {
+                val idToken = requestGoogleIdToken(context)
+                firebaseAuth
+                    .signInWithCredential(GoogleAuthProvider.getCredential(idToken, null))
+                    .await()
+                setKeepSignedIn(context, keep)
+                isAuthenticating = false
+                // Like sign-up: a new Google user's role claim may arrive later,
+                // and the profile is created with the Google name and email.
+                openAuthenticatedHome(refreshFirebaseToken = true)
+            } catch (error: GetCredentialCancellationException) {
+                // The user closed the account picker: nothing to report.
+                isAuthenticating = false
+            } catch (error: NoCredentialException) {
+                isAuthenticating = false
+                message = "No Google account was found on this phone. Add one in " +
+                        "your phone's Settings, then try again." + errorDetails(error)
+            } catch (error: FirebaseAuthException) {
+                isAuthenticating = false
+                message = authErrorMessage(error)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                isAuthenticating = false
+                message = "Google sign-in failed. Please try again." + errorDetails(error)
+            }
         }
     }
 
@@ -220,14 +285,15 @@ private fun SaluSaloApp() {
 
                     "home" -> HomeScreen(
                         onLogout = { logOut() },
-                        currentProfile = currentProfile
+                        currentProfile = currentProfile,
+                        onProfileUpdated = { currentProfile = it }
                     )
 
                     else -> SignInScreen(
                         mode = currentScreen,
                         onNavigate = { screen = it },
                         isAuthenticating = isAuthenticating,
-                        onContinue = { email, password, confirmPassword, name ->
+                        onContinue = { email, password, confirmPassword, name, keep ->
                             val cleanEmail = email.trim()
 
                             when {
@@ -259,6 +325,8 @@ private fun SaluSaloApp() {
                                             .addOnCompleteListener { task ->
                                                 isAuthenticating = false
                                                 if (task.isSuccessful) {
+                                                    // A new account stays signed in.
+                                                    setKeepSignedIn(context, true)
                                                     task.result.user?.updateProfile(
                                                         userProfileChangeRequest {
                                                             displayName = name.trim()
@@ -295,6 +363,7 @@ private fun SaluSaloApp() {
                                             .addOnCompleteListener { task ->
                                                 isAuthenticating = false
                                                 if (task.isSuccessful) {
+                                                    setKeepSignedIn(context, keep)
                                                     openAuthenticatedHome()
                                                 } else {
                                                     message = authErrorMessage(
@@ -306,11 +375,7 @@ private fun SaluSaloApp() {
                                 }
                             }
                         },
-                        onSocial = {
-                            message =
-                                "$it sign-in selected. This prototype " +
-                                        "does not connect to an account yet."
-                        }
+                        onGoogle = { keep -> signInWithGoogle(keep) }
                     )
                 }
             }
@@ -341,6 +406,11 @@ private fun authErrorMessage(exception: Exception?): String = when (exception) {
     else -> "Authentication failed. Please try again."
 }
 
+// A second line with the exception's own text, so setup problems (for example
+// a missing SHA-1) can be read on a test phone without logcat.
+private fun errorDetails(error: Exception): String =
+    error.message?.takeIf { it.isNotBlank() }?.let { "\nDetails: $it" }.orEmpty()
+
 /* WELCOME SCREEN */
 
 // One entry = one welcome screen. Edit the text, icons, and image here.
@@ -366,8 +436,8 @@ private val welcomePages = listOf(
         body = "Donate, sell, reserve, buy, or claim food " +
                 "before it expires. Together, we can build " +
                 "a more sustainable community.",
-        leftTitle = "Find nearby\nfood fast",
-        leftDescription = "Discover surplus food\nnear you in real time.",
+        leftTitle = "Find surplus\nfood",
+        leftDescription = "Browse food shared\nin your community.",
         leftIcon = Icons.Outlined.LocationOn,
         rightTitle = "Support your\ncommunity",
         rightDescription = "Help reduce waste\nand feed more lives.",
@@ -382,7 +452,7 @@ private val welcomePages = listOf(
         body = "Post extra food in seconds and let neighbors " +
                 "donate, buy, or claim it before it goes to waste.",
         leftTitle = "Post food\nin seconds",
-        leftDescription = "Add a photo, quantity,\nand pickup time.",
+        leftDescription = "Add a photo, quantity,\nand pickup location.",
         leftIcon = Icons.Outlined.CardGiftcard,
         rightTitle = "Donate\nor sell",
         rightDescription = "You choose whether\nit is free or priced.",
@@ -395,13 +465,13 @@ private val welcomePages = listOf(
         imageDescription = "Welcome screen 3 image",
         title = "Reserve, pick up,\nand enjoy",
         body = "Hold food for pickup, message the provider, " +
-                "and collect it safely from people you can trust.",
+                "and collect it at the agreed place.",
         leftTitle = "Reserve\nahead",
         leftDescription = "Hold food until\nyou arrive to pick up.",
         leftIcon = Icons.Outlined.Schedule,
-        rightTitle = "Safe and\nverified",
-        rightDescription = "Profiles are checked\nto keep sharing safe.",
-        rightIcon = Icons.Outlined.VerifiedUser
+        rightTitle = "Message\nbefore pickup",
+        rightDescription = "Chat with the donor\nto arrange pickup.",
+        rightIcon = Icons.Outlined.ChatBubbleOutline
     )
 )
 
@@ -605,9 +675,10 @@ private fun SignInScreen(
         email: String,
         password: String,
         confirmPassword: String,
-        name: String
+        name: String,
+        keepSignedIn: Boolean
     ) -> Unit,
-    onSocial: (String) -> Unit
+    onGoogle: (keepSignedIn: Boolean) -> Unit
 ) {
     val creatingAccount = mode == "signup"
     val resettingPassword = mode == "forgot"
@@ -789,7 +860,7 @@ private fun SignInScreen(
                     },
                     enabled = !isAuthenticating,
                     onClick = {
-                        onContinue(email, password, confirmPassword, name)
+                        onContinue(email, password, confirmPassword, name, keepSignedIn)
                     }
                 )
 
@@ -839,22 +910,9 @@ private fun SignInScreen(
 
                     Spacer(Modifier.height(14.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(
-                            12.dp,
-                            Alignment.CenterHorizontally
-                        )
-                    ) {
-                        ProviderButton("Google") {
-                            onSocial("Google")
-                        }
-                        ProviderButton("Apple") {
-                            onSocial("Apple")
-                        }
-                        ProviderButton("Facebook") {
-                            onSocial("Facebook")
-                        }
+                    // A new account made on the Create Account tab stays signed in.
+                    GoogleButton(enabled = !isAuthenticating) {
+                        onGoogle(if (creatingAccount) true else keepSignedIn)
                     }
 
                     Spacer(Modifier.height(18.dp))
@@ -887,8 +945,8 @@ private fun SignInScreen(
         Spacer(Modifier.height(6.dp))
 
         Text(
-            "We verify profiles and monitor activity to keep\n" +
-                    "food sharing safe and trustworthy.",
+            "Agree on pickup details in the chat and check\n" +
+                    "the food before you take it.",
             modifier = Modifier.padding(horizontal = 20.dp),
             textAlign = TextAlign.Center,
             fontSize = 12.sp,
@@ -1117,38 +1175,27 @@ private fun SmallCommunityIcon(icon: ImageVector) {
 /* SOCIAL BUTTONS — NO CROPPED IMAGE FRAGMENTS */
 
 @Composable
-private fun ProviderButton(
-    provider: String,
+private fun GoogleButton(
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = Modifier.size(width = 55.dp, height = 44.dp),
+        enabled = enabled,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(46.dp),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Line),
-        contentPadding = PaddingValues(10.dp)
+        border = BorderStroke(1.dp, Line)
     ) {
-        when (provider) {
-            "Google" -> GoogleMark()
-            "Apple" -> AppleMark()
-            else -> {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF1877F2)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "f",
-                        color = Color.White,
-                        fontSize = 25.sp,
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = 25.sp
-                    )
-                }
-            }
-        }
+        GoogleMark()
+        Spacer(Modifier.width(10.dp))
+        Text(
+            "Continue with Google",
+            color = DarkGreen,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
@@ -1196,68 +1243,13 @@ private fun GoogleMark() {
     }
 }
 
-@Composable
-private fun AppleMark() {
-    Canvas(Modifier.size(24.dp)) {
-        val w = size.width
-        val h = size.height
-
-        val body = Path().apply {
-            moveTo(w * 0.50f, h * 0.27f)
-            cubicTo(
-                w * 0.17f, h * 0.05f,
-                -w * 0.02f, h * 0.43f,
-                w * 0.22f, h * 0.85f
-            )
-            cubicTo(
-                w * 0.35f, h * 1.04f,
-                w * 0.40f, h * 0.85f,
-                w * 0.51f, h * 0.91f
-            )
-            cubicTo(
-                w * 0.70f, h * 1.05f,
-                w * 0.85f, h * 0.78f,
-                w * 0.90f, h * 0.57f
-            )
-            cubicTo(
-                w * 0.96f, h * 0.26f,
-                w * 0.72f, h * 0.12f,
-                w * 0.50f, h * 0.27f
-            )
-            close()
-        }
-
-        drawPath(body, Color.Black)
-
-        val leaf = Path().apply {
-            moveTo(w * 0.49f, h * 0.21f)
-            quadraticTo(
-                w * 0.48f, h * 0.02f,
-                w * 0.72f, 0f
-            )
-            quadraticTo(
-                w * 0.72f, h * 0.18f,
-                w * 0.49f, h * 0.21f
-            )
-            close()
-        }
-
-        drawPath(leaf, Color.Black)
-
-        drawCircle(
-            Color.White,
-            radius = w * 0.15f,
-            center = Offset(w * 0.92f, h * 0.40f)
-        )
-    }
-}
-
 /* HOMEPAGE */
 
 @Composable
 private fun HomeScreen(
     onLogout: () -> Unit,
-    currentProfile: UserProfile?
+    currentProfile: UserProfile?,
+    onProfileUpdated: (UserProfile) -> Unit
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("All") }
@@ -1423,6 +1415,7 @@ private fun HomeScreen(
                     onLogout = onLogout,
                     notificationViewModel = notificationViewModel,
                     remoteProfile = currentProfile,
+                    onProfileUpdated = onProfileUpdated,
                     onOpenFood = { title ->
                         selectedFood = foods.firstOrNull {
                             it.title == title
