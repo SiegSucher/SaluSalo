@@ -23,7 +23,18 @@ data class FoodPost(
     val price: Double = 0.0,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
-    @Transient val displayImageUrl: String? = null
+    // Optional details; listings made before 20260929_phase2_listing_details.sql have none.
+    @SerialName("pickup_start") val pickupStart: String? = null,
+    @SerialName("pickup_end") val pickupEnd: String? = null,
+    /** A [ListingHandover] code, or null when not set. */
+    val handover: String? = null,
+    val allergens: String? = null,
+    @SerialName("storage_notes") val storageNotes: String? = null,
+    /** Photos 2–4 as private food-images paths; [imageUrl] stays the cover. */
+    @SerialName("extra_image_paths") val extraImagePaths: List<String> = emptyList(),
+    @Transient val displayImageUrl: String? = null,
+    /** The donor's name from get_listing_donor_names(); null if it could not be loaded. */
+    @Transient val donorName: String? = null
 )
 
 @Serializable
@@ -43,7 +54,33 @@ data class NewFoodPost(
     @SerialName("expiration_date") val expirationDate: String,
     // No default, so the price is always sent, including 0 for a donation.
     val price: Double,
+    // No defaults either: supabase-kt leaves out values equal to their default,
+    // so these are always sent, as null when empty.
+    @SerialName("pickup_start") val pickupStart: String?,
+    @SerialName("pickup_end") val pickupEnd: String?,
+    val handover: String?,
+    val allergens: String?,
+    @SerialName("storage_notes") val storageNotes: String?,
+    @SerialName("extra_image_paths") val extraImagePaths: List<String>,
     val status: FoodPostStatus = FoodPostStatus.AVAILABLE
+)
+
+/** How the food changes hands. [code] is the value stored in food_posts.handover. */
+enum class ListingHandover(val code: String, val label: String) {
+    MEET_AT_PICKUP_LOCATION("MEET_AT_PICKUP_LOCATION", "Meet at pickup location"),
+    COLLECT_FROM_PROVIDER("COLLECT_FROM_PROVIDER", "Collect from provider");
+
+    companion object {
+        fun fromCode(code: String?): ListingHandover? = entries.firstOrNull { it.code == code }
+        fun fromLabel(label: String): ListingHandover? = entries.firstOrNull { it.label == label }
+    }
+}
+
+/** Row returned by get_listing_donor_names(). */
+@Serializable
+data class ListingDonorName(
+    @SerialName("food_post_id") val foodPostId: String,
+    @SerialName("donor_name") val donorName: String? = null
 )
 
 data class FoodPostDraft(
@@ -54,8 +91,32 @@ data class FoodPostDraft(
     val unit: String,
     val pickupLocation: String,
     val expirationDate: String,
-    val price: Double
+    val price: Double,
+    val pickupStart: String?,
+    val pickupEnd: String?,
+    val handover: ListingHandover?,
+    val allergens: String,
+    val storageNotes: String
 )
+
+/** The fields update_my_food_post() may change. Quantity, unit and photos never change. */
+data class FoodPostEdit(
+    val name: String,
+    val description: String,
+    val category: String,
+    val price: Double,
+    val pickupLocation: String,
+    val expirationDate: String,
+    val pickupStart: String?,
+    val pickupEnd: String?,
+    val handover: ListingHandover?,
+    val allergens: String,
+    val storageNotes: String
+)
+
+/** True when the listing's expiry has passed, whatever its stored status. */
+fun FoodPost.isExpired(now: java.time.Instant = java.time.Instant.now()): Boolean =
+    parseTimestamp(expirationDate)?.let { !it.isAfter(now) } ?: false
 
 /** Formats pesos with two decimals, e.g. 45.1 -> "₱45.10". */
 fun formatPeso(amount: BigDecimal): String =
