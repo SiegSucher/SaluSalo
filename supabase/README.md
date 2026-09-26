@@ -56,6 +56,10 @@ Run `migrations/20260927_activity_prices.sql` by hand in the SQL Editor after Ph
 
 The migration is safe to run again. **Do not run `20260924_phase3_reservations.sql` or `20260924_phase3_donor_recipient_names.sql` again after it:** they recreate `get_donor_reservations()` with the old return type and fail ("cannot change return type of existing function"). If you ever need to, drop the function first, run them, then run this migration again.
 
+## Profile name and photo
+
+Run `migrations/20260928_profile_updates.sql` by hand in the SQL Editor after `20260927_activity_prices.sql`. It adds two SECURITY DEFINER functions, `update_my_profile_name(p_name)` and `set_my_profile_image(p_path)`, which change only the caller's own `users` row, found from the token's `sub`. The name is trimmed and must be 1–120 characters; the photo path must be an existing `profile-images` object inside the caller's own folder. They never change `role`, `email` or `firebase_uid`. `users` still has no UPDATE grant or policy for clients, so these functions are the only way the app changes a profile. The migration is safe to run again.
+
 ## Safety checks (`tests/`)
 
 The files in `tests/` are not migrations and change nothing. `tests/phase4_live_safety_check.sql` checks that the live Phase 4 rules still refuse what they should. Paste it into the SQL Editor (role `postgres`) and run it. It pretends to be the two participants of the most recent chat and the newest other account, tries forbidden actions, and reports each check as PASS, FAIL or SKIP. It always ends with an error on purpose (`SAFETY CHECK FINISHED: …`); the error rolls back everything the check did. It needs at least one chat with messages, and a third account for the outsider checks.
