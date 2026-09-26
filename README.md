@@ -15,7 +15,7 @@ Working against the live backend:
 - **Messages (Phase 4, partly tested):** message a listing's donor from its details screen or from a reservation; live chat and a Messages inbox with unread counts. Participants see each other's display name only.
 - **Alerts (Phase 4, partly tested):** in-app alerts for new messages and for reservations being made, cancelled or claimed, with unread badges and settings saved to your account.
 
-Listing prices and real Purchases and Claims tabs (pay at pickup, no online payments) are in code on branch `claude/activity-purchases-claims` but not yet built or tested (`docs/PROJECT_STATUS.md` §9). Demo or preview-only, with no backend yet: the Claim Now / Buy Now dialogs, reviews, and the Google, Apple and Facebook sign-in buttons. There are no push notifications yet. Profile edits and most settings are saved only on the device; the profile name and notification preferences come from Supabase.
+Listing prices and real Purchases and Claims tabs (pay at pickup, no online payments) are in code on branch `claude/activity-purchases-claims` but not yet built or tested (`docs/PROJECT_STATUS.md` §9). Google sign-in, a working "Keep me signed in", and a profile name, photo and password change saved to the account are in code on branch `claude/phase1-demo-fixes` but not yet built or tested (`docs/PROJECT_STATUS.md` §10). Demo or preview-only, with no backend yet: the Claim Now / Buy Now dialogs and reviews. There are no push notifications yet. Most settings are saved only on the device; the profile name and notification preferences come from Supabase.
 
 ## Tech stack
 
