@@ -108,6 +108,9 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         }.onFailure { reportError(it) }
     }
 
+    /** Signed URLs for a listing's photos 2–4, for the details gallery; a photo that can't be signed is null. */
+    suspend fun extraPhotoUrls(post: FoodPost): List<String?> = repository.signedExtraPhotoUrls(post)
+
     fun clearSession() {
         myPostsLoadPending = false
         feedLoadPending = false

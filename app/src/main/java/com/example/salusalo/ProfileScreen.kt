@@ -1,5 +1,7 @@
 package com.example.salusalo
 
+import com.example.salusalo.viewmodel.SavedListingViewModel
+import com.example.salusalo.model.FoodPost
 import com.example.salusalo.viewmodel.NotificationViewModel
 import coil3.compose.AsyncImage
 import com.example.salusalo.data.UserRepository
@@ -60,7 +62,9 @@ fun ProfileScreen(
     onOpenFood: (String) -> Unit,
     notificationViewModel: NotificationViewModel,
     remoteProfile: UserProfile? = null,
-    onProfileUpdated: (UserProfile) -> Unit = {}
+    onProfileUpdated: (UserProfile) -> Unit = {},
+    savedListingViewModel: SavedListingViewModel,
+    onOpenListing: (FoodPost) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -518,7 +522,7 @@ fun ProfileScreen(
             ProfileMenuRow(
                 Icons.Outlined.BookmarkBorder,
                 "Saved Listings",
-                "Your saved items, donors, and organizations"
+                "Listings you bookmarked"
             ) {
                 page = "saved"
             }
@@ -602,7 +606,12 @@ fun ProfileScreen(
                 onOpenFood(title)
             },
             onClose = { page = "" },
-            notificationViewModel = notificationViewModel
+            notificationViewModel = notificationViewModel,
+            savedListingViewModel = savedListingViewModel,
+            onOpenListing = { post ->
+                page = ""
+                onOpenListing(post)
+            }
         )
     }
 

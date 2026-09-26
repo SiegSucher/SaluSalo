@@ -155,15 +155,12 @@ class FoodRepository(
         }).decodeAs<FoodPost>().withSignedImageUrl(bucket)
 
     /**
-     * 1-hour signed URLs for all of the listing's photos, cover first. Each
+     * 1-hour signed URLs for photos 2–4 (the cover is already signed). Each
      * photo is signed on its own, so one that fails is null and the others
      * still show.
      */
-    suspend fun signedListingPhotoUrls(post: FoodPost): List<String?> {
-        val cover = post.displayImageUrl ?: bucket.signedUrlOrNull(post.imageUrl)
-        val extras = post.extraImagePaths.map { path -> bucket.signedUrlOrNull(path) }
-        return if (post.imageUrl.isNullOrBlank()) extras else listOf(cover) + extras
-    }
+    suspend fun signedExtraPhotoUrls(post: FoodPost): List<String?> =
+        post.extraImagePaths.map { path -> bucket.signedUrlOrNull(path) }
 
     suspend fun deleteFoodPost(post: FoodPost) {
         val profile = userRepository.getCurrentProfile()

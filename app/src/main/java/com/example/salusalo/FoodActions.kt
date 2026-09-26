@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil3.compose.AsyncImage
 import java.util.Locale
 
 private val ActionGreen = Color(0xFF28754A)
@@ -36,8 +37,10 @@ fun FoodActionsDialog(
     action: String,
     foodTitle: String,
     provider: String,
-    rating: String,
     photo: Int,
+    // The listing's pickup_location and its signed cover URL (null if none).
+    pickupLocation: String,
+    imageUrl: String?,
     price: String,
     quantity: Int,
     unit: String,
@@ -50,7 +53,7 @@ fun FoodActionsDialog(
     onMessage: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val address = "Del Rosarrio, Balilihan"
+    val address = pickupLocation
     val donation = price.equals("Free", ignoreCase = true)
 
     var page by rememberSaveable(action) {
@@ -117,7 +120,7 @@ fun FoodActionsDialog(
         "chat" -> provider
         "pickup" -> "Choose pickup time"
         "location" -> "Pickup location"
-        "provider" -> "Provider profile"
+        "provider" -> if (donation) "Donor" else "Seller"
         "reserve" -> "Review reservation"
         "checkout" -> if (donation) "Review claim" else "Review purchase"
         else -> "Food details"
@@ -327,21 +330,19 @@ fun FoodActionsDialog(
                                 )
 
                                 Text(address)
-
-                                Text(
-                                    "The sample listing has no exact address " +
-                                            "or map pin yet.",
-                                    fontSize = 13.sp
-                                )
                             }
 
                             ActionButton(
                                 text = "Search area in Maps",
                                 onClick = {
-                                    val uri = Uri.parse(
-                                        "geo:0,0?q=" +
-                                                Uri.encode("$address, Bohol, Philippines")
-                                    )
+                                    // A text search for the address as entered;
+                                    // listings have no map pin.
+                                    val query = if (address.contains("Philippines", ignoreCase = true)) {
+                                        address
+                                    } else {
+                                        "$address, Philippines"
+                                    }
+                                    val uri = Uri.parse("geo:0,0?q=" + Uri.encode(query))
 
                                     try {
                                         context.startActivity(
@@ -413,17 +414,8 @@ fun FoodActionsDialog(
                                     color = ActionGreen
                                 )
 
-                                Text(address, fontSize = 13.sp)
-                                Text("★ $rating — sample rating")
-
-                                Text(
-                                    "This profile uses the selected listing’s " +
-                                            "sample information.",
-                                    fontSize = 12.sp
-                                )
-
                                 ActionButton(
-                                    text = "Message provider",
+                                    text = if (donation) "Message donor" else "Message seller",
                                     onClick = {
                                         if (onMessage != null) {
                                             onMessage("")
@@ -442,15 +434,38 @@ fun FoodActionsDialog(
                             )
 
                             ActionCard {
-                                Image(
-                                    painter = painterResource(photo),
-                                    contentDescription = foodTitle,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(150.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                )
+                                var imageFailed by remember(imageUrl) { mutableStateOf(false) }
+                                if (imageUrl != null && !imageFailed) {
+                                    AsyncImage(
+                                        model = imageUrl,
+                                        contentDescription = foodTitle,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(150.dp)
+                                            .clip(RoundedCornerShape(12.dp)),
+                                        onError = { imageFailed = true }
+                                    )
+                                } else if (imageUrl == null) {
+                                    Image(
+                                        painter = painterResource(photo),
+                                        contentDescription = foodTitle,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(150.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(150.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(ActionPale),
+                                        contentAlignment = Alignment.Center
+                                    ) { Text("Image unavailable", fontSize = 12.sp) }
+                                }
 
                                 Text(
                                     foodTitle,
