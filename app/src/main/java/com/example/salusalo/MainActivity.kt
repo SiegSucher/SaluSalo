@@ -16,6 +16,8 @@ import com.example.salusalo.viewmodel.MessageViewModel
 import com.example.salusalo.viewmodel.NotificationViewModel
 import com.example.salusalo.model.NotificationType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.Instant
 import java.time.LocalTime
@@ -1278,7 +1280,9 @@ private fun HomeScreen(
     val messageError by messageViewModel.message.collectAsStateWithLifecycle()
     val alerts by notificationViewModel.notifications.collectAsStateWithLifecycle()
     val unreadAlerts by notificationViewModel.unreadCount.collectAsStateWithLifecycle()
-    val unreadMessageAlerts = alerts.count { it.readAt == null && it.type == NotificationType.MESSAGE }
+    // The chat badge counts unread messages across all threads, as the Messages page shows them.
+    val conversations by messageViewModel.conversations.collectAsStateWithLifecycle()
+    val unreadMessages = conversations.sumOf { it.unreadCount }
     // Tab Activity opens on when an alert sends the user there.
     var activityTab by rememberSaveable { mutableStateOf("My Listings") }
     // Reservation a "Reservation claimed" or "Listing removed" alert asked Activity to open.
@@ -1290,8 +1294,41 @@ private fun HomeScreen(
     LaunchedEffect(currentProfile?.id) { foodViewModel.loadAvailablePosts() }
     // Alerts load once per session and then arrive live.
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { notificationViewModel.start(it) } }
+    // The inbox loads once per session and then follows new messages live.
+    LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { messageViewModel.start(it) } }
+    // Realtime misses messages while the app is in the background, so the inbox
+    // reloads once when the app comes back (not on the first start).
+    var wasStopped by remember { mutableStateOf(false) }
+    LifecycleStartEffect(messageViewModel) {
+        if (wasStopped) {
+            wasStopped = false
+            messageViewModel.loadConversations(quiet = true)
+        }
+        onStopOrDispose { wasStopped = true }
+    }
     // Bookmarks load once per session, so the icons show the right state at once.
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { savedListingViewModel.start(it) } }
+    // A new alert plays the phone's notification sound while the app is on
+    // screen, unless it is a message in the chat that is open. The switch is
+    // read when the alert arrives.
+    val context = LocalContext.current
+    val alertSound = remember { AlertSoundPlayer(context) }
+    var appResumed by remember { mutableStateOf(false) }
+    LifecycleResumeEffect(alertSound) {
+        appResumed = true
+        onPauseOrDispose {
+            appResumed = false
+            alertSound.stop()
+        }
+    }
+    val openChatId by rememberUpdatedState(activeChat?.id)
+    LaunchedEffect(notificationViewModel) {
+        notificationViewModel.newAlerts.collect { alert ->
+            val inOpenChat = alert.type == NotificationType.MESSAGE &&
+                    alert.conversationId != null && alert.conversationId == openChatId
+            if (appResumed && !inOpenChat && notificationSoundOn(context)) alertSound.play()
+        }
+    }
     // Opening a chat marks its message alerts read on the server; mirror that
     // for alerts that arrive while the chat is open.
     LaunchedEffect(activeChat?.id, alerts) {
@@ -1486,8 +1523,8 @@ private fun HomeScreen(
                             IconButton(onClick = { page = "messages" }) {
                                 BadgedBox(
                                     badge = {
-                                        if (unreadMessageAlerts > 0) {
-                                            Badge { Text(if (unreadMessageAlerts > 99) "99+" else "$unreadMessageAlerts") }
+                                        if (unreadMessages > 0) {
+                                            Badge { Text(if (unreadMessages > 99) "99+" else "$unreadMessages") }
                                         }
                                     }
                                 ) {

@@ -247,7 +247,6 @@ fun MessagesScreen(
         ) {
             TextButton(onClick = onBack) { Text("Back") }
             Text("Messages", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = CDark, modifier = Modifier.weight(1f))
-            TextButton(onClick = { messageViewModel.loadConversations() }, enabled = !loading) { Text("Refresh") }
         }
         HorizontalDivider(color = CLine)
 

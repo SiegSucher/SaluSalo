@@ -2,7 +2,7 @@
 
 Salu-Salo is an Android app for sharing surplus food within a community to reduce food waste. Donors post surplus food with a photo, quantity, pickup location and expiry date. Recipients browse the available listings and reserve some or all of a listing for pickup. The UI uses Philippine pesos (₱) and Philippine sample locations.
 
-**Status (2026-09-28):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Fixes to the demo parts of Phase 2 (real donor names, listing details, up to 4 photos, editing, saved listings; `docs/PROJECT_STATUS.md` §11) passed on two phones the same day, with the migration `20260929_phase2_listing_details.sql`. Fixes to the demo parts of Phase 3 (a Reserve review page and receipt, removing reserved listings, real Activity and Profile records; §12) passed on two phones on 2026-09-28, on branch `claude/phase3-demo-fixes` with the migration `20260930_phase3_demo_fixes.sql`. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
+**Status (2026-09-27):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Fixes to the demo parts of Phase 2 (real donor names, listing details, up to 4 photos, editing, saved listings; `docs/PROJECT_STATUS.md` §11) passed on two phones the same day, with the migration `20260929_phase2_listing_details.sql`. Fixes to the demo parts of Phase 3 (a Reserve review page and receipt, removing reserved listings, real Activity and Profile records; §12) passed on two phones on 2026-09-27 with the migration `20260930_phase3_demo_fixes.sql`, and were merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`). Fixes to the demo parts of Phase 4 (the Profile bell and Settings, a real notification sound, a real response rate, a live Messages inbox and a chat badge that counts unread messages; §13) passed a short test on two phones on 2026-09-27 with the migration `20261001_phase4_demo_fixes.sql`, on branch `claude/phase4-demo-fixes`; they are not merged into `master` yet. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
 
 ## Features
 
@@ -15,7 +15,7 @@ Working against the live backend:
 - **Messages:** message a listing's donor from its details screen or from a reservation; live chat and a Messages inbox with unread counts. Participants see each other's display name only.
 - **Alerts:** in-app alerts for new messages and for reservations being made, cancelled or claimed, with unread badges and settings saved to your account.
 
-Demo or preview-only, with no backend yet: reviews and ratings, the response rate, the verification badge and pages, and Report a concern. There are no push notifications yet. Most settings are saved only on the device; the profile name and photo and the notification preferences come from Supabase.
+Demo or preview-only, with no backend yet: reviews and ratings, the verification badge and pages, and Report a concern. The response rate, a notification sound for new alerts while the app is open, and a live Messages inbox passed testing on branch `claude/phase4-demo-fixes` (§13), but are not merged into `master` yet. There are no push notifications yet. Most settings are saved only on the device; the profile name and photo and the notification preferences come from Supabase.
 
 ## Tech stack
 
@@ -77,6 +77,8 @@ Skip this section if you use the project's existing Supabase backend.
    6. `20260927_activity_prices.sql`: listing prices and the price locked into each reservation. Don't run the Phase 3 files again after it.
    7. `20260928_profile_updates.sql`: the functions that save your own profile name and photo.
    8. `20260929_phase2_listing_details.sql`: the listing details and extra photos, editing through `update_my_food_post`, donor names and saved listings. Don't run `20260923_phase2_food_posts.sql` again after it.
+   9. `20260930_phase3_demo_fixes.sql`: removing reserved listings through `remove_my_food_post` (clients have no DELETE on listings), the `REMOVED` status and saved-listing names.
+   10. `20261001_phase4_demo_fixes.sql`: `get_my_response_rate()`, the caller's own response rate.
 2. **Third-Party Auth.** In Supabase, open **Authentication → Third-Party Auth** and add a Firebase integration for the project ID `salusalo`.
 3. **Custom claim.** Every Firebase user needs the custom claim `role: authenticated`. A trusted Admin SDK or Cloud Function must add it; that code is not in this repository. Existing users must sign in again or refresh their ID token after the claim is added.
 

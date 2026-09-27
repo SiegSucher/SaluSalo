@@ -7,15 +7,18 @@ import com.example.salusalo.viewmodel.ReservationViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.salusalo.model.ReservationStatus
 import coil3.compose.AsyncImage
+import com.example.salusalo.data.MessageRepository
 import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.encodeProfilePhoto
 import com.example.salusalo.data.supabaseErrorText
+import com.example.salusalo.model.ResponseRate
 import com.example.salusalo.model.UserProfile
 import androidx.compose.ui.layout.ContentScale
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -71,10 +74,6 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
 
-    val preferences = remember {
-        context.getSharedPreferences("salusalo_profile", 0)
-    }
-
     // Successful Claims and Donations are this account's claimed reservations,
     // as recipient and as donor; together they equal Activity's Completed.
     val myReservations by reservationViewModel.myReservations.collectAsStateWithLifecycle()
@@ -84,6 +83,7 @@ fun ProfileScreen(
     val successfulClaims = myReservations.filter { it.reservation.status == ReservationStatus.CLAIMED }
     val successfulDonations = donorReservations.filter { it.reservation.status == ReservationStatus.CLAIMED }
     LaunchedEffect(Unit) { reservationViewModel.refresh() }
+    val unreadAlerts by notificationViewModel.unreadCount.collectAsStateWithLifecycle()
 
     // Name, photo and member-since date come only from the Supabase profile.
     val userRepository = remember { UserRepository() }
@@ -101,12 +101,31 @@ fun ProfileScreen(
     var page by rememberSaveable { mutableStateOf("") }
     var notice by rememberSaveable { mutableStateOf("") }
 
-    var recommendations by rememberSaveable {
-        mutableStateOf(preferences.getBoolean("recommendations", true))
+    // This account's own response rate (get_my_response_rate), loaded when
+    // Profile opens and again when the Response Rate page opens. A reload keeps
+    // the last numbers until it finishes; a failed load clears them.
+    val messageRepository = remember { MessageRepository() }
+    var responseRate by remember { mutableStateOf<ResponseRate?>(null) }
+    var responseRateLoading by remember { mutableStateOf(false) }
+    var responseRateFailed by remember { mutableStateOf(false) }
+    fun loadResponseRate() {
+        if (responseRateLoading) return
+        responseRateLoading = true
+        responseRateFailed = false
+        scope.launch {
+            try {
+                responseRate = messageRepository.getMyResponseRate()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                responseRate = null
+                responseRateFailed = true
+            } finally {
+                responseRateLoading = false
+            }
+        }
     }
-    var pickupReminders by rememberSaveable {
-        mutableStateOf(preferences.getBoolean("pickupReminders", true))
-    }
+    LaunchedEffect(remoteProfile?.id) { loadResponseRate() }
 
     val reviews = remember {
         listOf(
@@ -290,7 +309,7 @@ fun ProfileScreen(
                 }
 
                 Text(
-                    "Demo verification & statistics",
+                    "Demo verification & rating",
                     fontSize = 9.sp,
                     color = PGray
                 )
@@ -298,7 +317,7 @@ fun ProfileScreen(
 
             Column {
                 IconButton(
-                    onClick = { page = "settings" },
+                    onClick = onAlerts,
                     modifier = Modifier.size(36.dp)
                 ) {
                     Box {
@@ -307,23 +326,26 @@ fun ProfileScreen(
                             contentDescription = "Open alerts",
                             tint = PDark
                         )
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFF6900))
-                        )
+                        // The dot shows only while there are unread alerts.
+                        if (unreadAlerts > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFFF6900))
+                            )
+                        }
                     }
                 }
 
                 IconButton(
-                    onClick = { openAccount() },
+                    onClick = { page = "settings" },
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         Icons.Outlined.Settings,
-                        contentDescription = "Account settings",
+                        contentDescription = "Settings",
                         tint = PDark
                     )
                 }
@@ -360,7 +382,9 @@ fun ProfileScreen(
                     page = "reviews"
                 }
                 ProfileStat(
-                    Icons.Outlined.Schedule, "92%", "Response\nRate"
+                    Icons.Outlined.Schedule,
+                    responseRate?.percent?.let { "$it%" } ?: "—",
+                    "Response\nRate"
                 ) {
                     page = "response"
                 }
@@ -371,7 +395,7 @@ fun ProfileScreen(
                 }
             }
             Text(
-                "Verified badge, rating and response rate are demo values",
+                "Verified badge and rating are demo values",
                 modifier = Modifier.padding(top = 6.dp),
                 fontSize = 10.sp,
                 color = PGray
@@ -556,10 +580,10 @@ fun ProfileScreen(
 
             ProfileMenuRow(
                 Icons.Outlined.Tune,
-                "Preferences",
-                "Notification and app preferences"
+                "Notifications",
+                "Message and reservation alerts, sound"
             ) {
-                page = "preferences"
+                page = "notifications"
             }
 
             HorizontalDivider(color = PLine)
@@ -622,16 +646,15 @@ fun ProfileScreen(
             initialPage = page,
             profile = remoteProfile,
             onProfileUpdated = onProfileUpdated,
-            onPreferencesSaved = { updatedRecommendations, updatedReminders ->
-                recommendations = updatedRecommendations
-                pickupReminders = updatedReminders
-            },
             onClose = { page = "" },
             successfulClaims = successfulClaims,
             successfulDonations = successfulDonations,
             recordsLoaded = reservationsLoaded,
             recordsFailed = reservationsFailed,
             onReloadRecords = { reservationViewModel.refresh() },
+            responseRate = responseRate,
+            responseRateFailed = responseRateFailed,
+            onReloadResponseRate = { loadResponseRate() },
             notificationViewModel = notificationViewModel,
             savedListingViewModel = savedListingViewModel,
             onOpenListing = { post ->

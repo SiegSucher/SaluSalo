@@ -33,6 +33,8 @@ data class NotificationPreferences(
     @SerialName("user_id") val userId: String,
     @EncodeDefault @SerialName("message_alerts") val messageAlerts: Boolean = true,
     @EncodeDefault @SerialName("reservation_alerts") val reservationAlerts: Boolean = true,
+    // No switch or alert uses these two any more; they are kept so a save
+    // writes back the stored values unchanged (older builds still show them).
     @EncodeDefault val recommendations: Boolean = true,
     @EncodeDefault @SerialName("pickup_reminders") val pickupReminders: Boolean = true
 )

@@ -14,6 +14,7 @@ import com.example.salusalo.viewmodel.NotificationViewModel
 import com.example.salusalo.viewmodel.SavedListingViewModel
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.ReservationDisplay
+import com.example.salusalo.model.ResponseRate
 import com.example.salusalo.model.parseTimestamp
 import com.example.salusalo.model.reservationTotal
 import com.example.salusalo.model.FoodPostStatus
@@ -48,13 +49,15 @@ fun ProfileSections(
     initialPage: String,
     profile: UserProfile?,
     onProfileUpdated: (UserProfile) -> Unit,
-    onPreferencesSaved: (Boolean, Boolean) -> Unit,
     onClose: () -> Unit,
     successfulClaims: List<ReservationDisplay>,
     successfulDonations: List<ReservationDisplay>,
     recordsLoaded: Boolean,
     recordsFailed: Boolean,
     onReloadRecords: () -> Unit,
+    responseRate: ResponseRate?,
+    responseRateFailed: Boolean,
+    onReloadResponseRate: () -> Unit,
     notificationViewModel: NotificationViewModel,
     savedListingViewModel: SavedListingViewModel,
     onOpenListing: (FoodPost) -> Unit
@@ -78,22 +81,13 @@ fun ProfileSections(
     var savingName by remember { mutableStateOf(false) }
     var feedback by rememberSaveable { mutableStateOf("") }
 
-    var recommendations by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("recommendations", true))
-    }
-    var reminders by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("pickupReminders", true))
-    }
     var sound by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("notificationSound", true))
-    }
-    var compact by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("compactPreview", false))
+        mutableStateOf(notificationSoundOn(context))
     }
 
     // Alert preferences saved to the account in Supabase (Phase 4). The
-    // recommendation and pickup-reminder switches are stored there too, but no
-    // alert uses them yet. Notification sound stays on this device.
+    // recommendations and pickup_reminders columns stay but have no switch; a
+    // save writes back the values it loaded. Notification sound stays on this phone.
     val serverPreferences by notificationViewModel.preferences.collectAsStateWithLifecycle()
     var messageAlerts by rememberSaveable { mutableStateOf(true) }
     var reservationAlerts by rememberSaveable { mutableStateOf(true) }
@@ -104,8 +98,6 @@ fun ProfileSections(
         serverPreferences?.let {
             messageAlerts = it.messageAlerts
             reservationAlerts = it.reservationAlerts
-            recommendations = it.recommendations
-            reminders = it.pickupReminders
         }
     }
 
@@ -140,14 +132,7 @@ fun ProfileSections(
     }
 
     fun savePreferences() {
-        prefs.edit()
-            .putBoolean("recommendations", recommendations)
-            .putBoolean("pickupReminders", reminders)
-            .putBoolean("notificationSound", sound)
-            .putBoolean("compactPreview", compact)
-            .apply()
-
-        onPreferencesSaved(recommendations, reminders)
+        setNotificationSoundOn(context, sound)
         feedback = "Preferences saved on this device."
     }
 
@@ -159,9 +144,7 @@ fun ProfileSections(
         "verificationSteps" -> "Verification Process"
         "verificationStatus" -> "Request Status"
         "saved" -> "Saved Listings"
-        "preferences" -> "Preferences"
         "notifications" -> "Notification Preferences"
-        "app" -> "App Preferences"
         "account" -> "Account Details"
         "security" -> "Account Security"
         "password" -> "Change Password"
@@ -317,9 +300,13 @@ fun ProfileSections(
                             }
 
                             "response" -> {
+                                // Only this account's own numbers (get_my_response_rate).
+                                LaunchedEffect(page) { onReloadResponseRate() }
+                                val rate = responseRate
+                                val days = rate?.periodDays ?: 30
                                 SectionCard(pale = true) {
                                     Text(
-                                        "92%",
+                                        rate?.percent?.let { "$it%" } ?: "—",
                                         fontSize = 42.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = SectionGreen
@@ -328,26 +315,56 @@ fun ProfileSections(
                                         "Response rate",
                                         fontWeight = FontWeight.SemiBold
                                     )
-                                    Text("Demo reporting period: last 30 days")
+                                    Text("Last $days days")
                                 }
 
-                                SectionCard {
-                                    Text("Example response summary",
-                                        fontWeight = FontWeight.Bold)
-                                    Text("Conversations received: 50")
-                                    Text("Conversations replied to: 46")
-                                    Text("Conversations without a reply: 4")
-                                    HorizontalDivider()
-                                    Text("46 ÷ 50 × 100 = 92%")
+                                when {
+                                    rate == null && responseRateFailed -> {
+                                        Text(
+                                            "Your response rate could not be loaded. " +
+                                                    "Check your internet connection and try again.",
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                        SectionButton("Try again") { onReloadResponseRate() }
+                                    }
+
+                                    rate == null ->
+                                        Text("Loading your response rate…", fontSize = 13.sp)
+
+                                    rate.received == 0 ->
+                                        SectionCard {
+                                            Text(
+                                                "No one has started a chat with you in the " +
+                                                        "last $days days, so there is no rate yet."
+                                            )
+                                        }
+
+                                    else -> SectionCard {
+                                        Text("Your last $days days",
+                                            fontWeight = FontWeight.Bold)
+                                        Text("Chats started by others: ${rate.received}")
+                                        Text("Chats you replied to: ${rate.replied}")
+                                        Text("Chats without a reply: ${rate.received - rate.replied}")
+                                        HorizontalDivider()
+                                        val exact = rate.replied * 100 % rate.received == 0
+                                        Text(
+                                            "${rate.replied} ÷ ${rate.received} × 100 " +
+                                                    "${if (exact) "=" else "≈"} ${rate.percent}%"
+                                        )
+                                    }
                                 }
 
                                 SectionCard {
                                     Text("How it works",
                                         fontWeight = FontWeight.Bold)
                                     Text(
-                                        "This example measures the share of " +
-                                                "received conversations that got a reply. " +
-                                                "Your actual messages are not being tracked."
+                                        "Counts chats that someone else started with you in " +
+                                                "the last $days days. A chat counts as replied once " +
+                                                "you send a message after their first message. Chats " +
+                                                "you started are not counted. A note sent with a " +
+                                                "reservation starts a chat too. Only you can see " +
+                                                "your response rate."
                                     )
                                 }
 
@@ -528,18 +545,6 @@ fun ProfileSections(
                                 }
                             }
 
-                            "preferences" -> {
-                                SectionLink(
-                                    "Notifications",
-                                    "Recommendations, pickup reminders, and sound"
-                                ) { navigate("notifications") }
-
-                                SectionLink(
-                                    "App preferences",
-                                    "Choose a compact or comfortable preview"
-                                ) { navigate("app") }
-                            }
-
                             "notifications" -> {
                                 SectionCard {
                                     if (serverPreferences == null) {
@@ -554,16 +559,6 @@ fun ProfileSections(
                                             "Reservation updates",
                                             reservationAlerts
                                         ) { reservationAlerts = it }
-
-                                        SectionToggle(
-                                            "Food recommendations",
-                                            recommendations
-                                        ) { recommendations = it }
-
-                                        SectionToggle(
-                                            "Pickup reminders",
-                                            reminders
-                                        ) { reminders = it }
                                     }
 
                                     SectionToggle(
@@ -573,11 +568,13 @@ fun ProfileSections(
                                 }
 
                                 Text(
-                                    "Alert choices are saved to your account and apply to " +
-                                            "the Alerts page. Food recommendations and pickup " +
-                                            "reminders are saved but not sent yet. Notification " +
-                                            "sound is stored on this device; phone notifications " +
-                                            "are not connected yet.",
+                                    "New messages and Reservation updates are saved to your " +
+                                            "account and decide which alerts you get on the Alerts " +
+                                            "page. Notification sound is saved on this phone: it " +
+                                            "plays the phone's notification sound when a new alert " +
+                                            "arrives while the app is open, and stays quiet in " +
+                                            "silent and vibrate mode. Phone notifications while " +
+                                            "the app is closed are not available yet.",
                                     fontSize = 12.sp
                                 )
 
@@ -589,51 +586,17 @@ fun ProfileSections(
                                     val base = serverPreferences
                                     if (base == null) {
                                         feedback = "Could not load your account's alert settings. " +
-                                                "Other preferences were saved on this device."
+                                                "Notification sound was saved on this phone."
                                     } else {
                                         notificationViewModel.savePreferences(
+                                            // recommendations and pickupReminders keep
+                                            // the values loaded from the account.
                                             base.copy(
                                                 messageAlerts = messageAlerts,
-                                                reservationAlerts = reservationAlerts,
-                                                recommendations = recommendations,
-                                                pickupReminders = reminders
+                                                reservationAlerts = reservationAlerts
                                             )
                                         ) { feedback = "Preferences saved to your account." }
                                     }
-                                }
-                            }
-
-                            "app" -> {
-                                SectionCard {
-                                    SectionToggle(
-                                        "Compact preview",
-                                        compact
-                                    ) { compact = it }
-
-                                    Text(
-                                        "Try the spacing below. This setting applies " +
-                                                "to this demonstration preview."
-                                    )
-                                }
-
-                                SectionCard {
-                                    listOf(
-                                        "Bread Assortment",
-                                        "Fresh Produce Box",
-                                        "Packed Rice Meals"
-                                    ).forEach {
-                                        Text(
-                                            it,
-                                            modifier = Modifier.padding(
-                                                vertical = if (compact) 3.dp else 15.dp
-                                            )
-                                        )
-                                        HorizontalDivider()
-                                    }
-                                }
-
-                                SectionButton("Save app preference") {
-                                    savePreferences()
                                 }
                             }
 
@@ -789,9 +752,9 @@ fun ProfileSections(
                                 ) { navigate("security") }
 
                                 SectionLink(
-                                    "Preferences",
-                                    "Notifications and app settings"
-                                ) { navigate("preferences") }
+                                    "Notifications",
+                                    "Message and reservation alerts, sound"
+                                ) { navigate("notifications") }
 
                                 SectionLink(
                                     "Verification",

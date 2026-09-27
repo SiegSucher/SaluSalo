@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-09-28 (Phase 4 signed off, §8; Purchases, Claims and listing prices merged into `master` through PR #3, migrated, and passed on two phones except the "Reserved" dialog, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — merged through PR #3, migrated, and passed on two phones, §10; Phase 2 demo fixes — real donor names, listing details, up to 4 photos, editing, saved listings, expiry — built on branch `claude/phase2-demo-fixes` (PR #5), migrated, and passed on two phones with a regression round, §11; PR #5 merged into `master` as `aa3e823`; Phase 3 demo fixes — Reserve review page and receipt, removing reserved listings, real Activity and Profile records — built on branch `claude/phase3-demo-fixes` at `24fe9f2`, migrated, and passed on two phones on 2026-09-27/28, §12). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
+_Last updated: 2026-09-27 (Phase 4 signed off, §8; Purchases, Claims and listing prices merged into `master` through PR #3, migrated, and passed on two phones except the "Reserved" dialog, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — merged through PR #3, migrated, and passed on two phones, §10; Phase 2 demo fixes — real donor names, listing details, up to 4 photos, editing, saved listings, expiry — built on branch `claude/phase2-demo-fixes` (PR #5), migrated, and passed on two phones with a regression round, §11; PR #5 merged into `master` as `aa3e823`; Phase 3 demo fixes — Reserve review page and receipt, removing reserved listings, real Activity and Profile records — built on branch `claude/phase3-demo-fixes` at `24fe9f2`, migrated, passed on two phones on 2026-09-27, and merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`), §12; Phase 4 demo fixes — Profile bell and Settings, notification preferences, a real notification sound, a real response rate, a live Messages inbox and chat badge — built on branch `claude/phase4-demo-fixes` at `3288d02`, migrated, and passed a short 13-step test on two phones on 2026-09-27, not merged yet, §13). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -24,7 +24,8 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Activity: Purchases, Claims, listing prices (between Phases 4 and 5; not part of Phase 5) | Stored listing prices, the price locked into each reservation, real Purchases and Claims tabs, real Activity totals (§9) | **Merged into `master` through PR #3 on 2026-09-26, together with the Phase 1 demo fixes, before its own device test. Built with AGP and migration applied to the live project on 2026-09-26. The §9.4 two-phone test passed on 2026-09-26, except the "Reserved" dialog after Reserve, which never appears: a Phase 3 bug present since `d4f65fe`, left for the Phase 3 demo fixes (§9.6).** |
 | Phase 1 demo fixes: accounts, profile, security (fixes to finished Phase 1 features; not part of Phase 5) | Google sign-in, a working "Keep me signed in", honest sign-in texts, profile name and photo saved to Supabase, real password change, real Member since; location, Privacy and Signed-in devices removed (§10) | **Complete.** Merged into `master` through PR #3 on 2026-09-26; built with AGP (`googleid` 1.2.0, new `google-services.json`) and migration applied the same day. The developer ran the Phase 1 checks on two phones on 2026-09-26 and reported that they passed ([results log](#results-log)). "Keep me signed in" starting unchecked was changed after PR #3; the tested build included it (§10). |
 | Phase 2 demo fixes: listings (fixes to finished Phase 2 features; not part of Phase 5) | Real donor names, no ratings or distances, newest-first feed, the listing's own pickup address, pickup window, handover, allergens and storage notes saved and shown, up to 4 photos, Edit listing, real Saved Listings, "Expired" from the expiry date (§11) | **Passed.** Built with AGP on branch `claude/phase2-demo-fixes` at `4b6aac6` (PR #5), and migration `20260929_phase2_listing_details.sql` applied to the live project on 2026-09-26. The §11.4 two-phone test (steps 1–25) and its regression round (steps 26–39) passed the same day ([results log](#results-log), §11.6). New small issues are listed in §11.5. |
-| Phase 3 demo fixes: reservations, Activity, Profile (fixes to finished Phase 3 features; not part of Phase 5) | Reserve review page and receipt, pickup questions and notes through the chat, deleting reserved listings by removing them, real Activity records, real Profile claims and donations, Phase 2 leftovers (§12) | **Passed.** Built with AGP on branch `claude/phase3-demo-fixes` at `24fe9f2`. Migration `20260930_phase3_demo_fixes.sql` applied to the live project on 2026-09-26; its read-only check passed 13 of 13 and the live safety check 14 of 14. The two-phone test (§12.4, 32 steps) passed on 2026-09-27/28 ([results log](#results-log), §12.6). |
+| Phase 3 demo fixes: reservations, Activity, Profile (fixes to finished Phase 3 features; not part of Phase 5) | Reserve review page and receipt, pickup questions and notes through the chat, deleting reserved listings by removing them, real Activity records, real Profile claims and donations, Phase 2 leftovers (§12) | **Passed.** Built with AGP on branch `claude/phase3-demo-fixes` at `24fe9f2`. Migration `20260930_phase3_demo_fixes.sql` applied to the live project on 2026-09-26; its read-only check passed 13 of 13 and the live safety check 14 of 14. The two-phone test (§12.4, 32 steps) passed on 2026-09-27 ([results log](#results-log), §12.6). Merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`). |
+| Phase 4 demo fixes: messages, alerts, Profile (fixes to finished Phase 4 features; not part of Phase 5) | The Profile bell opens Alerts and the gear opens Settings, the unused Food recommendations and Pickup reminders switches and Compact preview removed, a real notification sound, a real response rate, a live Messages inbox and a chat badge that counts unread messages (§13) | **Passed; not merged yet.** Written on branch `claude/phase4-demo-fixes` (from `master` at `c184d9b`) on 2026-09-27 and built with AGP at `3288d02`. Migration `20261001_phase4_demo_fixes.sql` applied to the live project on 2026-09-27; its read-only check passed 9 of 9. A short two-phone test (§13.4, 13 steps) passed the same day ([results log](#results-log), §13.6); the checks it left out are listed in §13.6. |
 | Phase 5: Maps, Reviews, Reports | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 | Phase 6: Admin and Final Release | Known only by its roadmap title; not yet specified in the repo | **Not started.** |
 
@@ -53,6 +54,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
   - No tests or lint were run. The developer then installed this code from Android Studio and ran the retest ([results log](#results-log)).
 - **Purchases/Claims and Phase 1 demo fixes (branch `claude/phase1-demo-fixes` at `8908548`, merged as PR #3):** `assembleDebug` BUILD SUCCESSFUL on 2026-09-26 after pinning `googleid` 1.2.0 (§10.6), and again with the "starts unchecked" change. The developer then installed it from Android Studio and ran the Phase 1 checks ([results log](#results-log)).
 - **Phase 3 demo fixes (branch `claude/phase3-demo-fixes` at `24fe9f2`):** `gradlew.bat :app:assembleDebug --offline` BUILD SUCCESSFUL in 3m 23s on 2026-09-26, with only the three old deprecation warnings (`FormatListBulleted`, `ArrowBack`, `Logout`). No tests or lint were run. The developer then installed it from Android Studio on both phones and ran the §12.4 test ([results log](#results-log)).
+- **Phase 4 demo fixes (branch `claude/phase4-demo-fixes` at `3288d02`, §13):** `gradlew.bat :app:assembleDebug --offline` BUILD SUCCESSFUL in 43s on 2026-09-27, with only old deprecation warnings (`ArrowBack`, `Logout`). No tests or lint were run. Before that, only a kotlinc 2.2.10 type check against desktop Compose jars and hand-written Android stubs had been run (§13.3). The developer then installed it from Android Studio on both phones and ran the §13.4 test ([results log](#results-log)).
 - **Automated tests:** only the Android Studio templates `ExampleUnitTest` and `ExampleInstrumentedTest` exist.
 
 ### Phase 1: what exists (summary)
@@ -507,7 +509,7 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 4. **Own listing:** A opens their own listing: the button reads "Your listing", and tapping it (or Allergens/Storage) shows "You cannot message yourself…".
 5. **Reservation alerts:** B reserves part of A's listing → A gets "New reservation" in Alerts. B cancels → A gets "Reservation cancelled". B reserves again and A marks it claimed → B gets "Reservation claimed". Tapping a reservation alert opens Activity on My Donations (A). Since §9 (not yet tested), B's "Reservation claimed" alert opens that reservation in Purchases or Claims instead of My Reservations.
 6. **Chat from Activity:** A → Activity → My Donations → record → "Message recipient", and B → My Reservations → record → "Message donor": both land in the same thread as step 1.
-7. **Preferences:** A → Profile → Preferences → Notifications → turns off "New messages" → Save ("Preferences saved to your account."). B sends a message: it arrives in A's chat, but A gets no new MESSAGE alert. Turn it back on and Save, leave the page and reopen it: the switch is still on (§8.7 bug 1). While the page loads, it shows "Loading your alert settings…" rather than switches (§8.7 bug 2). Repeat both checks in Alerts → settings icon.
+7. **Preferences:** A → Profile → Notifications (Profile → Preferences → Notifications before §13) → turns off "New messages" → Save ("Preferences saved to your account."). B sends a message: it arrives in A's chat, but A gets no new MESSAGE alert. Turn it back on and Save, leave the page and reopen it: the switch is still on (§8.7 bug 1). While the page loads, it shows "Loading your alert settings…" rather than switches (§8.7 bug 2). Repeat both checks in Alerts → settings icon.
 8. **Mark read:** Alerts → "Mark shown as read": the unread count and the bell badge go to 0 and stay 0 after reopening the app.
 9. **Token refresh:** leave the app open on Home for more than an hour, then have the other account send a message: it still arrives live. (Realtime is re-authenticated every 5 minutes; §8.3.)
 10. **Regression:** because the Ktor engine changed to OkHttp, repeat the Phase 1/2 regression and the A/B reservation test above.
@@ -542,13 +544,16 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 | 2026-09-26 | live project (SQL Editor), after the test | Developer | Passed | Read-only check of the Phase 2 migration: all 8 rows true. The 6 new `food_posts` columns, `update_my_food_post`, `get_listing_donor_names` and `saved_listings` exist; `authenticated` has no UPDATE privilege on `food_posts` and no UPDATE policy remains, and still has INSERT; `authenticated` can execute both functions, `anon` cannot (§11.6). |
 | 2026-09-26 | live project (SQL Editor): `20260930_phase3_demo_fixes.sql`, then `supabase/tests/phase3_demo_fixes_check.sql` in the same run | Developer | Passed | Phase 3 demo fix migration applied; the read-only check returned 13 of 13 PASS: exactly one check constraint each on `food_posts.status` (allows `REMOVED`) and `notifications.type` (allows `RESERVATION_REMOVED`), `reservations.cancel_reason` with its check, no DELETE or UPDATE policy or privilege on `food_posts`, both new functions SECURITY DEFINER and `authenticated`-only, the `REMOVED` checks in `create_reservation`, `update_my_food_post`, `notify_reservation_change` and the `saved_listings` insert policy, `notify_user` and `notify_reservation_change` not executable by clients, no UPDATE on `saved_listings` (§12.6). |
 | 2026-09-26 | live project (SQL Editor); script `supabase/tests/phase3_live_safety_check.sql` | Developer | Passed | 14 passed, 0 failed, 0 skipped. Listing checked: `OLD TEST` (account A), outsider: the newest other account. The three sanity checks confirmed both simulated sign-ins and that A's own `remove_my_food_post` would have deleted `OLD TEST` (never reserved; undone at once). Refused as expected: A's direct DELETE ("permission denied for table food_posts"), the outsider's removal ("You can delete only your own listing."), removal and `get_my_saved_listing_names` without a login (permission denied), a token from another Firebase project ("Not authenticated"). The outsider's saved names were their own only. With the listing marked `REMOVED`: A's edit ("This listing was removed and can no longer be edited."), the outsider's reservation ("The donor removed this listing."), new chat ("This listing is no longer available"), bookmark (row-level security) and reading the listing or its donor name (0 rows) were refused. The closing error rolled everything back. |
-| 2026-09-27/28 | `24fe9f2` (branch `claude/phase3-demo-fixes`); migration applied | Developer | Passed | Phase 3 demo fixes (§12): the §12.4 two-phone test, 32 steps, given in parts. Steps 1–15 reported on 2026-09-27; step 16 (stale quantity, B signed in on both phones) and steps 17–32 on 2026-09-28. Every step passed, including: no Buy Now / Claim Now; the review page and the "Reserved" receipt with the total and "Your message was sent to <A>." (the missing "Reserved" dialog of §9.6 is gone); the Pickup Window row opening the chat; the real photo on the Pickup Address page; the stale reserve showing "Not enough food available. Only 0 remains." on the review page; "Listing deleted." for a never-reserved listing; "Listing removed. 2 open reservations were cancelled…" and "…1 open reservation was cancelled…"; one "Listing removed" alert per listing on B's phone, opening the cancelled reservation in My Reservations; Purchases, Claims, the Activity totals and the Profile counts keeping the claimed reservations of removed listings; no "Reservation cancelled" alert for A; the chat about a removed listing still working; the name and photo on an expired saved listing's card; the short Post Listing and reserve errors in flight mode. Observed: "Listing: Removed by you / by the donor" appears in a record's details dialog, not on its card (as coded). Not re-run: email sign-up, Google sign-in, Keep me signed in, the profile photo, the password change, the photo gallery, the Delete, Cancel and Mark claimed error texts, dates on a phone set to another language, and the password-reset email (never tested). |
+| 2026-09-27 | `24fe9f2` (branch `claude/phase3-demo-fixes`); migration applied | Developer | Passed | Phase 3 demo fixes (§12): the §12.4 two-phone test, 32 steps, given in parts. Steps 1–15 were reported in a first session and step 16 (stale quantity, B signed in on both phones) and steps 17–32 in a second session, both on 2026-09-27. Every step passed, including: no Buy Now / Claim Now; the review page and the "Reserved" receipt with the total and "Your message was sent to <A>." (the missing "Reserved" dialog of §9.6 is gone); the Pickup Window row opening the chat; the real photo on the Pickup Address page; the stale reserve showing "Not enough food available. Only 0 remains." on the review page; "Listing deleted." for a never-reserved listing; "Listing removed. 2 open reservations were cancelled…" and "…1 open reservation was cancelled…"; one "Listing removed" alert per listing on B's phone, opening the cancelled reservation in My Reservations; Purchases, Claims, the Activity totals and the Profile counts keeping the claimed reservations of removed listings; no "Reservation cancelled" alert for A; the chat about a removed listing still working; the name and photo on an expired saved listing's card; the short Post Listing and reserve errors in flight mode. Observed: "Listing: Removed by you / by the donor" appears in a record's details dialog, not on its card (as coded). Not re-run: email sign-up, Google sign-in, Keep me signed in, the profile photo, the password change, the photo gallery, the Delete, Cancel and Mark claimed error texts, dates on a phone set to another language, and the password-reset email (never tested). |
+| 2026-09-27 | live project (SQL Editor): `20261001_phase4_demo_fixes.sql`, then `supabase/tests/phase4_demo_fixes_check.sql` in the same run | Developer | Passed | Phase 4 demo fix migration applied; the read-only check returned 9 of 9 PASS: `get_my_response_rate()` with its result columns, SECURITY INVOKER, STABLE and `search_path=public`, executable by `authenticated` only; the two helpers it calls executable by `authenticated`; no INSERT, UPDATE or DELETE for clients on `conversations`, `messages` and `notifications`, which have SELECT policies only; `notify_user` not executable by clients; `messages` and `notifications` in `supabase_realtime`; no UPDATE on `users` and no UPDATE or DELETE on `food_posts` for clients (§13.6). |
+| 2026-09-27 | `3288d02` (branch `claude/phase4-demo-fixes`); migration applied | Developer | Passed | Phase 4 demo fixes (§13): the short §13.4 two-phone test, 13 steps, sent all at once. The developer asked for fewer steps than the 30-step draft, and reported one result ("test passed"). Covered: a new free listing `P4 FREE`; the Profile header and caption texts; Response Rate as a real value, and its page; the gear opening Settings; Notifications with only "New messages", "Reservation updates" and "Notification sound". Also covered, the bell and badges: the Profile bell opening Alerts, its dot gone after "Mark shown as read" and back after new alerts; no Refresh button in Messages. Live, without touching the phone: with Messages open, B's new chat appearing at the top and an older chat moving up, both with an unread count of 1, and the notification sound playing. The chat badge counted the unread messages and went back down once the chats were opened. No sound for a message in the open chat. Both Response Rate numbers were 1 higher after B started a chat and A replied. "Notification sound" turned off stayed off after signing out and in again; the next message then made no sound, but the badge still went up live. In the background: no sound. After reopening from Recents, the badge and the inbox included the message sent meanwhile: the note of a reservation B made through the review page, with the "Reserved" receipt. A also had the "New reservation" alert. Not covered: see §13.6. |
 
 - **Build:** the test phone's app code was deployed on 2026-09-25 at 10:37 (+08:00), after the last source change (10:04), so it matches the working tree above. That same code was committed on 2026-09-25, with no source changes after 10:04. The build on any second device was not checked.
 - **Phase 4 retest build:** `c7323b8`, built at 21:21 (+08:00) with no local source changes and installed from Android Studio. A's phone showed the new "Loading your alert settings…" text, so it ran this build; which build the second phone ran was not checked.
 - **Phase 1 demo fix test build:** installed from Android Studio on 2026-09-26 from `claude/phase1-demo-fixes` at `8908548` plus the uncommitted "starts unchecked" change, which was committed afterwards on branch `claude/phase1-demo-fixes-results`. Which build each phone ran was not checked.
 - **Phase 2 demo fix test build:** `assembleDebug` of `claude/phase2-demo-fixes` at `4b6aac6` on the developer's PC (2026-09-26, BUILD SUCCESSFUL in 1m 34s, only the three old deprecation warnings), installed on both phones after the migration. Both phones showed screens that exist only on this branch (A the 4-photo Create Listing, B the gallery and Saved Listings), so both ran a build of it; the exact build on each phone was not checked.
 - **Phase 3 demo fix test build:** `assembleDebug` of `claude/phase3-demo-fixes` at `24fe9f2` on the developer's PC (2026-09-26), installed from Android Studio on both phones right after the migration. Both phones showed screens that exist only on this branch (the two-button details page and the review page and receipt; the new delete dialogs), so both ran a build of it; the exact build on each phone was not checked.
+- **Phase 4 demo fix test build:** `assembleDebug` of `claude/phase4-demo-fixes` at `3288d02` on the developer's PC (2026-09-27), installed from Android Studio on both phones. A's phone showed screens that exist only on this branch: the gear opening Settings, Notifications with three switches, and the real Response Rate page. So it ran a build of it; which build B's phone ran was not checked.
 - **§3.5 test build:** the developer installed commit `85c9263` from Android Studio, with no local source changes, and followed a step-by-step script covering §3.5 checks 1, 3 and 4 (including a full reservation in check 4) plus the regression steps above. §3.5 check 2 could not be run as written: the "lemon dou" listings were no longer on Home; only the listings created during this test were. The reason was not checked; the feed hides expired and fully reserved listings. Check 2 was then run with a staged listing (row above).
 - **Phase 3 sign-off:** on 2026-09-25 the developer declared Phases 1–3 complete and manually verified. The cancel, claim and Recommended for You tests were then run and passed (rows above). Two optional follow-up checks passed later, in the §3.5 test: reserving your own listing ("Your listing / You cannot reserve it") and a cancelled listing's return to the feed. These checks still have no individual test record:
   - from the optional follow-up checks above: the fully reserved listing in My Listings, and over-quantity;
@@ -574,14 +579,15 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 | Auth / profile | `app/src/main/java/com/example/salusalo/data/GoogleSignIn.kt`, `data/ProfilePhoto.kt` | Google ID token through Credential Manager; profile photo shrinking (§10) |
 | Auth / profile | `app/src/main/java/com/example/salusalo/model/UserProfile.kt` | `UserProfile`, `UserRole`, `NewUserProfile` |
 | Auth / profile | `app/src/main/java/com/example/salusalo/data/SupabaseClientProvider.kt` | Supabase client using the Firebase ID token |
-| Auth / profile | `app/src/main/java/com/example/salusalo/ProfileScreen.kt`, `ProfileSections.kt` | Name, photo, member since and password change are real (§10, passed on 2026-09-26), as are the notification preferences (§8) and saved listings (§11, passed on 2026-09-26); stats, reviews, verification and report are still demo |
+| Auth / profile | `app/src/main/java/com/example/salusalo/ProfileScreen.kt`, `ProfileSections.kt` | Name, photo, member since and password change are real (§10, passed on 2026-09-26), as are the notification preferences (§8) and saved listings (§11, passed on 2026-09-26); since §13 (passed on two phones on 2026-09-27) the bell opens Alerts, the gear opens Settings and the response rate is real; the rating, reviews, verification and report are still demo |
 | Storage paths | `app/src/main/java/com/example/salusalo/data/StorageRepository.kt` | `foodImagePath()`, `profileImagePath()` (`<uid>/profile-<millis>.jpg` since §10) |
 | Create listing | `app/src/main/java/com/example/salusalo/PostScreen.kt` | Create Listing form, "My posts", `EditListingDialog` (§11), `PostPhoto` |
-| Messaging (Phase 4) | `ChatScreen.kt`, `data/MessageRepository.kt`, `data/RealtimeInserts.kt`, `model/Conversation.kt`, `viewmodel/MessageViewModel.kt` | Chat dialog and Messages inbox; RPC calls; Realtime insert stream |
-| Alerts (Phase 4) | `AlertScreen.kt`, `data/NotificationRepository.kt`, `model/AppNotification.kt`, `viewmodel/NotificationViewModel.kt` | Real alerts, unread counts, preferences |
+| Messaging (Phase 4) | `ChatScreen.kt`, `data/MessageRepository.kt`, `data/RealtimeInserts.kt`, `model/Conversation.kt`, `viewmodel/MessageViewModel.kt` | Chat dialog and Messages inbox; RPC calls; Realtime insert stream. Since §13 (passed on two phones on 2026-09-27): the inbox is live for the whole session (`MessageViewModel.start`), the chat badge is the sum of unread counts, and `getMyResponseRate()` / `ResponseRate` |
+| Alerts (Phase 4) | `AlertScreen.kt`, `data/NotificationRepository.kt`, `model/AppNotification.kt`, `viewmodel/NotificationViewModel.kt` | Real alerts, unread counts, preferences; since §13 `newAlerts` (alerts that arrive live) |
+| Alert sound (§13) | `AlertSound.kt` | `AlertSoundPlayer` (the phone's default notification sound) and the phone-level `notification_sound` setting in `salusalo_session` |
 | Demo screens | `app/src/main/java/com/example/salusalo/FoodActions.kt` | Preview-only pickup and checkout dialogs; its demo chat is now only a fallback |
 | Theme | `app/src/main/java/com/example/salusalo/ui/theme/` | `SaluSaloTheme` is **unused**; `MainActivity` builds its own `MaterialTheme` |
-| Database / Storage SQL | `supabase/migrations/` (8 files), `supabase/README.md` | Applied manually in the Supabase SQL Editor |
+| Database / Storage SQL | `supabase/migrations/` (10 files), `supabase/README.md` | Applied manually in the Supabase SQL Editor |
 | Build / config | `app/build.gradle.kts`, `gradle/libs.versions.toml`, `app/google-services.json`, `local.properties` (git-ignored) | Supabase URL and publishable key are read from `local.properties` into `BuildConfig` |
 
 - **Navigation files:** there are none; there is no Navigation-Compose `NavHost`. Navigation is string state in `MainActivity.kt`:
@@ -661,7 +667,7 @@ Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow; n
 - **`conversations`**: one thread per `(food_post_id, recipient_id)`; `donor_id` is copied from the listing by the RPCs. Per-side read times (`recipient_last_read_at`, `donor_last_read_at`) and `last_message_at`. Deleted with the listing (cascade).
 - **`messages`**: `conversation_id`, `sender_id`, `body` (1–2000 characters after trimming), `created_at`.
 - **`notifications`**: per-user alerts of type `MESSAGE`, `RESERVATION_CREATED`, `RESERVATION_CANCELLED` or `RESERVATION_CLAIMED`, with optional links to the listing, conversation and reservation, and `read_at`.
-- **`notification_preferences`**: one row per user (`message_alerts`, `reservation_alerts`, `recommendations`, `pickup_reminders`). A missing row means everything is on. Only `message_alerts` and `reservation_alerts` affect alerts today.
+- **`notification_preferences`**: one row per user (`message_alerts`, `reservation_alerts`, `recommendations`, `pickup_reminders`). A missing row means everything is on. Only `message_alerts` and `reservation_alerts` affect alerts today. **Since §13** the app no longer shows `recommendations` and `pickup_reminders` (checked on a phone on 2026-09-27). A save writes back their stored values (as coded; not checked in the database), and the columns stay.
 - **Access:** clients may only SELECT conversations and messages they take part in, and their own alerts and preferences. `notification_preferences` also allows INSERT/UPDATE of the caller's own row. Every other write goes through SECURITY DEFINER functions that take the caller from the JWT:
   - `start_listing_conversation(p_food_post_id)`: get or create the caller's thread with the donor. Rejects the caller's own listing, and listings that are not available unless the caller has a reservation on them.
   - `open_reservation_conversation(p_reservation_id)`: get or create the thread of a reservation; either its recipient or the listing's donor may call it.
@@ -682,12 +688,12 @@ Before Phase 4, recipients never saw the donor's name. In a conversation, **both
 - **Realtime auth:** Realtime uses the same Firebase ID token as PostgREST (the client's `accessToken` lambda), read when a channel joins. Without the Supabase Auth plugin it is never refreshed automatically, so `NotificationViewModel` calls `realtime.setAuth()` every 5 minutes (confirmed by reading the realtime-kt 3.5.0 sources). On 2026-09-25 alerts still arrived live after the app had been open on Home for more than 65 minutes ([results log](#results-log)).
 - **Data layer:** `MessageRepository`, `NotificationRepository`, `realtimeInserts()` (a channel per stream, removed when collection stops), `MessageViewModel` and `NotificationViewModel` (created per profile like the Phase 3 ViewModels and cleared on sign-out). `signedUrlOrNull()` is shared with `withSignedImageUrl()`.
 - **UI:**
-  - Home header: new chat icon (badge = unread message alerts) → Messages inbox (`MessagesScreen`); bell badge = all unread alerts.
+  - Home header: new chat icon (badge = unread message alerts; **since §13, passed on two phones on 2026-09-27:** the sum of the threads' unread counts) → Messages inbox (`MessagesScreen`); bell badge = all unread alerts.
   - `ChatScreen`: full-screen conversation over any screen, live updates, marks the thread read.
   - Food details: "Message Donor", the Allergens and Storage rows, and the details dialog's "Ask for exact location"/"Message provider" links open the real chat (prefilled where the demo chat was). On your own listing the button reads "Your listing".
   - Activity: "Message donor"/"Message recipient" in reservation details; the bell dot only shows with unread alerts.
   - Alerts: real alerts, filters All/Messages/Reservations, Today/Earlier, mark read, tap to open the chat or the Activity tab, settings dialog saved to Supabase. The sample alerts and the "Personalized for you" card were removed.
-  - Profile → Preferences → Notifications: "New messages", "Reservation updates", "Food recommendations" and "Pickup reminders" are saved to Supabase; "Notification sound" stays on the device.
+  - Profile → Preferences → Notifications: "New messages", "Reservation updates", "Food recommendations" and "Pickup reminders" are saved to Supabase; "Notification sound" stays on the device. **Changed in §13 (passed on two phones on 2026-09-27):** the page opens from Profile → Notifications and has only "New messages" and "Reservation updates" (saved to Supabase) and "Notification sound" (saved on the phone, and now plays a sound).
 
 ### 8.4 Known limits
 
@@ -695,8 +701,8 @@ Before Phase 4, recipients never saw the donor's name. In a conversation, **both
 - No blocking or reporting of users (Phase 5), and no editing or deleting of messages.
 - No rate limit on messages beyond the 2000-character limit.
 - Deleting a listing deletes its conversations, messages and related alerts.
-- The chat icon badge counts unread message **alerts**, so it stays empty when message alerts are turned off; the inbox still shows unread counts.
-- The Profile screen's bell still opens settings and always shows its dot (unchanged demo UI).
+- The chat icon badge counts unread message **alerts**, so it stays empty when message alerts are turned off; the inbox still shows unread counts. **Fixed in §13:** the badge sums the threads' unread counts (passed on two phones on 2026-09-27). With message alerts turned off it was not tested.
+- The Profile screen's bell still opens settings and always shows its dot (unchanged demo UI). **Fixed in §13 (passed on two phones on 2026-09-27).**
 
 ### 8.5 Status matrix
 
@@ -820,7 +826,7 @@ Preconditions: run `20260927_activity_prices.sql` in the SQL Editor (check: `sel
 - **Result:** the developer ran §9.4 on two phones (A = donor on phone 1, B = recipient on phone 2) with the §10 build, given in parts, and reported that every step passed except the "Reserved" dialog below. Recorded values: A0 = 2, A1 = 2, B0 = 2, B1 = 2; steps 14 and 18 then expected Completed 4 and Items Rescued 7, and were reported as passed.
   - Step 4: the first try put `100000` into Quantity, leaving the price empty, and correctly got "Enter a price greater than zero, with up to two decimal places."; the redo with the price field showed "Enter a price of at most ₱99,999.99.".
   - Step 12: A had two `PRICE TEST` listings (another account had reserved the first one); the newest-only update changed the tested one and returned 1 row, `99.00`. Home showed "₱99.00" only after a reload (Post → Back), since the feed does not update live (§7).
-- **Known issue, fixed in §12 (the Reserve review page and receipt; passed on two phones on 2026-09-28): the "Reserved" dialog never appears.** After a successful Reserve, `FoodDetailsScreen` sets its "Reserved" notice ("Reservation created. Pay ₱… at pickup." or "…Please coordinate pickup with the donor.") and at once calls `onReserved()`. `HomeScreen`'s `onReserved` reloads the feed and sets `selectedFood = null`, which closes the details dialog and the notice inside it before it is drawn. Present since `d4f65fe`, so not caused by §9 or §10. It affects §9.4 steps 8, 9 and 19 and §10.4 step 17. The reservation itself is created correctly; the amount still shows in My Reservations and in the line under the buttons. The developer chose on 2026-09-26 to fix it with the Phase 3 demo fixes, together with Buy Now / Claim Now. Proposed fix: keep the details open until the dialog's OK, then close them; the feed can still reload at once.
+- **Known issue, fixed in §12 (the Reserve review page and receipt; passed on two phones on 2026-09-27): the "Reserved" dialog never appears.** After a successful Reserve, `FoodDetailsScreen` sets its "Reserved" notice ("Reservation created. Pay ₱… at pickup." or "…Please coordinate pickup with the donor.") and at once calls `onReserved()`. `HomeScreen`'s `onReserved` reloads the feed and sets `selectedFood = null`, which closes the details dialog and the notice inside it before it is drawn. Present since `d4f65fe`, so not caused by §9 or §10. It affects §9.4 steps 8, 9 and 19 and §10.4 step 17. The reservation itself is created correctly; the amount still shows in My Reservations and in the line under the buttons. The developer chose on 2026-09-26 to fix it with the Phase 3 demo fixes, together with Buy Now / Claim Now. Proposed fix: keep the details open until the dialog's OK, then close them; the feed can still reload at once.
 - **Observations for later (not bugs in §9):**
   - The "Pay ₱… at pickup" line under the buttons is 10 sp grey text and was missed at first.
   - The Buy Now / Claim Now demo checkout looks like a receipt and was taken for the real flow.
@@ -1041,9 +1047,9 @@ Not covered by this round (use §4, §9.4 and §10.4 when those areas change): e
 - Deleting photos (after a failed post, or with a listing) is best effort; a failure can leave files in Storage.
 - The pickup-time picker in the details (the "Pickup Window" row) is still the demo picker and does not reserve anything.
 - `get_listing_donor_names` repeats the `food_posts` SELECT rule in SQL; if that policy changes, the function must change with it. (The `saved_listings` insert policy reads `food_posts` under its RLS, so it follows automatically.)
-- **Blank Saved Listings card.** A saved listing the user can no longer see (expired, and not reserved by them) is hidden by the `food_posts` SELECT policy, so its card shows only "No longer available" and "Remove", without its name or photo. Seen in the §11.4 test (step 21). **Fixed in §12 (`get_my_saved_listing_names`); passed on two phones on 2026-09-28.**
+- **Blank Saved Listings card.** A saved listing the user can no longer see (expired, and not reserved by them) is hidden by the `food_posts` SELECT policy, so its card shows only "No longer available" and "Remove", without its name or photo. Seen in the §11.4 test (step 21). **Fixed in §12 (`get_my_saved_listing_names`); passed on two phones on 2026-09-27.**
 - **Dates follow the phone's language.** The details times (`listingTimeFormat` and `listingClockFormat` in `MainActivity.kt`), the time buttons of Create and Edit Listing (`postTime()` in `PostScreen.kt`), Activity, Alerts and Chat format dates with `Locale.getDefault()`, while "Member since" uses English; on a phone set to another language the month names and AM/PM change. Found in review; not tested. **Changed in §12 (every date uses `Locale.ENGLISH`); built, but not checked on a phone set to another language.**
-- **Long error text on Post Listing; no error on Delete.** `FoodViewModel.errorText()` shows the whole exception message on Post Listing, which for a Supabase error includes the request URL (headers masked); Edit uses the short `supabaseErrorText()`. _Correction (2026-09-26):_ Delete errors were never shown at all; they went to the feed's error state, which no dialog displays and the next load clears. Found in review; not tested. Both are addressed in §12: the short Post Listing error passed on a phone on 2026-09-28 (flight mode), and the Delete result dialog passed for "Listing deleted." and "Listing removed…"; a Delete error was not triggered.
+- **Long error text on Post Listing; no error on Delete.** `FoodViewModel.errorText()` shows the whole exception message on Post Listing, which for a Supabase error includes the request URL (headers masked); Edit uses the short `supabaseErrorText()`. _Correction (2026-09-26):_ Delete errors were never shown at all; they went to the feed's error state, which no dialog displays and the next load clears. Found in review; not tested. Both are addressed in §12: the short Post Listing error passed on a phone on 2026-09-27 (flight mode), and the Delete result dialog passed for "Listing deleted." and "Listing removed…"; a Delete error was not triggered.
 
 ### 11.6 Results (2026-09-26)
 
@@ -1058,7 +1064,7 @@ Not covered by this round (use §4, §9.4 and §10.4 when those areas change): e
 
 ## 12. Phase 3 demo fixes: reservations, Activity, Profile
 
-**Status (2026-09-28): passed on two phones.** Written on branch `claude/phase3-demo-fixes` (from `master` at `aa3e823`). Built with AGP at `24fe9f2`. Migration `20260930_phase3_demo_fixes.sql` applied to the live project on 2026-09-26; its read-only check passed 13 of 13 and the live safety check 14 of 14. The §12.4 two-phone test passed on 2026-09-27/28 (§12.6). The SQL was also tested on a local PostgreSQL 16 copy (§12.3). These are fixes to finished Phase 3 features, not part of Phase 5.
+**Status (2026-09-27): passed on two phones, and merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`).** Written on branch `claude/phase3-demo-fixes` (from `master` at `aa3e823`). Built with AGP at `24fe9f2`. Migration `20260930_phase3_demo_fixes.sql` applied to the live project on 2026-09-26; its read-only check passed 13 of 13 and the live safety check 14 of 14. The §12.4 two-phone test passed on 2026-09-27 (§12.6). The SQL was also tested on a local PostgreSQL 16 copy (§12.3). These are fixes to finished Phase 3 features, not part of Phase 5.
 
 ### 12.1 What changed
 
@@ -1093,7 +1099,7 @@ Afterwards, run `supabase/tests/phase3_demo_fixes_check.sql` (read-only, 13 chec
 
 ### 12.4 Manual test (A → B → A; phone 1 = A, phone 2 = B)
 
-The steps in the order they were run on 2026-09-27/28 (§12.6). **Preconditions:** the migration and both checks in §12.2 have been run, and this branch is installed on both phones right after the migration. A (phone 1) and B (phone 2) are signed in. Each step is tagged [New] or [Regression].
+The steps in the order they were run on 2026-09-27 (§12.6). **Preconditions:** the migration and both checks in §12.2 have been run, and this branch is installed on both phones right after the migration. A (phone 1) and B (phone 2) are signed in. Each step is tagged [New] or [Regression].
 
 **A, part 1 (phone 1)**
 1. [New] Home → one of A's own listings: two buttons, "Your listing / Questions go to Messages" and "Your listing / You cannot reserve it". There is no Buy Now or Claim Now.
@@ -1197,10 +1203,171 @@ The steps in the order they were run on 2026-09-27/28 (§12.6). **Preconditions:
 - **Older app builds break against this migration:** they can't delete listings (no DELETE privilege), and their `Json` fails on the new `REMOVED` status and `RESERVATION_REMOVED` alert type. Install the new build on every phone after running the migration.
 - "Listing: Removed by you / by the donor" is shown in a record's details dialog, not on its card in the list.
 
-### 12.6 Results (2026-09-26 to 2026-09-28)
+### 12.6 Results (2026-09-26 to 2026-09-27)
 
 - **Build:** `assembleDebug` of `24fe9f2` on the developer's PC (2026-09-26): BUILD SUCCESSFUL in 3m 23s, with only the three old deprecation warnings. Installed on both phones right after the migration.
 - **Migration and live checks (2026-09-26):** `20260930_phase3_demo_fixes.sql` was applied together with `phase3_demo_fixes_check.sql` in the same run: 13 of 13 PASS. `phase3_live_safety_check.sql`: 14 passed, 0 failed, 0 skipped, all rolled back ([results log](#results-log)).
-- **Two-phone test:** §12.4 steps 1–32 passed. Steps 1–15 were reported on 2026-09-27, and steps 16–32 on 2026-09-28.
+- **Two-phone test:** §12.4 steps 1–32 passed. Steps 1–15 and steps 16–32 were reported in two sessions, both on 2026-09-27.
+- **Merged:** into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`).
 - **Observed:** "Listing: Removed by you / by the donor" appears in the record's details dialog, not on its card, as coded (§12.5).
 - **Not checked:** the list at the end of §12.4. The concurrency results in §12.3 come from the local PostgreSQL copy only.
+
+---
+
+## 13. Phase 4 demo fixes: messages, alerts, Profile
+
+**Status (2026-09-27): passed on two phones; not merged yet.** Written on branch `claude/phase4-demo-fixes` (from `master` at `c184d9b`, the PR #7 merge) and built with AGP at `3288d02`. The migration `20261001_phase4_demo_fixes.sql` was applied to the live project on 2026-09-27, and its read-only check passed 9 of 9. A short two-phone test (§13.4, 13 steps) passed the same day (§13.6). The SQL was also tested on a local PostgreSQL 16 copy (§13.3). These are fixes to finished Phase 4 features, not part of Phase 5.
+
+### 13.1 What changed
+
+- **Profile bell and gear** (`ProfileScreen.kt`). The bell opens Alerts, and its orange dot shows only while there are unread alerts, like the Home and Activity bells. The gear opens the Settings page (content description "Settings"), which was reachable before only through the bell. The "Account Settings" menu row still opens Account details. The header line reads "Demo verification & rating".
+- **Notification preferences** (`ProfileSections.kt`, `ProfileScreen.kt`).
+  - The "Food recommendations" and "Pickup reminders" switches are removed; no alert ever used them. `NotificationPreferences` keeps both fields (`@EncodeDefault`), and Save writes back the values loaded from the account, so the columns and older builds are unaffected. No database change.
+  - "App preferences" → "Compact preview" (a page of sample foods) and the "Preferences" hub are removed. The Profile menu row and the Settings link are now "Notifications / Message and reservation alerts, sound" and open "Notification Preferences" directly.
+  - The page shows "New messages", "Reservation updates" and "Notification sound", with the note: "New messages and Reservation updates are saved to your account and decide which alerts you get on the Alerts page. Notification sound is saved on this phone: it plays the phone's notification sound when a new alert arrives while the app is open, and stays quiet in silent and vibrate mode. Phone notifications while the app is closed are not available yet."
+- **Notification sound** (new `AlertSound.kt`, `NotificationViewModel.newAlerts`, `HomeScreen`).
+  - When an alert arrives live through Realtime (never the alerts loaded when Home starts), `HomeScreen` plays the phone's default notification sound (`RingtoneManager.TYPE_NOTIFICATION`, notification audio usage) if all of these hold: the app is on screen (resumed); "Notification sound" is on; the alert is not a message of the chat that is open; the ringer is on normal (silent and vibrate stay quiet). A new sound stops the previous one, and leaving the screen stops it.
+  - The switch is stored on the phone in `salusalo_session` → `notification_sound` (default on), next to "Keep me signed in"; sign-out does not clear it. The old `salusalo_profile` → `notificationSound` value is ignored.
+  - No Android notification, no permission and no new library.
+- **Response rate** (migration `20261001_phase4_demo_fixes.sql`, `MessageRepository.getMyResponseRate()`, `ResponseRate` in `model/Conversation.kt`, `ProfileScreen.kt`, `ProfileSections.kt`).
+  - Over the last 30 days: **received** = the caller's chats whose first message the other participant sent in that period; **replied** = those in which the caller sent a message after that first message; the rate is replied ÷ received × 100, rounded. With nothing received there is no rate: the stat shows "—".
+  - The stat loads when Profile opens and again when its page opens. The page shows the percentage or "—", "Response rate", "Last 30 days", then one of: "Loading your response rate…"; "Your response rate could not be loaded. Check your internet connection and try again." with "Try again"; "No one has started a chat with you in the last 30 days, so there is no rate yet."; or a card "Your last 30 days" with "Chats started by others: N", "Chats you replied to: R", "Chats without a reply: N−R" and "R ÷ N × 100 = P%" ("≈" when not exact). "How it works" reads: "Counts chats that someone else started with you in the last 30 days. A chat counts as replied once you send a message after their first message. Chats you started are not counted. A note sent with a reservation starts a chat too. Only you can see your response rate."
+  - The demo "92%", "Demo reporting period", the example summary (50 / 46 / 4) and "Your actual messages are not being tracked." are removed. The caption under the stats reads "Verified badge and rating are demo values".
+- **Live Messages inbox and chat badge** (`MessageViewModel.start()`, `MessageRepository.allMessageInserts()`, `realtimeInserts()`, `HomeScreen`, `ChatScreen.kt`).
+  - The inbox loads when Home starts and then follows new messages in all of the caller's threads through one Realtime channel on `messages` with no filter (`realtimeInserts()`'s filter is now optional). Realtime applies the `messages` SELECT policy, so only the caller's own threads arrive.
+  - A message in a thread already listed updates its last message, time, "mine" flag and order in memory; the unread count goes up only for someone else's message outside the open chat. No cover image is re-signed. A thread not listed yet (for example a new chat) is fetched once with `get_my_conversations(p_conversation_id)`. A reload keeps any thread that Realtime has already moved past the loaded copy.
+  - The Home chat badge is the sum of the threads' unread counts, instead of the unread MESSAGE alerts, so it also counts while "New messages" alerts are off. The open chat is marked read, so it never counts.
+  - When the app returns from the background (lifecycle ON_START after a stop, not the first start), the inbox reloads once, because Realtime misses messages while the app is stopped. The initial load and this reload show no error dialog; opening Messages still reloads the list and shows errors.
+  - The Messages page's Refresh button is removed. The Realtime token refresh stays in `NotificationViewModel` only; it covers the whole client.
+- **Docs.** The Phase 3 test dates are corrected to 2026-09-27 (both sessions were on that day), and Phase 3's merge through PR #7 (`c184d9b`) is recorded.
+
+**Left as they are:** phone notifications while the app is closed (push; a later phase), Ratings & Reviews and Report a concern (Phase 5), the Identity Verified badge and the verification pages (Phase 6), the Home page, message alerts, the Home and Activity bells and the Alerts page.
+
+### 13.2 Migration `20261001_phase4_demo_fixes.sql`
+
+Run it by hand in the SQL Editor after `20260930_phase3_demo_fixes.sql` (see `supabase/README.md`). It is safe to run again. It adds one function, `get_my_response_rate()`, and changes no table, column, policy, table grant, trigger or existing function.
+
+- **SECURITY INVOKER, STABLE, `search_path = public`, no arguments.** It checks `is_salusalo_firebase_jwt()` first ("Not authenticated"), then takes the caller from `current_salusalo_profile_id()` ("Profile not found" when null). It reads only rows the caller may already select, so it needs no extra rights; it also filters explicitly on the caller being the chat's recipient or donor, and the `conversations` and `messages` RLS still applies on top.
+- The first message of a chat is the earliest by `created_at`, ties broken by `id`; "after" uses the same order.
+- EXECUTE is revoked from `public` and `anon` and granted to `authenticated`.
+- **Order:** it can run before or after the new build is installed. Older builds never call it. Until it runs, the new build shows "—" for Response Rate and "Your response rate could not be loaded…" on its page.
+
+Afterwards, run `supabase/tests/phase4_demo_fixes_check.sql` (read-only, 9 checks, expect all PASS): the function's result type; INVOKER, STABLE and `search_path=public`; EXECUTE for `authenticated` only; the helpers executable by `authenticated`; no INSERT, UPDATE or DELETE for clients on `conversations`, `messages` and `notifications`; SELECT-only policies on them; `notify_user` not executable by clients; `messages` and `notifications` in `supabase_realtime`; no UPDATE on `users` and no UPDATE or DELETE on `food_posts` for clients.
+
+### 13.3 Local results (PostgreSQL 16 and kotlinc, not the live project or a phone)
+
+- **Migrations:** all in order, with `20261001_phase4_demo_fixes.sql` applied twice at the end: no errors.
+- **Counts on sample data.** Caller A got received 5, replied 4. Counted and replied: a chat B started that A answered; a chat where B wrote twice before A replied (counted once); a chat whose first two messages share one `created_at`, where B's has the lower `id`; a chat made through the real RPCs (`start_listing_conversation`, `send_message`). Counted, not replied: a chat C started that A never answered. Not counted: a chat A started; a chat whose first message is 31 days old; a same-`created_at` tie where A's message has the lower `id`. B got 2 / 1, C 1 / 1, and a profile with no chats 0 / 0; each caller got only their own counts. With RLS bypassed (table owner), A still got 5 / 4, so the explicit participant filter works on its own.
+- **Refusals:** `anon` → "permission denied for function get_my_response_rate"; a token from another Firebase project → "Not authenticated"; no token → "Not authenticated"; a valid token without a profile → "Profile not found"; calling it with an argument → no such function; a direct insert into `messages` as `authenticated` → permission denied.
+- **Existing checks on the local copy:** `phase4_live_safety_check.sql` 21 passed, 0 failed, 0 skipped (after seeding a reservation and alert settings); `phase3_live_safety_check.sql` 14/14; `phase3_demo_fixes_check.sql` 13/13; the new `phase4_demo_fixes_check.sql` 9/9 PASS. In a rolled-back negative run (EXECUTE granted to `anon` and PUBLIC, SECURITY DEFINER, INSERT on `messages` granted, an UPDATE policy on `notifications`), checks 2, 3, 5 and 6 reported FAIL, as they should.
+- **Kotlin:** a kotlinc 2.2.10 type check of all sources after each commit: 0 errors, and only the three old deprecation warnings. It uses desktop Compose jars and hand-written stubs of the Android classes (including `AudioManager`, `RingtoneManager`, `Ringtone`, `AudioAttributes` and the lifecycle owner classes), because Google Maven is blocked here. **It is not an AGP build**, and nothing ran on a phone: the sound, the ringer-mode check, the lifecycle events, the unfiltered Realtime channel and the badge are untested. (The AGP build and the phone test came afterwards; see §13.6. The ringer-mode check is still untested on a phone.)
+
+### 13.4 Manual test (A → B → A; phone 1 = A, phone 2 = B)
+
+The steps as run on 2026-09-27 (§13.6). The first draft of this test had 30 steps. At the developer's request, this short version of 13 steps was run instead. The checks it left out are listed after the steps, and they are not tested.
+
+**Preconditions:**
+- The migration and `phase4_demo_fixes_check.sql` (9 of 9 PASS) have been run, and this branch is installed on both phones.
+- A (phone 1) and B (phone 2) are signed in, and already have at least one older chat with each other.
+- Phone 1's ringer is on normal, with the notification volume up.
+
+Each step is tagged [New] or [Regression].
+
+**A**
+
+1. [Regression] Post a new listing named `P4 FREE`: a donation, quantity 3, expiring a few days later, with one photo. It shows on Home.
+2. [New] Profile:
+   - "Demo verification & rating" is near the top, and "Verified badge and rating are demo values" is under the stats.
+   - Response Rate shows a percentage or "—", never "92%". Its page: write down "Chats started by others" and "Chats you replied to" (both 0 if it shows "No one has started a chat with you in the last 30 days, so there is no rate yet.").
+   - The gear (top right) opens "Settings". Its "Notifications" opens "Notification Preferences" with only "New messages", "Reservation updates" and "Notification sound", all on. There is no "Food recommendations", "Pickup reminders" or "Compact preview".
+3. [New] The Profile bell opens Alerts.
+   - Tap "Mark shown as read": back on Profile, the bell has no orange dot.
+   - On Home, write down the number on the chat icon (none = 0).
+   - Tap the chat icon: "Messages" has no Refresh button. Stay on this page.
+
+**B**
+
+4. [New] In Messages, open an older chat with A (not the top one) and send "Hello again". Then Home → `P4 FREE` → "Message Donor" → send "Is P4 still available?". Stay in this chat.
+
+**A (without touching the phone)**
+
+5. [New] Without anyone touching phone 1:
+   - The notification sound plays.
+   - The `P4 FREE` chat (B's name, "Your listing: P4 FREE") appears at the top with "Is P4 still available?" and an unread count of 1.
+   - The older chat is right below it, with "Hello again" and 1.
+   - On Home, the chat badge is 2 more than the number written down, and on Profile the bell has the orange dot.
+6. [New] Open the `P4 FREE` chat and reply "Yes, it is." Stay in it.
+
+**B**
+
+7. [Regression] "Yes, it is." appears by itself. Reply "On my way".
+
+**A**
+
+8. [New] Three checks:
+   - "On my way" appears in the open chat with no sound.
+   - Go back, open the older chat too, then go to Home: the chat badge is back to the number written down.
+   - Profile → Response Rate: both numbers are 1 more than in step 2.
+9. [New] Profile → "Notifications" → turn "Notification sound" off → "Save preferences" ("Preferences saved to your account.").
+   - Log out, then sign in again as A.
+   - Profile → Notifications: "Notification sound" is still off.
+   - Stay on Home.
+
+**B**
+
+10. [New] In the `P4 FREE` chat, send "Test 1".
+
+**A**
+
+11. [New] No sound, but the chat badge goes up by 1 by itself. Turn "Notification sound" back on and save. Press the phone's Home button, so Salu-Salo goes to the background without being swiped away.
+
+**B**
+
+12. [Regression] Home → `P4 FREE` → "Reserve" → "Review reservation":
+    - quantity 1;
+    - "Pickup at 5 PM?" in "Message to <A> (optional)";
+    - "Confirm reservation" → the "Reserved" receipt.
+
+**A**
+
+13. [New] No sound played while Salu-Salo was in the background. Reopened from Recents:
+    - the chat badge is 2 more than the number written down;
+    - Messages shows the `P4 FREE` chat at the top with "Pickup at 5 PM?";
+    - Alerts has "New reservation" ("<B> reserved 1 <unit> of P4 FREE.").
+
+**Left out of the short test (not tested):**
+- Sound settings:
+  - silent and vibrate mode (the ringer-mode check), and Do Not Disturb;
+  - the sound for a reservation alert (the one in step 13 arrived while the app was in the background);
+  - "New messages" turned off: no alert and no sound, while the chat badge still counts.
+- Settings pages:
+  - turning "Reservation updates" off and on again (the §8.7 regression; Save itself was used in steps 9 and 11);
+  - the other Settings pages opened from the gear (only "Notifications" was opened).
+- Response rate:
+  - B's own rate (a chat B started does not count for B; tested only on the local copy, §13.3);
+  - the Response Rate error text (it needs the phone offline while the page loads).
+- A Realtime reconnect while the app stays open.
+- The regressions in the draft's last step:
+  - removing a reserved listing and its "Listing removed" alert;
+  - Mark claimed, with Purchases or Claims and the Activity totals;
+  - email sign-up, editing a listing, and saving a listing.
+- Also not run: Google sign-in, the profile photo, the password change, and the password-reset email (never tested).
+
+### 13.5 Known limits
+
+- No sound while the app is in the background or closed, and no phone notifications. Push notifications are a later phase.
+- No sound for a message while "New messages" is off, because no alert is created. The chat badge still counts it.
+- Every new alert plays the sound, message and reservation alerts alike.
+- The sound switch belongs to the phone, not the account: every account signed in on that phone shares it.
+- Do Not Disturb was not checked. The app checks only the ringer mode, not Do Not Disturb. Depending on the phone and its Do Not Disturb settings, the sound may still play while the app is open. The push-notification phase should add a Do Not Disturb check (for example `NotificationManager.currentInterruptionFilter`) and test it.
+- A message missed during a Realtime reconnect while the app stays open appears the next time Messages opens, a chat is closed, or the app returns from the background.
+- The response rate counts a reply however late it came, and the period is fixed at 30 days. A note sent with a reservation starts a chat, so it counts. Chats of a never-reserved listing that is deleted disappear with it (existing cascade) and drop out of the rate.
+- Older builds still show "Food recommendations" and "Pickup reminders". Their stored values stay, and the new build writes them back unchanged.
+
+### 13.6 Results
+
+- **Build:** `gradlew.bat :app:assembleDebug --offline` at `3288d02`: BUILD SUCCESSFUL in 43s on 2026-09-27, with only old deprecation warnings (`ArrowBack`, `Logout`). The developer installed it from Android Studio on both phones.
+- **Migration:** `20261001_phase4_demo_fixes.sql` applied to the live project on 2026-09-27 in the SQL Editor, with `supabase/tests/phase4_demo_fixes_check.sql` in the same run: 9 of 9 PASS ([results log](#results-log)).
+- **Two-phone test:** the short §13.4 test, 13 steps, passed on 2026-09-27, reported as one result ("test passed").
+- **Not tested:** the checks listed under "Left out of the short test" in §13.4, including silent and vibrate mode, Do Not Disturb, the sound for a reservation alert, and "New messages" turned off. The developer chose to test them in the later push-notification phase, which reworks the same alert and sound code.
+- **Not merged yet.**

@@ -40,17 +40,102 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
     val message = _message.asStateFlow()
 
     private var threadJob: Job? = null
+    private var sessionJob: Job? = null
+    private var sessionProfileId: String? = null
+    /** Whether the running inbox load shows its error (a quiet load becomes visible when the page asks too). */
+    private var reportLoadError = false
 
-    fun loadConversations() {
-        if (_conversationsLoading.value) return
-        viewModelScope.launch {
-            _conversationsLoading.value = true
-            runCatching { repository.getMyConversations() }
-                .onSuccess { _conversations.value = it }
-                .onFailure { _message.value = errorText(it) }
-            _conversationsLoading.value = false
+    /**
+     * Loads the inbox and keeps it live for the signed-in profile, so the chat
+     * badge on Home is current before Messages is opened: a new message in any
+     * of the caller's threads updates that thread's preview, time and unread
+     * count. The initial load is quiet; a failure only leaves the badge as it is.
+     */
+    fun start(profileId: String) {
+        if (sessionJob?.isActive == true && sessionProfileId == profileId) return
+        sessionJob?.cancel()
+        sessionProfileId = profileId
+        loadConversations(quiet = true)
+        sessionJob = viewModelScope.launch {
+            repository.allMessageInserts()
+                .retryWhen { cause, attempt ->
+                    if (cause is CancellationException) false
+                    else { delay(minOf(30_000L, 2_000L shl attempt.toInt().coerceAtMost(4))); true }
+                }
+                .collect { applyIncoming(it, profileId) }
         }
     }
+
+    /** Reloads the inbox; [quiet] loads (Home start, return to the app) never show an error. */
+    fun loadConversations(quiet: Boolean = false) {
+        if (_conversationsLoading.value) {
+            if (!quiet) reportLoadError = true
+            return
+        }
+        reportLoadError = !quiet
+        viewModelScope.launch {
+            _conversationsLoading.value = true
+            try {
+                mergeConversations(repository.getMyConversations(), replace = true)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (reportLoadError) _message.value = errorText(error)
+            } finally {
+                _conversationsLoading.value = false
+            }
+        }
+    }
+
+    /** Applies a message that arrived through Realtime to its thread in the inbox. */
+    private suspend fun applyIncoming(message: ChatMessage, profileId: String) {
+        if (_conversations.value.none { it.id == message.conversationId }) {
+            // A thread the inbox does not have yet, for example a chat someone just started.
+            val summary = try {
+                repository.getConversation(message.conversationId)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                null
+            } ?: return
+            mergeConversations(listOf(summary), replace = false)
+            return
+        }
+        val sentAt = parseTimestamp(message.createdAt)
+        val mine = message.senderId == profileId
+        _conversations.update { list ->
+            val thread = list.firstOrNull { it.id == message.conversationId } ?: return@update list
+            // Already in the thread (a reload that ran after it was sent) or older than its last message.
+            if (sentAt != null && lastMessageTime(thread) >= sentAt) return@update list
+            val updated = thread.copy(
+                lastMessage = message.body,
+                lastMessageAt = message.createdAt,
+                lastMessageMine = mine,
+                unreadCount = if (mine || _active.value?.id == thread.id) thread.unreadCount else thread.unreadCount + 1
+            )
+            listOf(updated) + list.filterNot { it.id == thread.id }
+        }
+    }
+
+    /**
+     * Puts [loaded] threads into the inbox. A thread that Realtime already moved
+     * past the loaded copy keeps its newer state, and the open chat stays read.
+     * [replace] drops the threads that [loaded] does not contain.
+     */
+    private fun mergeConversations(loaded: List<ConversationSummary>, replace: Boolean) {
+        _conversations.update { current ->
+            val known = current.associateBy { it.id }
+            val activeId = _active.value?.id
+            val merged = loaded.map { fresh ->
+                val kept = known[fresh.id]?.takeIf { lastMessageTime(it) > lastMessageTime(fresh) } ?: fresh
+                if (kept.id == activeId) kept.copy(unreadCount = 0) else kept
+            }
+            val others = if (replace) emptyList() else current.filterNot { thread -> loaded.any { it.id == thread.id } }
+            (merged + others).sortedByDescending { parseTimestamp(it.lastMessageAt ?: it.createdAt) ?: Instant.EPOCH }
+        }
+    }
+
+    private fun lastMessageTime(thread: ConversationSummary) = parseTimestamp(thread.lastMessageAt) ?: Instant.EPOCH
 
     fun openForListing(foodPostId: String, draft: String = "") =
         open(draft) { repository.startListingConversation(foodPostId).id }
@@ -128,6 +213,9 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
     fun clearMessage() { _message.value = null }
 
     fun clearSession() {
+        sessionJob?.cancel()
+        sessionJob = null
+        sessionProfileId = null
         threadJob?.cancel()
         threadJob = null
         _conversations.value = emptyList()
