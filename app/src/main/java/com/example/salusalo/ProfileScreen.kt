@@ -71,10 +71,6 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
 
-    val preferences = remember {
-        context.getSharedPreferences("salusalo_profile", 0)
-    }
-
     // Successful Claims and Donations are this account's claimed reservations,
     // as recipient and as donor; together they equal Activity's Completed.
     val myReservations by reservationViewModel.myReservations.collectAsStateWithLifecycle()
@@ -101,13 +97,6 @@ fun ProfileScreen(
 
     var page by rememberSaveable { mutableStateOf("") }
     var notice by rememberSaveable { mutableStateOf("") }
-
-    var recommendations by rememberSaveable {
-        mutableStateOf(preferences.getBoolean("recommendations", true))
-    }
-    var pickupReminders by rememberSaveable {
-        mutableStateOf(preferences.getBoolean("pickupReminders", true))
-    }
 
     val reviews = remember {
         listOf(
@@ -560,10 +549,10 @@ fun ProfileScreen(
 
             ProfileMenuRow(
                 Icons.Outlined.Tune,
-                "Preferences",
-                "Notification and app preferences"
+                "Notifications",
+                "Message and reservation alerts, sound"
             ) {
-                page = "preferences"
+                page = "notifications"
             }
 
             HorizontalDivider(color = PLine)
@@ -626,10 +615,6 @@ fun ProfileScreen(
             initialPage = page,
             profile = remoteProfile,
             onProfileUpdated = onProfileUpdated,
-            onPreferencesSaved = { updatedRecommendations, updatedReminders ->
-                recommendations = updatedRecommendations
-                pickupReminders = updatedReminders
-            },
             onClose = { page = "" },
             successfulClaims = successfulClaims,
             successfulDonations = successfulDonations,

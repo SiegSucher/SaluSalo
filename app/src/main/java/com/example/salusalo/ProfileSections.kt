@@ -48,7 +48,6 @@ fun ProfileSections(
     initialPage: String,
     profile: UserProfile?,
     onProfileUpdated: (UserProfile) -> Unit,
-    onPreferencesSaved: (Boolean, Boolean) -> Unit,
     onClose: () -> Unit,
     successfulClaims: List<ReservationDisplay>,
     successfulDonations: List<ReservationDisplay>,
@@ -78,22 +77,13 @@ fun ProfileSections(
     var savingName by remember { mutableStateOf(false) }
     var feedback by rememberSaveable { mutableStateOf("") }
 
-    var recommendations by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("recommendations", true))
-    }
-    var reminders by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("pickupReminders", true))
-    }
     var sound by rememberSaveable {
         mutableStateOf(prefs.getBoolean("notificationSound", true))
     }
-    var compact by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("compactPreview", false))
-    }
 
     // Alert preferences saved to the account in Supabase (Phase 4). The
-    // recommendation and pickup-reminder switches are stored there too, but no
-    // alert uses them yet. Notification sound stays on this device.
+    // recommendations and pickup_reminders columns stay but have no switch; a
+    // save writes back the values it loaded. Notification sound stays on this phone.
     val serverPreferences by notificationViewModel.preferences.collectAsStateWithLifecycle()
     var messageAlerts by rememberSaveable { mutableStateOf(true) }
     var reservationAlerts by rememberSaveable { mutableStateOf(true) }
@@ -104,8 +94,6 @@ fun ProfileSections(
         serverPreferences?.let {
             messageAlerts = it.messageAlerts
             reservationAlerts = it.reservationAlerts
-            recommendations = it.recommendations
-            reminders = it.pickupReminders
         }
     }
 
@@ -141,13 +129,9 @@ fun ProfileSections(
 
     fun savePreferences() {
         prefs.edit()
-            .putBoolean("recommendations", recommendations)
-            .putBoolean("pickupReminders", reminders)
             .putBoolean("notificationSound", sound)
-            .putBoolean("compactPreview", compact)
             .apply()
 
-        onPreferencesSaved(recommendations, reminders)
         feedback = "Preferences saved on this device."
     }
 
@@ -159,9 +143,7 @@ fun ProfileSections(
         "verificationSteps" -> "Verification Process"
         "verificationStatus" -> "Request Status"
         "saved" -> "Saved Listings"
-        "preferences" -> "Preferences"
         "notifications" -> "Notification Preferences"
-        "app" -> "App Preferences"
         "account" -> "Account Details"
         "security" -> "Account Security"
         "password" -> "Change Password"
@@ -528,18 +510,6 @@ fun ProfileSections(
                                 }
                             }
 
-                            "preferences" -> {
-                                SectionLink(
-                                    "Notifications",
-                                    "Recommendations, pickup reminders, and sound"
-                                ) { navigate("notifications") }
-
-                                SectionLink(
-                                    "App preferences",
-                                    "Choose a compact or comfortable preview"
-                                ) { navigate("app") }
-                            }
-
                             "notifications" -> {
                                 SectionCard {
                                     if (serverPreferences == null) {
@@ -554,16 +524,6 @@ fun ProfileSections(
                                             "Reservation updates",
                                             reservationAlerts
                                         ) { reservationAlerts = it }
-
-                                        SectionToggle(
-                                            "Food recommendations",
-                                            recommendations
-                                        ) { recommendations = it }
-
-                                        SectionToggle(
-                                            "Pickup reminders",
-                                            reminders
-                                        ) { reminders = it }
                                     }
 
                                     SectionToggle(
@@ -573,11 +533,13 @@ fun ProfileSections(
                                 }
 
                                 Text(
-                                    "Alert choices are saved to your account and apply to " +
-                                            "the Alerts page. Food recommendations and pickup " +
-                                            "reminders are saved but not sent yet. Notification " +
-                                            "sound is stored on this device; phone notifications " +
-                                            "are not connected yet.",
+                                    "New messages and Reservation updates are saved to your " +
+                                            "account and decide which alerts you get on the Alerts " +
+                                            "page. Notification sound is saved on this phone: it " +
+                                            "plays the phone's notification sound when a new alert " +
+                                            "arrives while the app is open, and stays quiet in " +
+                                            "silent and vibrate mode. Phone notifications while " +
+                                            "the app is closed are not available yet.",
                                     fontSize = 12.sp
                                 )
 
@@ -589,51 +551,17 @@ fun ProfileSections(
                                     val base = serverPreferences
                                     if (base == null) {
                                         feedback = "Could not load your account's alert settings. " +
-                                                "Other preferences were saved on this device."
+                                                "Notification sound was saved on this phone."
                                     } else {
                                         notificationViewModel.savePreferences(
+                                            // recommendations and pickupReminders keep
+                                            // the values loaded from the account.
                                             base.copy(
                                                 messageAlerts = messageAlerts,
-                                                reservationAlerts = reservationAlerts,
-                                                recommendations = recommendations,
-                                                pickupReminders = reminders
+                                                reservationAlerts = reservationAlerts
                                             )
                                         ) { feedback = "Preferences saved to your account." }
                                     }
-                                }
-                            }
-
-                            "app" -> {
-                                SectionCard {
-                                    SectionToggle(
-                                        "Compact preview",
-                                        compact
-                                    ) { compact = it }
-
-                                    Text(
-                                        "Try the spacing below. This setting applies " +
-                                                "to this demonstration preview."
-                                    )
-                                }
-
-                                SectionCard {
-                                    listOf(
-                                        "Bread Assortment",
-                                        "Fresh Produce Box",
-                                        "Packed Rice Meals"
-                                    ).forEach {
-                                        Text(
-                                            it,
-                                            modifier = Modifier.padding(
-                                                vertical = if (compact) 3.dp else 15.dp
-                                            )
-                                        )
-                                        HorizontalDivider()
-                                    }
-                                }
-
-                                SectionButton("Save app preference") {
-                                    savePreferences()
                                 }
                             }
 
@@ -789,9 +717,9 @@ fun ProfileSections(
                                 ) { navigate("security") }
 
                                 SectionLink(
-                                    "Preferences",
-                                    "Notifications and app settings"
-                                ) { navigate("preferences") }
+                                    "Notifications",
+                                    "Message and reservation alerts, sound"
+                                ) { navigate("notifications") }
 
                                 SectionLink(
                                     "Verification",
