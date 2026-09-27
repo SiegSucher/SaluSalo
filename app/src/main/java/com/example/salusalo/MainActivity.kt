@@ -1387,6 +1387,9 @@ private fun HomeScreen(
 
     // The feed arrives newest first (created_at).
     val foods = remotePosts.map { it.toHomeFood() }
+    val discoveryPreferences = rememberDiscoveryPreferences(sessionKey)
+    val preferredFoods = remotePosts.filter { discoveryPreferences.matches(it) }.map { it.toHomeFood() }
+
 
     val visibleFoods = foods.filter { food ->
         val matchesSearch =
@@ -1705,7 +1708,7 @@ private fun HomeScreen(
                             Spacer(Modifier.width(6.dp))
 
                             Text(
-                                "Newest listings",
+                                if (discoveryPreferences.isActive) "For your preferences" else "Newest listings",
                                 modifier = Modifier.weight(1f),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
@@ -1719,7 +1722,7 @@ private fun HomeScreen(
                                     sort = "Newest"
                                 }
                             ) {
-                                Text("See all", fontSize = 12.sp)
+                                Text("Browse all", fontSize = 12.sp)
                             }
                         }
 
@@ -1767,7 +1770,11 @@ private fun HomeScreen(
                                 }
                             }
 
-                            foods.take(2).forEach { food ->
+                            if (preferredFoods.isEmpty() && !feedLoading) {
+                                Text("No matching food yet. You can still browse all listings below.",
+                                    modifier = Modifier.width(180.dp).padding(12.dp), color = Gray, fontSize = 13.sp)
+                            }
+                            preferredFoods.take(2).forEach { food ->
                                 RecommendationCard(
                                     title = food.title,
                                     photo = food.photo,
@@ -1924,13 +1931,7 @@ private fun HomeScreen(
             ) {
                 listOf(
                     "Home" to Icons.Outlined.Home,
-                    (
-                            if (page == "activity") {
-                                "Browse" to Icons.Outlined.Search
-                            } else {
-                                "Alerts" to Icons.Outlined.Notifications
-                            }
-                            ),
+                    "Alerts" to Icons.Outlined.Notifications,
                     "Post" to Icons.Outlined.Add,
                     "Activity" to Icons.Outlined.Timeline,
                     "Profile" to Icons.Outlined.Person
@@ -1957,12 +1958,6 @@ private fun HomeScreen(
 
                                     "Activity" -> {
                                         page = "activity"
-                                    }
-
-                                    "Browse" -> {
-                                        page = "all"
-                                        category = "All"
-                                        search = ""
                                     }
 
                                     "Profile" -> {
@@ -3069,7 +3064,7 @@ private fun listingPickupWindow(start: String?, end: String?): String? {
     val zone = java.time.ZoneId.systemDefault()
     val sameDay = from.atZone(zone).toLocalDate() == to.atZone(zone).toLocalDate()
     return listingTime(from) + " – " +
-        if (sameDay) listingClockFormat.format(to.atZone(zone)) else listingTime(to)
+            if (sameDay) listingClockFormat.format(to.atZone(zone)) else listingTime(to)
 }
 
 @Composable
@@ -3193,11 +3188,3 @@ private fun FoodActionButton(
         }
     }
 }
-
-
-
-
-
-
-
-

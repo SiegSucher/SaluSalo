@@ -83,7 +83,6 @@ fun ProfileScreen(
     val successfulClaims = myReservations.filter { it.reservation.status == ReservationStatus.CLAIMED }
     val successfulDonations = donorReservations.filter { it.reservation.status == ReservationStatus.CLAIMED }
     LaunchedEffect(Unit) { reservationViewModel.refresh() }
-    val unreadAlerts by notificationViewModel.unreadCount.collectAsStateWithLifecycle()
 
     // Name, photo and member-since date come only from the Supabase profile.
     val userRepository = remember { UserRepository() }
@@ -185,10 +184,6 @@ fun ProfileScreen(
         }
     }
 
-    fun openAccount() {
-        page = "account"
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -197,209 +192,55 @@ fun ProfileScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Profile header.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(80.dp)
-                    .height(86.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(74.dp)
-                        .clip(CircleShape)
-                        .background(PPale),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Same fallback as the food cards: the initial when there is
-                    // no photo or it cannot be loaded.
-                    if (photoUrl != null && !photoFailed) {
-                        AsyncImage(
-                            model = photoUrl,
-                            contentDescription = "Profile photo",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                            onError = { photoFailed = true }
-                        )
-                    } else {
-                        Text(
-                            displayName.take(1).uppercase(),
-                            fontSize = 30.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PGreen
-                        )
-                    }
-                    if (uploadingPhoto) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(30.dp),
-                            color = PGreen,
-                            strokeWidth = 2.dp
-                        )
-                    }
-                }
-
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(32.dp)
-                        .clickable(enabled = !uploadingPhoto && remoteProfile != null) {
-                            photoPicker.launch(arrayOf("image/*"))
-                        },
-                    shape = CircleShape,
-                    color = Color.White,
-                    shadowElevation = 3.dp
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Outlined.PhotoCamera,
-                            contentDescription = "Change profile photo",
-                            tint = PDark,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-                }
+        // Profile identity. Account controls live only under the settings gear.
+        Box(Modifier.fillMaxWidth()) {
+            IconButton(onClick = { page = "settings" }, modifier = Modifier.align(Alignment.TopEnd)) {
+                Icon(Icons.Outlined.Settings, "Settings", tint = PDark)
             }
-
-            Spacer(Modifier.width(10.dp))
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        displayName,
-                        modifier = Modifier.weight(1f, fill = false),
-                        fontSize = 23.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PDark
-                    )
-                    Spacer(Modifier.width(5.dp))
-                    Icon(
-                        Icons.Outlined.Eco,
-                        contentDescription = null,
-                        tint = PGreen,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                // Green once Firebase has confirmed the email; grey until then.
-                // Both open the Verification page.
-                Surface(
-                    modifier = Modifier.clickable { page = "verification" },
-                    shape = RoundedCornerShape(20.dp),
-                    color = if (emailVerified) PPale else Color(0xFFEDEEF0)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(
-                            horizontal = 8.dp,
-                            vertical = 5.dp
-                        ),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            if (emailVerified) Icons.Outlined.MarkEmailRead else Icons.Outlined.MarkEmailUnread,
-                            contentDescription = null,
-                            tint = if (emailVerified) PGreen else PGray,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            if (emailVerified) "Email verified" else "Email not verified",
-                            color = if (emailVerified) PGreen else PGray,
-                            fontSize = 10.sp
-                        )
-                    }
-                }
-            }
-
-            Column {
-                IconButton(
-                    onClick = onAlerts,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Box {
-                        Icon(
-                            Icons.Outlined.Notifications,
-                            contentDescription = "Open alerts",
-                            tint = PDark
-                        )
-                        // The dot shows only while there are unread alerts.
-                        if (unreadAlerts > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFFF6900))
-                            )
+            Column(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(106.dp)) {
+                    Box(Modifier.size(100.dp).clip(CircleShape).background(PPale), contentAlignment = Alignment.Center) {
+                        if (photoUrl != null && !photoFailed) {
+                            AsyncImage(model = photoUrl, contentDescription = "Profile photo",
+                                contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                                onError = { photoFailed = true })
+                        } else {
+                            Text(displayName.take(1).uppercase(), fontSize = 40.sp, fontWeight = FontWeight.Bold, color = PGreen)
                         }
+                        if (uploadingPhoto) CircularProgressIndicator(Modifier.size(30.dp), color = PGreen)
+                    }
+                    FilledIconButton(
+                        onClick = { photoPicker.launch(arrayOf("image/*")) },
+                        enabled = !uploadingPhoto && remoteProfile != null,
+                        modifier = Modifier.align(Alignment.BottomEnd).size(36.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color.White, contentColor = PDark)
+                    ) { Icon(Icons.Outlined.PhotoCamera, "Change profile photo", Modifier.size(20.dp)) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(displayName, modifier = Modifier.weight(1f, fill = false), fontSize = 23.sp, fontWeight = FontWeight.Bold, color = PDark)
+                    IconButton(onClick = { page = "edit_profile" }, enabled = remoteProfile != null) {
+                        Icon(Icons.Outlined.Edit, "Edit profile", tint = PGreen, modifier = Modifier.size(21.dp))
                     }
                 }
-
-                IconButton(
-                    onClick = { page = "settings" },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        Icons.Outlined.Settings,
-                        contentDescription = "Settings",
-                        tint = PDark
-                    )
-                }
+                Text(remoteProfile?.bio?.takeIf { it.isNotBlank() } ?: "Add a little about yourself using the pencil.",
+                    color = PGray, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
-
-        // Statistics.
         ProfilePanel {
-            Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ProfileStat(
-                    Icons.Outlined.Spa,
-                    if (reservationsLoaded) successfulClaims.size.toString() else "—",
-                    "Successful\nClaims"
-                ) {
-                    page = "claims"
+            Row(Modifier.fillMaxWidth()) {
+                listOf(
+                    Triple(if (reservationsLoaded) successfulClaims.size.toString() else "—", "Claims", "claims"),
+                    Triple(if (reservationsLoaded) successfulDonations.size.toString() else "—", "Donations", "donations"),
+                    Triple(ratingSummary?.average?.let(::formatRatingAverage) ?: "—", "Rating", "reviews")
+                ).forEach { (value, label, destination) ->
+                    Column(Modifier.weight(1f).clickable { page = destination }.padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = PDark)
+                        Text(label, fontSize = 12.sp, color = PGray)
+                    }
                 }
-                ProfileStat(
-                    Icons.Outlined.CardGiftcard,
-                    if (reservationsLoaded) successfulDonations.size.toString() else "—",
-                    "Successful\nDonations"
-                ) {
-                    page = "donations"
-                }
-                ProfileStat(
-                    Icons.Outlined.Star,
-                    ratingSummary?.average?.let(::formatRatingAverage) ?: "—",
-                    "Overall\nRating",
-                    iconColor = PGold
-                ) {
-                    page = "reviews"
-                }
-                ProfileStat(
-                    Icons.Outlined.Schedule,
-                    responseRate?.percent?.let { "$it%" } ?: "—",
-                    "Response\nRate"
-                ) {
-                    page = "response"
-                }
-                ProfileStat(
-                    Icons.Outlined.CalendarMonth, memberSince, "Member\nSince"
-                ) {
-                    page = "membership"
-                }
-            }
             }
         }
-
         // Verification panel.
         ProfilePanel(pale = true) {
             Row(verticalAlignment = Alignment.Top) {
@@ -490,169 +331,46 @@ fun ProfileScreen(
             }
         }
 
-        // Ratings and reviews.
         ProfilePanel {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Ratings & Reviews",
-                    modifier = Modifier.weight(1f),
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp
-                )
-                TextButton(onClick = { page = "reviews" }) {
-                    Text("View all", fontSize = 11.sp, color = PGreen)
-                }
+                Icon(Icons.Outlined.StarOutline, null, tint = PGreen)
+                Spacer(Modifier.width(8.dp))
+                Text("Ratings & Reviews", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = { page = "reviews" }) { Text("View all", color = PGreen) }
             }
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Surface(
-                    modifier = Modifier.width(92.dp),
-                    color = PPale,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(
-                            horizontal = 8.dp,
-                            vertical = 24.dp
-                        ),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(9.dp)
-                    ) {
-                        val average = ratingSummary?.average
-                        val count = ratingSummary?.count ?: 0
-                        Icon(
-                            Icons.Outlined.Star,
-                            contentDescription = null,
-                            tint = PGold,
-                            modifier = Modifier.size(26.dp)
-                        )
-                        Text(
-                            average?.let(::formatRatingAverage) ?: "—",
-                            fontSize = 29.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PDark
-                        )
-                        Text("Overall Rating", fontSize = 10.sp)
-                        if (average != null && count > 0) {
-                            Text(starsText(average), color = PGold, fontSize = 13.sp)
-                            Text("(${reviewCountText(count)})", fontSize = 10.sp)
-                        } else if (ratingSummary != null) {
-                            Text("No reviews yet", fontSize = 10.sp)
-                        }
-                    }
+            val recent = receivedReviews
+            when {
+                recent == null && reviewsFailed -> {
+                    Text("Your reviews could not be loaded.", color = PGray)
+                    TextButton(onClick = { loadReviews() }) { Text("Try again") }
                 }
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        "Recent reviews",
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 12.sp
-                    )
-
-                    val recent = receivedReviews
-                    when {
-                        recent == null && reviewsFailed ->
-                            Text("Your reviews could not be loaded.", fontSize = 10.sp, color = PGray)
-                        recent == null ->
-                            Text("Loading your reviews…", fontSize = 10.sp, color = PGray)
-                        recent.isEmpty() ->
-                            Text(NO_RATING_LINE, fontSize = 10.sp, lineHeight = 13.sp, color = PGray)
-                        else -> recent.take(3).forEach { review ->
-                            ProfileReviewRow(review)
-                        }
-                    }
-
-                    TextButton(
-                        onClick = { page = "reviews" },
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text(
-                            "View all reviews",
-                            color = PGreen,
-                            fontSize = 11.sp
-                        )
-                    }
+                recent == null -> Text("Loading your reviews…", color = PGray)
+                recent.isEmpty() -> Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Outlined.StarOutline, null, tint = PGray, modifier = Modifier.size(32.dp))
+                    Text("No reviews yet", fontWeight = FontWeight.Medium)
+                    Text("Reviews from people who picked up your food appear here.", fontSize = 12.sp, color = PGray,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
+                else -> recent.take(2).forEach { ProfileReviewRow(it) }
             }
         }
-
-        // Menu.
         ProfilePanel {
-            ProfileMenuRow(
-                Icons.Outlined.BookmarkBorder,
-                "Saved Listings",
-                "Listings you bookmarked"
-            ) {
-                page = "saved"
+            ProfileMenuRow(Icons.Outlined.BookmarkBorder, "Saved Listings", "Food you bookmarked") { page = "saved" }
+        }
+        // Retain the existing response and membership destinations in a compact footer.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = { page = "response"; loadResponseRate() }) {
+                Text("Response: ${responseRate?.percent?.let { "$it%" } ?: "—"}", color = PGray, fontSize = 11.sp)
             }
-
-            HorizontalDivider(color = PLine)
-
-            ProfileMenuRow(
-                Icons.Outlined.Tune,
-                "Notifications",
-                "Message and reservation alerts, sound"
-            ) {
-                page = "notifications"
-            }
-
-            HorizontalDivider(color = PLine)
-
-            ProfileMenuRow(
-                Icons.Outlined.Person,
-                "Account Settings",
-                "Manage your account details and security"
-            ) {
-                openAccount()
-            }
-
-            HorizontalDivider(color = PLine)
-
-            ProfileMenuRow(
-                Icons.Outlined.Logout,
-                "Log out",
-                "Sign out of your Salu-Salo account"
-            ) {
-                onLogout()
+            TextButton(onClick = { page = "membership" }) {
+                Text("Member since $memberSince", color = PGray, fontSize = 11.sp)
             }
         }
-
-        // Trust footer.
-        ProfilePanel(pale = true) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ProfileShield()
-                Spacer(Modifier.width(10.dp))
-
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "We value trust and safety",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        "Rate the people you get food from, and report anything " +
-                                "that doesn't feel right.",
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp,
-                        color = PGray
-                    )
-                }
-            }
-
-            OutlinedButton(
-                onClick = {
-                    page = "safety"
-                },
-                modifier = Modifier.align(Alignment.End),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Text("Learn more", fontSize = 11.sp, color = PGreen)
-            }
+        OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)) {
+            Icon(Icons.Outlined.Logout, null, tint = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.width(8.dp))
+            Text("Log out", color = MaterialTheme.colorScheme.error)
         }
     }
 
