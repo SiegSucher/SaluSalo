@@ -87,6 +87,17 @@ Run `migrations/20260930_phase3_demo_fixes.sql` by hand in the SQL Editor after 
 - **`get_my_saved_listing_names()`** (SECURITY DEFINER) returns the name and cover path of the caller's own saved listings, including ones the caller can no longer read (expired or fully reserved), so Saved Listings can still show them.
 - **Known limit:** someone who only chatted about a listing (no reservation) keeps that chat after the listing is removed.
 
+## Phase 4 demo fixes: response rate
+
+Run `migrations/20261001_phase4_demo_fixes.sql` by hand in the SQL Editor after `20260930_phase3_demo_fixes.sql`. It is safe to run again, and it can run before or after installing the new app build: it only adds a function that older builds never call. Until it has run, the new build's Profile shows "—" for Response Rate and the Response Rate page shows its "could not be loaded" message; everything else works.
+
+- **`get_my_response_rate()`** returns one row, `(received, replied, period_days)`, for the caller only (taken from the token; the function has no arguments). Over the last 30 days: `received` counts the caller's conversations whose first message was sent by the other participant within the last 30 days; `replied` counts those in which the caller sent a message after that first message. Messages are ordered by `created_at`, then `id`. The app shows `round(replied / received × 100)`, or no rate when `received` is 0.
+- **SECURITY INVOKER**, `stable`, `search_path = public`. It filters explicitly on the caller being the conversation's recipient or donor, and the existing `conversations` and `messages` RLS applies on top, so it needs no extra rights. Executable by `authenticated` only (revoked from PUBLIC and `anon`).
+- **Nothing else changes:** no table, column, policy, table grant or trigger, and no Phase 3 or Phase 4 function. Clients still only read `conversations`, `messages` and `notifications`.
+- **Known limits:** a note sent with a reservation starts a chat, so it counts for the donor; chats of a listing deleted before anyone reserved it are deleted with it and drop out of the rate; a reply counts however late it comes.
+
+After running it, run `tests/phase4_demo_fixes_check.sql` (below).
+
 ## Safety checks (`tests/`)
 
 The files in `tests/` are not migrations and change nothing. `tests/phase4_live_safety_check.sql` checks that the live Phase 4 rules still refuse what they should. Paste it into the SQL Editor (role `postgres`) and run it. It pretends to be the two participants of the most recent chat and the newest other account, tries forbidden actions, and reports each check as PASS, FAIL or SKIP. It always ends with an error on purpose (`SAFETY CHECK FINISHED: …`); the error rolls back everything the check did. It needs at least one chat with messages, and a third account for the outsider checks.
@@ -95,3 +106,5 @@ After running `20260930_phase3_demo_fixes.sql`, run two more files the same way:
 
 - `tests/phase3_demo_fixes_check.sql` only reads the catalog and returns one row per check (PASS or FAIL): the new constraints, that `food_posts` has no DELETE or UPDATE policy or privilege, and the grants of the new and changed functions.
 - `tests/phase3_live_safety_check.sql` works like the Phase 4 check and also always ends with an error that undoes everything. It picks the newest listing that is unexpired and not removed, its donor and the newest other account. It checks that a direct DELETE by the donor, a removal by the outsider, without a login or with another project's token are refused, that the outsider's saved names are their own only, and, after marking the listing `REMOVED`, that it can no longer be edited, reserved, chatted about, saved or seen. Checks it cannot run are reported as SKIP.
+
+After running `20261001_phase4_demo_fixes.sql`, run `tests/phase4_demo_fixes_check.sql`. It only reads the catalog and returns one row per check (PASS or FAIL): that `get_my_response_rate()` exists with its result columns, is SECURITY INVOKER with `search_path=public` and is executable by `authenticated` but not by `anon` or PUBLIC; that clients still have no INSERT, UPDATE or DELETE and only SELECT policies on `conversations`, `messages` and `notifications`; that `notify_user` is still not executable by clients; that `messages` and `notifications` are still in `supabase_realtime`; and that there is still no UPDATE on `users` and no UPDATE or DELETE on `food_posts` for clients.
