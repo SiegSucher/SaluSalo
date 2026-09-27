@@ -11,8 +11,10 @@ import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
@@ -31,6 +33,9 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     val preferences = _preferences.asStateFlow()
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
+    private val _newAlerts = MutableSharedFlow<AppNotification>(extraBufferCapacity = 8)
+    /** Alerts that arrive live through Realtime (never the initial load); they play the alert sound. */
+    val newAlerts = _newAlerts.asSharedFlow()
 
     private var sessionJob: Job? = null
     private var sessionProfileId: String? = null
@@ -53,7 +58,11 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                         if (cause is CancellationException) false
                         else { delay(minOf(30_000L, 2_000L shl attempt.toInt().coerceAtMost(4))); true }
                     }
-                    .collect { alert -> _notifications.update { list -> listOf(alert) + list.filterNot { it.id == alert.id } } }
+                    .collect { alert ->
+                        val isNew = _notifications.value.none { it.id == alert.id }
+                        _notifications.update { list -> listOf(alert) + list.filterNot { it.id == alert.id } }
+                        if (isNew) _newAlerts.tryEmit(alert)
+                    }
             }
             launch {
                 while (true) {

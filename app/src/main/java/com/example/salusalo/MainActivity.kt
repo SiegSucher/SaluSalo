@@ -16,6 +16,7 @@ import com.example.salusalo.viewmodel.MessageViewModel
 import com.example.salusalo.viewmodel.NotificationViewModel
 import com.example.salusalo.model.NotificationType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.Instant
 import java.time.LocalTime
@@ -1292,6 +1293,27 @@ private fun HomeScreen(
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { notificationViewModel.start(it) } }
     // Bookmarks load once per session, so the icons show the right state at once.
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { savedListingViewModel.start(it) } }
+    // A new alert plays the phone's notification sound while the app is on
+    // screen, unless it is a message in the chat that is open. The switch is
+    // read when the alert arrives.
+    val context = LocalContext.current
+    val alertSound = remember { AlertSoundPlayer(context) }
+    var appResumed by remember { mutableStateOf(false) }
+    LifecycleResumeEffect(alertSound) {
+        appResumed = true
+        onPauseOrDispose {
+            appResumed = false
+            alertSound.stop()
+        }
+    }
+    val openChatId by rememberUpdatedState(activeChat?.id)
+    LaunchedEffect(notificationViewModel) {
+        notificationViewModel.newAlerts.collect { alert ->
+            val inOpenChat = alert.type == NotificationType.MESSAGE &&
+                    alert.conversationId != null && alert.conversationId == openChatId
+            if (appResumed && !inOpenChat && notificationSoundOn(context)) alertSound.play()
+        }
+    }
     // Opening a chat marks its message alerts read on the server; mirror that
     // for alerts that arrive while the chat is open.
     LaunchedEffect(activeChat?.id, alerts) {

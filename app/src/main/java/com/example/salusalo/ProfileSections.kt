@@ -78,7 +78,7 @@ fun ProfileSections(
     var feedback by rememberSaveable { mutableStateOf("") }
 
     var sound by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("notificationSound", true))
+        mutableStateOf(notificationSoundOn(context))
     }
 
     // Alert preferences saved to the account in Supabase (Phase 4). The
@@ -128,10 +128,7 @@ fun ProfileSections(
     }
 
     fun savePreferences() {
-        prefs.edit()
-            .putBoolean("notificationSound", sound)
-            .apply()
-
+        setNotificationSoundOn(context, sound)
         feedback = "Preferences saved on this device."
     }
 
