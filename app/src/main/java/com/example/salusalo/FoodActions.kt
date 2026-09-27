@@ -25,9 +25,19 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Verified
+import com.example.salusalo.data.ReviewRepository
+import com.example.salusalo.model.DONOR_REVIEWS_LIMIT
+import com.example.salusalo.model.ListingDonorProfile
+import com.example.salusalo.model.ReportTarget
+import com.example.salusalo.model.ReviewItem
 import com.example.salusalo.model.formatPeso
+import com.example.salusalo.model.formatRatingAverage
 import com.example.salusalo.model.reservationTotal
+import com.example.salusalo.model.reviewCountText
 import com.example.salusalo.viewmodel.ReserveResult
+import kotlinx.coroutines.CancellationException
 
 private val ActionGreen = Color(0xFF28754A)
 private val ActionCream = Color(0xFFF8F7EF)
@@ -36,13 +46,23 @@ private val ActionDark = Color(0xFF203E2C)
 
 /**
  * The Pickup location and Donor/Seller pages of a listing. Questions go to the
- * real chat through [onMessage] (with a prefilled draft).
+ * real chat through [onMessage] (with a prefilled draft). The Donor/Seller page
+ * also shows the donor's "Email verified" badge, rating and latest reviews
+ * (names only, loaded fresh when it opens) and "Report <name>".
  */
 @Composable
 fun FoodActionsDialog(
     action: String,
+    foodPostId: String,
     foodTitle: String,
     provider: String,
+    // The donor's real name, or null when it could not be loaded.
+    donorName: String?,
+    isOwnListing: Boolean,
+    // From the listing row until the page's own load finishes.
+    donorEmailVerified: Boolean,
+    donorRatingAverage: Double?,
+    donorReviewCount: Int,
     photo: Int,
     // The listing's pickup_location and its signed cover URL (null if none).
     pickupLocation: String,
@@ -168,6 +188,27 @@ fun FoodActionsDialog(
             }
 
             "provider" -> {
+                // The donor's badge, rating and latest reviews, loaded fresh when
+                // the page opens. Until then the listing row's values are shown.
+                val reviewRepository = remember { ReviewRepository() }
+                var donor by remember(foodPostId) { mutableStateOf<ListingDonorProfile?>(null) }
+                var reviews by remember(foodPostId) { mutableStateOf<List<ReviewItem>?>(null) }
+                var reviewsFailed by remember(foodPostId) { mutableStateOf(false) }
+                LaunchedEffect(foodPostId) {
+                    try {
+                        donor = reviewRepository.getListingDonorProfile(foodPostId)
+                        reviews = reviewRepository.getListingDonorReviews(foodPostId)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        reviewsFailed = true
+                    }
+                }
+                val verified = donor?.emailVerified ?: donorEmailVerified
+                val average = if (donor != null) donor?.ratingAverage else donorRatingAverage
+                val count = donor?.ratingCount ?: donorReviewCount
+                var reporting by rememberSaveable(foodPostId) { mutableStateOf(false) }
+
                 ActionCard {
                     Text(
                         provider.take(1).uppercase(),
@@ -192,9 +233,81 @@ fun FoodActionsDialog(
                         color = ActionGreen
                     )
 
+                    if (verified) {
+                        Surface(shape = RoundedCornerShape(20.dp), color = ActionPale) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Verified,
+                                    contentDescription = null,
+                                    tint = ActionGreen,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("Email verified", color = ActionGreen, fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    Text(
+                        if (average != null && count > 0) {
+                            "★ ${formatRatingAverage(average)} • ${reviewCountText(count)}"
+                        } else {
+                            "No reviews yet"
+                        },
+                        color = if (count > 0) RatingAmber else ActionDark,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
                     ActionButton(
                         text = if (donation) "Message donor" else "Message seller",
                         onClick = { onMessage("") }
+                    )
+                }
+
+                val loaded = reviews
+                if (count > 0 || reviewsFailed || !loaded.isNullOrEmpty()) {
+                    Text(
+                        "Reviews",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+
+                    ActionCard {
+                        when {
+                            loaded == null && reviewsFailed -> Text(
+                                "Reviews could not be loaded. Check your internet connection and try again.",
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 13.sp
+                            )
+                            loaded == null -> Text("Loading reviews…", fontSize = 13.sp)
+                            else -> {
+                                loaded.forEachIndexed { index, review ->
+                                    if (index > 0) HorizontalDivider()
+                                    ReviewRow(review)
+                                }
+                                if (count > loaded.size && loaded.size >= DONOR_REVIEWS_LIMIT) {
+                                    Text(
+                                        "Showing the latest ${loaded.size} reviews.",
+                                        fontSize = 12.sp,
+                                        color = ActionDark
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (reporting) {
+                    val person = donorName ?: if (donation) "this donor" else "this seller"
+                    ReportPage(
+                        target = ReportTarget.DONOR,
+                        targetId = foodPostId,
+                        heading = "Report $person",
+                        prompt = "Why are you reporting $person?",
+                        onClose = { reporting = false }
                     )
                 }
 
@@ -226,6 +339,22 @@ fun FoodActionsDialog(
                         text = "Return to food details",
                         onClick = onClose
                     )
+                }
+
+                // Nobody reports themself.
+                if (!isOwnListing) {
+                    OutlinedButton(
+                        onClick = { reporting = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(
+                            "Report " + (donorName ?: if (donation) "this donor" else "this seller"),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }
@@ -427,9 +556,9 @@ fun ReservationReviewDialog(
     }
 }
 
-/** Full-screen page with a Back button and a title, shared by the pages above. */
+/** Full-screen page with a Back button and a title, shared by the pages above and ReviewsAndReports.kt. */
 @Composable
-private fun ActionPage(
+internal fun ActionPage(
     heading: String,
     onBack: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
@@ -531,7 +660,7 @@ private fun ListingCover(
 }
 
 @Composable
-private fun ActionCard(
+internal fun ActionCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(
@@ -567,7 +696,7 @@ private fun ActionLine(label: String, value: String) {
 }
 
 @Composable
-private fun ActionButton(
+internal fun ActionButton(
     text: String,
     enabled: Boolean = true,
     onClick: () -> Unit

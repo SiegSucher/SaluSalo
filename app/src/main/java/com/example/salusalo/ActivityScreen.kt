@@ -31,6 +31,8 @@ import com.example.salusalo.viewmodel.FoodViewModel
 import com.example.salusalo.viewmodel.text
 import com.example.salusalo.viewmodel.ReservationViewModel
 import com.example.salusalo.viewmodel.MessageViewModel
+import com.example.salusalo.viewmodel.ReviewResult
+import com.example.salusalo.model.MyReview
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -67,8 +69,26 @@ private data class ActivityRecord(
     val details: String = "",
     val ownedPost: FoodPost? = null,
     val reservationId: String? = null,
-    val donorCanClaim: Boolean = false
+    val donorCanClaim: Boolean = false,
+    // A claimed reservation this account received: its donor can be rated.
+    val canRate: Boolean = false,
+    // The listing's donor, for "Rate <name>"; null when unknown.
+    val donorName: String? = null,
+    val priced: Boolean = false
 )
+
+/** The review page that is open: which reservation, with what it showed when opened. */
+private data class RatingTarget(
+    val reservationId: String,
+    val title: String,
+    val listingName: String,
+    val summaryLine: String,
+    val existing: MyReview?
+)
+
+/** "Rate <name>", or "Rate the donor/seller" when the name is unknown. */
+private fun rateTitle(record: ActivityRecord): String =
+    "Rate " + (record.donorName ?: if (record.priced) "the seller" else "the donor")
 
 @Composable
 fun ActivityScreen(
@@ -100,6 +120,14 @@ fun ActivityScreen(
     // then clear them so they do not reappear later in the food details dialog.
     val reservationMessage by reservationViewModel.message.collectAsStateWithLifecycle()
     val reservationSaving by reservationViewModel.saving.collectAsStateWithLifecycle()
+    // This account's own reviews, and the page to rate a claimed pickup's donor.
+    val myReviews by reservationViewModel.myReviews.collectAsStateWithLifecycle()
+    val reviewResult by reservationViewModel.reviewResult.collectAsStateWithLifecycle()
+    var rating by remember { mutableStateOf<RatingTarget?>(null) }
+    // A new or changed review changes the donor's rating on Home, so reload the feed.
+    LaunchedEffect(reviewResult) {
+        if (reviewResult is ReviewResult.Saved) foodViewModel.loadAvailablePosts()
+    }
     val reservationsLoadFailed by reservationViewModel.loadFailed.collectAsStateWithLifecycle()
     var reservationNotice by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(reservationMessage) {
@@ -190,7 +218,10 @@ fun ActivityScreen(
                     "\nListing: Removed by the donor\nThe donor has since removed this listing."
                 else -> ""
             },
-            reservationId = reservation.id, donorCanClaim = false
+            reservationId = reservation.id, donorCanClaim = false,
+            canRate = claimed,
+            donorName = post.donorName?.takeIf { it.isNotBlank() },
+            priced = priced
         )
     }
 
@@ -594,6 +625,23 @@ fun ActivityScreen(
                             Text(if (record.donorCanClaim) "Message recipient" else "Message donor")
                         }
                     }
+                    // Only a claimed pickup this account received can be rated.
+                    record.reservationId?.takeIf { record.canRate }?.let { reservationId ->
+                        val existing = myReviews[reservationId]
+                        OutlinedButton(onClick = {
+                            reservationViewModel.clearReviewResult()
+                            rating = RatingTarget(
+                                reservationId = reservationId,
+                                title = if (existing != null) "Change your review" else rateTitle(record),
+                                listingName = record.title,
+                                summaryLine = record.quantity,
+                                existing = existing
+                            )
+                            selectedId = null
+                        }) {
+                            Text(if (existing != null) "Change your review" else rateTitle(record))
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -611,6 +659,25 @@ fun ActivityScreen(
             },
             dismissButton = {
                 TextButton(onClick = { selectedId = null }) { Text("Close") }
+            }
+        )
+    }
+
+    rating?.let { target ->
+        RateDonorPage(
+            reservationId = target.reservationId,
+            title = target.title,
+            listingName = target.listingName,
+            summaryLine = target.summaryLine,
+            existing = target.existing,
+            saving = reservationSaving,
+            result = reviewResult,
+            onSend = { stars, comment ->
+                reservationViewModel.submitReview(target.reservationId, stars, comment)
+            },
+            onClose = {
+                rating = null
+                reservationViewModel.clearReviewResult()
             }
         )
     }
