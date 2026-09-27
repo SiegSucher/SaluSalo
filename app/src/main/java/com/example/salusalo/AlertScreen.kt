@@ -53,7 +53,8 @@ fun AlertsScreen(
     notificationViewModel: NotificationViewModel,
     onOpenConversation: (String) -> Unit,
     onOpenActivity: (String) -> Unit,
-    onOpenClaimedReservation: (String?) -> Unit
+    onOpenClaimedReservation: (String?) -> Unit,
+    onOpenRemovedReservation: (String?) -> Unit
 ) {
     val alerts by notificationViewModel.notifications.collectAsStateWithLifecycle()
     val preferences by notificationViewModel.preferences.collectAsStateWithLifecycle()
@@ -254,6 +255,8 @@ fun AlertsScreen(
                                     alert.conversationId?.let(onOpenConversation)
                                 NotificationType.RESERVATION_CLAIMED ->
                                     onOpenClaimedReservation(alert.reservationId)
+                                NotificationType.RESERVATION_REMOVED ->
+                                    onOpenRemovedReservation(alert.reservationId)
                                 else ->
                                     onOpenActivity("My Donations")
                             }
@@ -347,6 +350,7 @@ private fun AlertListingCard(
         NotificationType.RESERVATION_CREATED -> "🧺"
         NotificationType.RESERVATION_CANCELLED -> "↩"
         NotificationType.RESERVATION_CLAIMED -> "✓"
+        NotificationType.RESERVATION_REMOVED -> "✕"
     }
 
     Surface(
@@ -439,7 +443,7 @@ private fun formatAlertTime(value: String): String {
     val instant = parseTimestamp(value) ?: return ""
     val zone = ZoneId.systemDefault()
     val pattern = if (instant.atZone(zone).toLocalDate() == LocalDate.now(zone)) "h:mm a" else "MMM d, h:mm a"
-    return DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).withZone(zone).format(instant)
+    return DateTimeFormatter.ofPattern(pattern, Locale.ENGLISH).withZone(zone).format(instant)
 }
 
 @Composable

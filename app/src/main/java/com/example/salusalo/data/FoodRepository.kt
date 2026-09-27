@@ -6,6 +6,7 @@ import com.example.salusalo.model.FoodPostEdit
 import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.ListingDonorName
 import com.example.salusalo.model.NewFoodPost
+import com.example.salusalo.model.RemoveFoodPostResult
 import com.google.firebase.auth.FirebaseAuth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
@@ -48,7 +49,11 @@ class FoodRepository(
     suspend fun getUserFoodPosts(): List<FoodPost> {
         val profile = userRepository.getCurrentProfile()
         val posts = supabase.from("food_posts").select {
-            filter { filter("donor_id", FilterOperator.EQ, profile.id) }
+            filter {
+                filter("donor_id", FilterOperator.EQ, profile.id)
+                // Removed listings stay in the database for their reservations only.
+                filter("status", FilterOperator.NEQ, FoodPostStatus.REMOVED.name)
+            }
         }.decodeList<FoodPost>()
         return posts.map { post -> post.withSignedImageUrl(bucket) }
     }
@@ -162,16 +167,22 @@ class FoodRepository(
     suspend fun signedExtraPhotoUrls(post: FoodPost): List<String?> =
         post.extraImagePaths.map { path -> bucket.signedUrlOrNull(path) }
 
-    suspend fun deleteFoodPost(post: FoodPost) {
-        val profile = userRepository.getCurrentProfile()
-        require(post.donorId == profile.id) { "You can delete only your own listing." }
-        supabase.from("food_posts").delete {
-            filter { filter("id", FilterOperator.EQ, post.id) }
+    /**
+     * Deletes or removes the caller's own listing through remove_my_food_post().
+     * The server finds the caller from the token. A listing nobody ever reserved
+     * is deleted, and then its photos too (best effort: a failure only leaves
+     * photos behind in Storage). A listing with reservations is only hidden, so
+     * its photos stay for those reservations.
+     */
+    suspend fun removeMyFoodPost(post: FoodPost): RemoveFoodPostResult {
+        val result = supabase.postgrest.rpc("remove_my_food_post", buildJsonObject {
+            put("p_food_post_id", post.id)
+        }).decodeList<RemoveFoodPostResult>().single()
+        if (result.deleted) {
+            val paths = listOfNotNull(post.imageUrl?.takeIf { it.isNotBlank() }) + post.extraImagePaths
+            if (paths.isNotEmpty()) runCatching { bucket.delete(paths) }
         }
-        // Best effort: the listing is already gone, so a failure here only
-        // leaves photos behind in Storage.
-        val paths = listOfNotNull(post.imageUrl?.takeIf { it.isNotBlank() }) + post.extraImagePaths
-        if (paths.isNotEmpty()) runCatching { bucket.delete(paths) }
+        return result
     }
 }
 

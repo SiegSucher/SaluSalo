@@ -25,13 +25,19 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
-import java.util.Locale
+import com.example.salusalo.model.formatPeso
+import com.example.salusalo.model.reservationTotal
+import com.example.salusalo.viewmodel.ReserveResult
 
 private val ActionGreen = Color(0xFF28754A)
 private val ActionCream = Color(0xFFF8F7EF)
 private val ActionPale = Color(0xFFE7F1E5)
 private val ActionDark = Color(0xFF203E2C)
 
+/**
+ * The Pickup location and Donor/Seller pages of a listing. Questions go to the
+ * real chat through [onMessage] (with a prefilled draft).
+ */
 @Composable
 fun FoodActionsDialog(
     action: String,
@@ -42,92 +48,394 @@ fun FoodActionsDialog(
     pickupLocation: String,
     imageUrl: String?,
     price: String,
-    quantity: Int,
-    unit: String,
     status: String,
-    pickupChoice: String,
-    onPickupSelected: (String) -> Unit,
     onClose: () -> Unit,
-    // Opens the real Phase 4 chat with a prefilled message. When null, the
-    // links below fall back to the local demo chat.
-    onMessage: ((String) -> Unit)? = null
+    onMessage: (String) -> Unit
 ) {
     val context = LocalContext.current
     val address = pickupLocation
     val donation = price.equals("Free", ignoreCase = true)
 
-    var page by rememberSaveable(action) {
-        mutableStateOf(
-            when (action) {
-                "allergens", "storage", "message" -> "chat"
-                else -> action
-            }
-        )
-    }
-
-    var draft by rememberSaveable(action) {
-        mutableStateOf(
-            when (action) {
-                "allergens" ->
-                    "Hi! What allergens does $foodTitle contain?"
-
-                "storage" ->
-                    "Hi! How should I store $foodTitle after pickup?"
-
-                else -> ""
-            }
-        )
-    }
-
-    var messages by rememberSaveable {
-        mutableStateOf(arrayListOf<String>())
-    }
-
-    var pickup by rememberSaveable {
-        mutableStateOf(pickupChoice)
-    }
-
-    var note by rememberSaveable {
-        mutableStateOf("")
-    }
-
-    var confirmed by rememberSaveable {
-        mutableStateOf(false)
-    }
-
     var mapError by remember {
         mutableStateOf("")
     }
 
-    // Demo assumption: the displayed price is for one selectable unit.
-    val unitPrice = price
-        .removePrefix("₱")
-        .replace(",", "")
-        .trim()
-        .toBigDecimalOrNull()
-
-    val total = unitPrice?.multiply(quantity.toBigDecimal())
-
-    val formattedTotal = if (donation) {
-        "Free"
-    } else {
-        total?.let {
-            String.format(Locale.US, "₱%,.2f", it)
-        } ?: "Confirm with seller"
-    }
-
-    val heading = when (page) {
-        "chat" -> provider
-        "pickup" -> "Choose pickup time"
+    val heading = when (action) {
         "location" -> "Pickup location"
         "provider" -> if (donation) "Donor" else "Seller"
-        "reserve" -> "Review reservation"
-        "checkout" -> if (donation) "Review claim" else "Review purchase"
         else -> "Food details"
     }
 
+    ActionPage(heading = heading, onBack = onClose) {
+        if (action != "provider") {
+            ActionCard {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ListingCover(
+                        imageUrl = imageUrl,
+                        photo = photo,
+                        description = foodTitle,
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                    )
+
+                    Spacer(Modifier.width(12.dp))
+
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            foodTitle,
+                            fontWeight = FontWeight.Bold,
+                            color = ActionDark
+                        )
+
+                        Text(
+                            provider,
+                            fontSize = 12.sp,
+                            color = ActionGreen
+                        )
+
+                        Text(
+                            price,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        when (action) {
+            "location" -> {
+                ActionCard {
+                    Text(
+                        "Pickup area",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ActionDark
+                    )
+
+                    Text(address)
+                }
+
+                ActionButton(
+                    text = "Search area in Maps",
+                    onClick = {
+                        // A text search for the address as entered;
+                        // listings have no map pin.
+                        val query = if (address.contains("Philippines", ignoreCase = true)) {
+                            address
+                        } else {
+                            "$address, Philippines"
+                        }
+                        val uri = Uri.parse("geo:0,0?q=" + Uri.encode(query))
+
+                        try {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, uri)
+                            )
+                        } catch (_: ActivityNotFoundException) {
+                            mapError =
+                                "No maps app is available on this device."
+                        }
+                    }
+                )
+
+                if (mapError.isNotBlank()) {
+                    Text(
+                        mapError,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                ActionCard {
+                    Text(
+                        "Pickup instructions",
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        "Ask the provider for the exact meeting " +
+                                "point and collection instructions.",
+                        fontSize = 13.sp
+                    )
+
+                    ActionButton(
+                        text = "Ask for exact location",
+                        onClick = { onMessage("Hi! Where exactly can I pick up $foodTitle?") }
+                    )
+                }
+            }
+
+            "provider" -> {
+                ActionCard {
+                    Text(
+                        provider.take(1).uppercase(),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(ActionPale)
+                            .padding(20.dp),
+                        color = ActionGreen,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        provider,
+                        fontSize = 23.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ActionDark
+                    )
+
+                    Text(
+                        if (donation) "Food donor" else "Food seller",
+                        color = ActionGreen
+                    )
+
+                    ActionButton(
+                        text = if (donation) "Message donor" else "Message seller",
+                        onClick = { onMessage("") }
+                    )
+                }
+
+                Text(
+                    "Listing from this provider",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp
+                )
+
+                ActionCard {
+                    ListingCover(
+                        imageUrl = imageUrl,
+                        photo = photo,
+                        description = foodTitle,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                    )
+
+                    Text(
+                        foodTitle,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text("$price • $status")
+
+                    ActionButton(
+                        text = "Return to food details",
+                        onClick = onClose
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Full-screen "Review reservation" page. Confirm sends create_reservation
+ * (through the caller's [onConfirm]); on success the page turns into the
+ * "Reserved" receipt. Amounts on the receipt come from the reservation the
+ * server returned, never from the listing shown here.
+ */
+@Composable
+fun ReservationReviewDialog(
+    foodPostId: String,
+    foodTitle: String,
+    // The donor's name, or null when it could not be loaded.
+    donorName: String?,
+    photo: Int,
+    imageUrl: String?,
+    // The signed-in profile's name, or null while unknown.
+    profileName: String?,
+    quantity: Int,
+    unit: String,
+    // Listing price per unit (0 = free).
+    unitPrice: Double,
+    pickupLocation: String,
+    pickupWindow: String,
+    handover: String,
+    expires: String,
+    saving: Boolean,
+    result: ReserveResult?,
+    onConfirm: (note: String) -> Unit,
+    onMessageDonor: (reservationId: String) -> Unit,
+    // Back or Done on the receipt: closes the receipt and the details page.
+    onFinished: () -> Unit,
+    // Back on the review page: returns to the details page.
+    onBack: () -> Unit
+) {
+    val priced = unitPrice > 0
+    val donorRole = if (priced) "seller" else "donor"
+    // Never put the "unavailable" placeholder into a sentence.
+    val donorLabel = donorName?.takeIf { it.isNotBlank() } ?: "the $donorRole"
+    var note by rememberSaveable(foodPostId) { mutableStateOf("") }
+
+    val reserved = (result as? ReserveResult.Reserved)
+        ?.takeIf { it.reservation.foodPostId == foodPostId }
+    val failure = (result as? ReserveResult.Failed)?.message
+
+    ActionPage(
+        heading = if (reserved != null) "Reserved" else "Review reservation",
+        onBack = if (reserved != null) onFinished else onBack
+    ) {
+        ActionCard {
+            ListingCover(
+                imageUrl = imageUrl,
+                photo = photo,
+                description = foodTitle,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+
+            Text(
+                foodTitle,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold,
+                color = ActionDark
+            )
+
+            donorName?.takeIf { it.isNotBlank() }?.let {
+                Text("From $it", fontSize = 13.sp, color = ActionGreen)
+            }
+        }
+
+        if (reserved != null) {
+            val reservation = reserved.reservation
+            val paid = reservation.unitPrice > 0
+            ActionCard {
+                Text(
+                    "You reserved ${reservation.quantity} $unit of $foodTitle.",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = ActionDark
+                )
+
+                Text(
+                    if (paid) {
+                        "Pay ${formatPeso(reservationTotal(reservation.unitPrice, reservation.quantity))} at pickup."
+                    } else {
+                        "Free — nothing to pay."
+                    },
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = ActionGreen
+                )
+
+                ActionLine("Pickup location", pickupLocation)
+                ActionLine("Pickup window", pickupWindow)
+
+                when (reserved.noteSent) {
+                    true -> Text(
+                        if (donorName.isNullOrBlank()) {
+                            "Your message was sent to the $donorRole."
+                        } else {
+                            "Your message was sent to $donorName."
+                        },
+                        fontSize = 13.sp
+                    )
+                    false -> Text(
+                        "Your message could not be sent. You can send it from the chat.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    null -> Unit
+                }
+
+                Text(
+                    "You'll find this reservation in Activity → My Reservations.",
+                    fontSize = 13.sp
+                )
+            }
+
+            ActionButton(
+                text = if (paid) "Message seller" else "Message donor",
+                onClick = { onMessageDonor(reservation.id) }
+            )
+
+            OutlinedButton(
+                onClick = onFinished,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Done", color = ActionGreen)
+            }
+        } else {
+            ActionCard {
+                ActionLine("Reserving as", profileName?.takeIf { it.isNotBlank() } ?: "—")
+                ActionLine("Quantity", "$quantity $unit")
+                ActionLine("Pickup location", pickupLocation)
+                ActionLine("Pickup window", pickupWindow)
+                ActionLine("Handover", handover)
+                ActionLine("Expires", expires)
+
+                HorizontalDivider()
+
+                if (priced) {
+                    ActionLine("Price per unit", formatPeso(unitPrice))
+                    ActionLine("Total", formatPeso(reservationTotal(unitPrice, quantity)))
+                    Text(
+                        "Paid at pickup. The app takes no payments.",
+                        fontSize = 12.sp,
+                        color = ActionDark
+                    )
+                } else {
+                    ActionLine("Price", "Free")
+                }
+            }
+
+            OutlinedTextField(
+                value = note,
+                onValueChange = { if (it.length <= 2000) note = it },
+                label = {
+                    Text(
+                        if (donorName.isNullOrBlank()) {
+                            "Message to the $donorRole (optional)"
+                        } else {
+                            "Message to $donorName (optional)"
+                        }
+                    )
+                },
+                supportingText = {
+                    Text("Sent in your chat with the $donorRole after the reservation is made.")
+                },
+                enabled = !saving,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                minLines = 2,
+                maxLines = 5
+            )
+
+            if (failure != null) {
+                Text(
+                    failure,
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 13.sp
+                )
+            }
+
+            ActionButton(
+                text = if (saving) "Reserving…" else "Confirm reservation",
+                enabled = !saving,
+                onClick = { onConfirm(note) }
+            )
+        }
+    }
+}
+
+/** Full-screen page with a Back button and a title, shared by the pages above. */
+@Composable
+private fun ActionPage(
+    heading: String,
+    onBack: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
     Dialog(
-        onDismissRequest = onClose,
+        onDismissRequest = onBack,
         properties = DialogProperties(
             usePlatformDefaultWidth = false
         )
@@ -152,7 +460,7 @@ fun FoodActionsDialog(
                             .padding(horizontal = 8.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = onClose) {
+                        TextButton(onClick = onBack) {
                             Text("Back", color = ActionGreen)
                         }
 
@@ -178,467 +486,47 @@ fun FoodActionsDialog(
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
                         .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    if (page != "provider") {
-                        ActionCard {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Image(
-                                    painter = painterResource(photo),
-                                    contentDescription = foodTitle,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                )
-
-                                Spacer(Modifier.width(12.dp))
-
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        foodTitle,
-                                        fontWeight = FontWeight.Bold,
-                                        color = ActionDark
-                                    )
-
-                                    Text(
-                                        provider,
-                                        fontSize = 12.sp,
-                                        color = ActionGreen
-                                    )
-
-                                    Text(
-                                        price,
-                                        fontSize = 12.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    when (page) {
-                        "chat" -> {
-                            Text(
-                                "Demo conversation • messages are not delivered",
-                                fontSize = 12.sp,
-                                color = ActionGreen
-                            )
-
-                            if (messages.isEmpty()) {
-                                ActionCard {
-                                    Text(
-                                        "Ask about this listing",
-                                        fontWeight = FontWeight.Bold
-                                    )
-
-                                    Text(
-                                        "Check ingredients, storage, or pickup " +
-                                                "arrangements with $provider.",
-                                        fontSize = 13.sp
-                                    )
-                                }
-                            }
-
-                            messages.forEach { message ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    Surface(
-                                        modifier = Modifier.widthIn(max = 280.dp),
-                                        color = ActionPale,
-                                        shape = RoundedCornerShape(
-                                            topStart = 18.dp,
-                                            topEnd = 18.dp,
-                                            bottomStart = 18.dp,
-                                            bottomEnd = 4.dp
-                                        )
-                                    ) {
-                                        Column(Modifier.padding(14.dp)) {
-                                            Text(
-                                                message,
-                                                color = ActionDark
-                                            )
-
-                                            Spacer(Modifier.height(5.dp))
-
-                                            Text(
-                                                "Local demo",
-                                                fontSize = 10.sp,
-                                                color = ActionGreen
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        "pickup" -> {
-                            ActionCard {
-                                ActionLine("Listing deadline", status)
-
-                                Text(
-                                    "Choose a preferred arrival time. These " +
-                                            "sample options are not confirmed " +
-                                            "provider availability.",
-                                    fontSize = 13.sp
-                                )
-                            }
-
-                            PickupOptions(
-                                selected = pickup,
-                                onSelect = {
-                                    pickup = it
-                                    confirmed = false
-                                }
-                            )
-
-                            ActionButton(
-                                text = "Save preferred pickup time",
-                                enabled = pickup.isNotBlank(),
-                                onClick = {
-                                    onPickupSelected(pickup)
-                                    confirmed = true
-                                }
-                            )
-
-                            if (confirmed) {
-                                ActionCard {
-                                    Text(
-                                        "Preference saved",
-                                        fontWeight = FontWeight.Bold,
-                                        color = ActionGreen
-                                    )
-
-                                    Text(
-                                        "$pickup. This does not reserve food.",
-                                        fontSize = 13.sp
-                                    )
-                                }
-                            }
-                        }
-
-                        "location" -> {
-                            ActionCard {
-                                Text(
-                                    "Pickup area",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = ActionDark
-                                )
-
-                                Text(address)
-                            }
-
-                            ActionButton(
-                                text = "Search area in Maps",
-                                onClick = {
-                                    // A text search for the address as entered;
-                                    // listings have no map pin.
-                                    val query = if (address.contains("Philippines", ignoreCase = true)) {
-                                        address
-                                    } else {
-                                        "$address, Philippines"
-                                    }
-                                    val uri = Uri.parse("geo:0,0?q=" + Uri.encode(query))
-
-                                    try {
-                                        context.startActivity(
-                                            Intent(Intent.ACTION_VIEW, uri)
-                                        )
-                                    } catch (_: ActivityNotFoundException) {
-                                        mapError =
-                                            "No maps app is available on this device."
-                                    }
-                                }
-                            )
-
-                            if (mapError.isNotBlank()) {
-                                Text(
-                                    mapError,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-
-                            ActionCard {
-                                Text(
-                                    "Pickup instructions",
-                                    fontWeight = FontWeight.Bold
-                                )
-
-                                Text(
-                                    "Ask the provider for the exact meeting " +
-                                            "point and collection instructions.",
-                                    fontSize = 13.sp
-                                )
-
-                                ActionButton(
-                                    text = "Ask for exact location",
-                                    onClick = {
-                                        val question = "Hi! Where exactly can I pick up $foodTitle?"
-                                        if (onMessage != null) {
-                                            onMessage(question)
-                                        } else {
-                                            draft = question
-                                            page = "chat"
-                                        }
-                                    }
-                                )
-                            }
-                        }
-
-                        "provider" -> {
-                            ActionCard {
-                                Text(
-                                    provider.take(1).uppercase(),
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(18.dp))
-                                        .background(ActionPale)
-                                        .padding(20.dp),
-                                    color = ActionGreen,
-                                    fontSize = 32.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-
-                                Text(
-                                    provider,
-                                    fontSize = 23.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = ActionDark
-                                )
-
-                                Text(
-                                    if (donation) "Food donor" else "Food seller",
-                                    color = ActionGreen
-                                )
-
-                                ActionButton(
-                                    text = if (donation) "Message donor" else "Message seller",
-                                    onClick = {
-                                        if (onMessage != null) {
-                                            onMessage("")
-                                        } else {
-                                            draft = ""
-                                            page = "chat"
-                                        }
-                                    }
-                                )
-                            }
-
-                            Text(
-                                "Listing from this provider",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 17.sp
-                            )
-
-                            ActionCard {
-                                var imageFailed by remember(imageUrl) { mutableStateOf(false) }
-                                if (imageUrl != null && !imageFailed) {
-                                    AsyncImage(
-                                        model = imageUrl,
-                                        contentDescription = foodTitle,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(150.dp)
-                                            .clip(RoundedCornerShape(12.dp)),
-                                        onError = { imageFailed = true }
-                                    )
-                                } else if (imageUrl == null) {
-                                    Image(
-                                        painter = painterResource(photo),
-                                        contentDescription = foodTitle,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(150.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(150.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(ActionPale),
-                                        contentAlignment = Alignment.Center
-                                    ) { Text("Image unavailable", fontSize = 12.sp) }
-                                }
-
-                                Text(
-                                    foodTitle,
-                                    fontWeight = FontWeight.Bold
-                                )
-
-                                Text("$price • $status")
-
-                                ActionButton(
-                                    text = "Return to food details",
-                                    onClick = onClose
-                                )
-                            }
-                        }
-
-                        "reserve", "checkout" -> {
-                            if (confirmed) {
-                                ActionCard {
-                                    Text(
-                                        "Preview complete",
-                                        fontSize = 24.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = ActionGreen
-                                    )
-
-                                    Text(
-                                        when {
-                                            page == "reserve" ->
-                                                "You reviewed a reservation."
-
-                                            donation ->
-                                                "You reviewed a donation claim."
-
-                                            else ->
-                                                "You reviewed a purchase."
-                                        }
-                                    )
-
-                                    ActionLine("Food", foodTitle)
-                                    ActionLine("Quantity", "$quantity $unit")
-                                    ActionLine("Preferred pickup", pickup)
-
-                                    Text(
-                                        "No request was sent, no stock was " +
-                                                "held, and no payment was taken.",
-                                        fontSize = 13.sp
-                                    )
-
-                                    ActionButton(
-                                        text = "Back to food details",
-                                        onClick = onClose
-                                    )
-                                }
-                            } else {
-                                ActionCard {
-                                    ActionLine("Requesting as", "Mika")
-                                    ActionLine("Quantity", "$quantity $unit")
-                                    ActionLine("Pickup area", address)
-                                    ActionLine("Deadline", status)
-
-                                    if (!donation) {
-                                        ActionLine("Price per unit", price)
-
-                                        Text(
-                                            "Demo pricing assumes this price " +
-                                                    "applies to one selectable unit.",
-                                            fontSize = 11.sp
-                                        )
-                                    }
-
-                                    HorizontalDivider()
-
-                                    ActionLine(
-                                        if (donation) "Cost" else "Estimated total",
-                                        formattedTotal
-                                    )
-
-                                    if (!donation) {
-                                        ActionLine(
-                                            "Payment",
-                                            "Pay at pickup (demo)"
-                                        )
-                                    }
-                                }
-
-                                Text(
-                                    "Preferred pickup",
-                                    fontWeight = FontWeight.Bold
-                                )
-
-                                Text(
-                                    "Sample preferences only. The provider " +
-                                            "must confirm a time within the deadline.",
-                                    fontSize = 12.sp
-                                )
-
-                                PickupOptions(
-                                    selected = pickup,
-                                    onSelect = {
-                                        pickup = it
-                                        onPickupSelected(it)
-                                    }
-                                )
-
-                                OutlinedTextField(
-                                    value = note,
-                                    onValueChange = { note = it },
-                                    label = { Text("Note to provider (optional)") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(14.dp),
-                                    minLines = 2
-                                )
-
-                                ActionButton(
-                                    text = when {
-                                        page == "reserve" ->
-                                            "Preview reservation"
-
-                                        donation ->
-                                            "Preview claim"
-
-                                        else ->
-                                            "Preview purchase"
-                                    },
-                                    enabled = pickup.isNotBlank() &&
-                                            (donation || unitPrice != null),
-                                    onClick = { confirmed = true }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (page == "chat") {
-                    Surface(
-                        color = Color.White,
-                        shadowElevation = 4.dp
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = draft,
-                                onValueChange = { draft = it },
-                                modifier = Modifier.weight(1f),
-                                placeholder = { Text("Type your question…") },
-                                shape = RoundedCornerShape(18.dp),
-                                maxLines = 4
-                            )
-
-                            Button(
-                                enabled = draft.isNotBlank(),
-                                onClick = {
-                                    messages = ArrayList(messages).apply {
-                                        add(draft.trim())
-                                    }
-                                    draft = ""
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = ActionGreen
-                                )
-                            ) {
-                                Text("Send\nDemo", fontSize = 12.sp)
-                            }
-                        }
-                    }
-                }
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    content = content
+                )
             }
         }
+    }
+}
+
+/**
+ * The listing's signed cover with the same fallbacks as AvailableFoodCard: the
+ * sample drawable when the listing has no photo, "Image unavailable" when it
+ * can't be loaded.
+ */
+@Composable
+private fun ListingCover(
+    imageUrl: String?,
+    photo: Int,
+    description: String,
+    modifier: Modifier
+) {
+    var imageFailed by remember(imageUrl) { mutableStateOf(false) }
+    if (imageUrl != null && !imageFailed) {
+        AsyncImage(
+            model = imageUrl,
+            contentDescription = description,
+            contentScale = ContentScale.Crop,
+            modifier = modifier,
+            onError = { imageFailed = true }
+        )
+    } else if (imageUrl == null) {
+        Image(
+            painter = painterResource(photo),
+            contentDescription = description,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+        )
+    } else {
+        Box(
+            modifier = modifier.background(ActionPale),
+            contentAlignment = Alignment.Center
+        ) { Text("Image unavailable", fontSize = 12.sp) }
     }
 }
 
@@ -696,35 +584,5 @@ private fun ActionButton(
         )
     ) {
         Text(text)
-    }
-}
-
-@Composable
-private fun PickupOptions(
-    selected: String,
-    onSelect: (String) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        listOf(
-            "Within 15 minutes",
-            "Within 30 minutes",
-            "Agree on a time in chat"
-        ).forEach { option ->
-            FilterChip(
-                selected = selected == option,
-                onClick = { onSelect(option) },
-                label = {
-                    Text(
-                        option,
-                        modifier = Modifier.padding(vertical = 6.dp)
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = ActionPale,
-                    selectedLabelColor = ActionGreen
-                )
-            )
-        }
     }
 }

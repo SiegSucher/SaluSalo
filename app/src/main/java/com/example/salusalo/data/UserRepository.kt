@@ -184,6 +184,15 @@ class PasswordChangeException(message: String) : Exception(message)
 fun supabaseErrorText(error: Throwable, fallback: String): String =
     (error as? RestException)?.error?.takeIf { it.isNotBlank() } ?: fallback
 
+/**
+ * [supabaseErrorText] as a sentence: a server message without a full stop
+ * (for example "Food post is no longer available") gets one.
+ */
+fun shortErrorText(error: Throwable, fallback: String): String =
+    supabaseErrorText(error, fallback).trim().let { text ->
+        if (text.endsWith(".") || text.endsWith("!") || text.endsWith("?")) text else "$text."
+    }
+
 sealed class ProfileException(message: String) : Exception(message) {
     data object NotSignedIn : ProfileException("No Firebase user is signed in.")
     data object MissingEmail : ProfileException("The Firebase account has no email address.")

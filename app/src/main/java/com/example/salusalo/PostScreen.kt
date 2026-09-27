@@ -656,7 +656,7 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text("Delete listing?") },
-            text = { Text("This permanently removes this listing and its photos.") },
+            text = { Text(DELETE_LISTING_TEXT) },
             confirmButton = {
                 TextButton(enabled = !backendSaving, onClick = {
                     foodViewModel.deletePost(post)
@@ -666,6 +666,7 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
         )
     }
+    DeleteResultDialog(foodViewModel = foodViewModel)
     editing?.let { post ->
         EditListingDialog(
             post = post,
@@ -958,7 +959,7 @@ private fun postTime(value: Long): String {
     if (value == 0L) return "Select date and time"
     return SimpleDateFormat(
         "MMM d, yyyy • h:mm a",
-        Locale.getDefault()
+        Locale.ENGLISH
     ).format(Date(value))
 }
 

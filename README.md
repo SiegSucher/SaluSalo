@@ -2,7 +2,7 @@
 
 Salu-Salo is an Android app for sharing surplus food within a community to reduce food waste. Donors post surplus food with a photo, quantity, pickup location and expiry date. Recipients browse the available listings and reserve some or all of a listing for pickup. The UI uses Philippine pesos (₱) and Philippine sample locations.
 
-**Status (2026-09-26):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Fixes to the demo parts of Phase 2 (real donor names, listing details, up to 4 photos, editing, saved listings; `docs/PROJECT_STATUS.md` §11) passed on two phones the same day, with the migration `20260929_phase2_listing_details.sql`. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
+**Status (2026-09-28):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Fixes to the demo parts of Phase 2 (real donor names, listing details, up to 4 photos, editing, saved listings; `docs/PROJECT_STATUS.md` §11) passed on two phones the same day, with the migration `20260929_phase2_listing_details.sql`. Fixes to the demo parts of Phase 3 (a Reserve review page and receipt, removing reserved listings, real Activity and Profile records; §12) passed on two phones on 2026-09-28, on branch `claude/phase3-demo-fixes` with the migration `20260930_phase3_demo_fixes.sql`. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
 
 ## Features
 
@@ -15,7 +15,7 @@ Working against the live backend:
 - **Messages:** message a listing's donor from its details screen or from a reservation; live chat and a Messages inbox with unread counts. Participants see each other's display name only.
 - **Alerts:** in-app alerts for new messages and for reservations being made, cancelled or claimed, with unread badges and settings saved to your account.
 
-Demo or preview-only, with no backend yet: the Claim Now / Buy Now dialogs and reviews. There are no push notifications yet. Most settings are saved only on the device; the profile name and photo and the notification preferences come from Supabase.
+Demo or preview-only, with no backend yet: reviews and ratings, the response rate, the verification badge and pages, and Report a concern. There are no push notifications yet. Most settings are saved only on the device; the profile name and photo and the notification preferences come from Supabase.
 
 ## Tech stack
 

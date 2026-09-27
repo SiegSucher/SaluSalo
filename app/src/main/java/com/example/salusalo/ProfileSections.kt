@@ -13,6 +13,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.salusalo.viewmodel.NotificationViewModel
 import com.example.salusalo.viewmodel.SavedListingViewModel
 import com.example.salusalo.model.FoodPost
+import com.example.salusalo.model.ReservationDisplay
+import com.example.salusalo.model.parseTimestamp
+import com.example.salusalo.model.reservationTotal
 import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.formatPeso
 import com.example.salusalo.model.isExpired
@@ -46,8 +49,12 @@ fun ProfileSections(
     profile: UserProfile?,
     onProfileUpdated: (UserProfile) -> Unit,
     onPreferencesSaved: (Boolean, Boolean) -> Unit,
-    onOpenFood: (String) -> Unit,
     onClose: () -> Unit,
+    successfulClaims: List<ReservationDisplay>,
+    successfulDonations: List<ReservationDisplay>,
+    recordsLoaded: Boolean,
+    recordsFailed: Boolean,
+    onReloadRecords: () -> Unit,
     notificationViewModel: NotificationViewModel,
     savedListingViewModel: SavedListingViewModel,
     onOpenListing: (FoodPost) -> Unit
@@ -163,7 +170,8 @@ fun ProfileSections(
         "report" -> "Report a Concern"
         "reviews" -> "Ratings & Reviews"
         "membership" -> "Membership"
-        "record" -> itemName
+        "record" -> (successfulClaims + successfulDonations)
+            .firstOrNull { it.reservation.id == itemName }?.foodPost?.name ?: "Record"
         else -> "Profile"
     }
 
@@ -227,72 +235,84 @@ fun ProfileSections(
                     ) {
                         when (page) {
                             "claims", "donations" -> {
+                                val claims = page == "claims"
+                                val records = (if (claims) successfulClaims else successfulDonations)
+                                    .sortedByDescending { it.reservation.updatedAt ?: it.reservation.createdAt.orEmpty() }
+                                LaunchedEffect(page) { onReloadRecords() }
                                 SectionCard(pale = true) {
                                     Text(
-                                        if (page == "claims") "38" else "24",
+                                        if (recordsLoaded) records.size.toString() else "—",
                                         fontSize = 38.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = SectionGreen
                                     )
                                     Text(
-                                        if (page == "claims") {
-                                            "Successful claims"
-                                        } else {
-                                            "Successful donations"
-                                        },
+                                        if (claims) "Successful claims" else "Successful donations",
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        "Demo total • three example records below",
+                                        if (claims) {
+                                            "Food you picked up that donors marked as claimed, free and paid."
+                                        } else {
+                                            "Reservations on your listings that you marked as claimed."
+                                        },
                                         fontSize = 12.sp
                                     )
                                 }
 
-                                val foods = if (page == "claims") {
-                                    listOf(
-                                        "Bread Assortment",
-                                        "Fresh Produce Box",
-                                        "Packed Rice Meals"
+                                when {
+                                    recordsFailed -> Text(
+                                        "Your records could not be loaded. Check your internet connection and try again.",
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.error
                                     )
-                                } else {
-                                    listOf(
-                                        "Pastries Assortment",
-                                        "Mixed Vegetables",
-                                        "Bread Assortment"
+                                    !recordsLoaded -> Text("Loading your records…", fontSize = 13.sp)
+                                    records.isEmpty() -> Text(
+                                        if (claims) {
+                                            "No successful claims yet. They appear here after a donor marks your reservation as claimed."
+                                        } else {
+                                            "No successful donations yet. They appear here after you mark a reservation on your listing as claimed."
+                                        },
+                                        fontSize = 13.sp
                                     )
                                 }
 
-                                foods.forEachIndexed { index, food ->
+                                records.forEach { entry ->
                                     SectionLink(
-                                        title = food,
-                                        subtitle = "Completed • Example ${index + 1}"
+                                        title = entry.foodPost.name,
+                                        subtitle = successRecordLines(entry, showRecipient = !claims)
                                     ) {
-                                        navigate("record|$food")
+                                        navigate("record|${entry.reservation.id}")
                                     }
                                 }
                             }
 
                             "record" -> {
-                                SectionFoodPhoto(itemName)
+                                val donation = successfulDonations.firstOrNull { it.reservation.id == itemName }
+                                val entry = donation ?: successfulClaims.firstOrNull { it.reservation.id == itemName }
+                                if (entry == null) {
+                                    Text("This record is no longer available.", fontSize = 13.sp)
+                                } else {
+                                    val post = entry.foodPost
+                                    SavedListingPhoto(post)
 
-                                SectionCard {
-                                    Text(
-                                        "Completed",
-                                        color = SectionGreen,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text("Food: $itemName")
-                                    Text("Account: $currentName")
-                                    Text("Example reference: DEMO-104")
-                                    Text(
-                                        "This is a demonstration history record. " +
-                                                "No real transaction was completed.",
-                                        fontSize = 12.sp
-                                    )
-                                }
+                                    SectionCard {
+                                        Text(
+                                            "Claimed",
+                                            color = SectionGreen,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(post.name, fontWeight = FontWeight.SemiBold)
+                                        Text(successRecordLines(entry, showRecipient = donation != null))
+                                        Text("Pickup location: ${post.pickupLocation}", fontSize = 12.sp)
+                                    }
 
-                                SectionButton("View food listing") {
-                                    onOpenFood(itemName)
+                                    // Only a listing that can still be reserved opens.
+                                    if (post.status == FoodPostStatus.AVAILABLE && !post.isExpired()) {
+                                        SectionButton("View listing") {
+                                            onOpenListing(post)
+                                        }
+                                    }
                                 }
                             }
 
@@ -478,6 +498,14 @@ fun ProfileSections(
                                                 "${post.quantity} ${post.unit} • " +
                                                         if (post.price > 0) formatPeso(post.price) else "Free",
                                                 fontSize = 12.sp
+                                            )
+                                        } else {
+                                            // A listing this account can no longer see: its
+                                            // name and cover from get_my_saved_listing_names().
+                                            SavedFallbackPhoto(row.fallbackImageUrl, row.fallbackName)
+                                            Text(
+                                                row.fallbackName ?: "Saved listing",
+                                                fontWeight = FontWeight.Bold
                                             )
                                         }
                                         if (available) {
@@ -965,6 +993,28 @@ private fun SectionToggle(
     }
 }
 
+/** The cover of a saved listing that no longer loads, or a plain tile. */
+@Composable
+private fun SavedFallbackPhoto(imageUrl: String?, name: String?) {
+    var imageFailed by remember(imageUrl) { mutableStateOf(false) }
+    val modifier = Modifier
+        .fillMaxWidth()
+        .height(170.dp)
+    Surface(shape = RoundedCornerShape(16.dp)) {
+        if (imageUrl != null && !imageFailed) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = name,
+                contentScale = ContentScale.Crop,
+                modifier = modifier,
+                onError = { imageFailed = true }
+            )
+        } else {
+            Box(modifier.background(SectionPale))
+        }
+    }
+}
+
 /** A saved listing's cover, with the same fallbacks as the Home cards. */
 @Composable
 private fun SavedListingPhoto(post: FoodPost) {
@@ -998,24 +1048,25 @@ private fun SavedListingPhoto(post: FoodPost) {
     }
 }
 
-@Composable
-private fun SectionFoodPhoto(title: String) {
-    val photo = when (title) {
-        "Bread Assortment" -> R.drawable.food_bread
-        "Fresh Produce Box" -> R.drawable.food_produce
-        "Mixed Vegetables" -> R.drawable.food_vegetables
-        "Packed Rice Meals" -> R.drawable.food_meals
-        else -> R.drawable.food_pastries
+/**
+ * "3 packs • ₱135.30" (or "• Free"), "Picked up Sep 26, 2026 • 3:00 PM" and,
+ * for a donation, "Recipient: <name>".
+ */
+private fun successRecordLines(entry: ReservationDisplay, showRecipient: Boolean): String {
+    val reservation = entry.reservation
+    val amount = if (reservation.unitPrice > 0) {
+        formatPeso(reservationTotal(reservation.unitPrice, reservation.quantity))
+    } else {
+        "Free"
     }
-
-    Surface(shape = RoundedCornerShape(16.dp)) {
-        Image(
-            painter = painterResource(photo),
-            contentDescription = title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(170.dp)
-        )
+    val pickedUp = parseTimestamp(reservation.updatedAt)?.let {
+        java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy • h:mm a", java.util.Locale.ENGLISH)
+            .withZone(java.time.ZoneId.systemDefault())
+            .format(it)
+    }
+    return buildString {
+        append("${reservation.quantity} ${entry.foodPost.unit} • $amount")
+        pickedUp?.let { append("\nPicked up $it") }
+        if (showRecipient) append("\nRecipient: ${entry.recipientName ?: "Unknown"}")
     }
 }
