@@ -32,6 +32,9 @@ data class FoodPost(
     @SerialName("storage_notes") val storageNotes: String? = null,
     /** Photos 2–4 as private food-images paths; [imageUrl] stays the cover. */
     @SerialName("extra_image_paths") val extraImagePaths: List<String> = emptyList(),
+    /** The pickup pin; both null for listings without one (see [pickupPin] in Geo.kt). */
+    @SerialName("pickup_latitude") val pickupLatitude: Double? = null,
+    @SerialName("pickup_longitude") val pickupLongitude: Double? = null,
     @Transient val displayImageUrl: String? = null,
     /** The donor's name from get_listing_donor_profiles(); null if it could not be loaded. */
     @Transient val donorName: String? = null,

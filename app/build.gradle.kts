@@ -81,6 +81,8 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.kotlinx.coroutines.play.services)
+    // OpenStreetMap map for the pickup pin: no API key, tiles cached in the app's cache folder.
+    implementation(libs.osmdroid.android)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     implementation(libs.androidx.core.ktx)
