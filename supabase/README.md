@@ -117,6 +117,18 @@ Run `migrations/20261002_phase5_reviews_reports.sql` by hand in the SQL Editor a
 
 After running it, run `tests/phase5_reviews_reports_check.sql` and `tests/phase5_live_safety_check.sql` (below).
 
+## Phase 5 part 2: maps (pickup pin)
+
+Run `migrations/20261003_phase5_maps.sql` by hand in the SQL Editor after `20261002_phase5_reviews_reports.sql`, **before** installing the app build that uses it: that build sends the pin with every new listing and saves edits through `update_my_food_post_with_pin`, so without the migration its Post Listing and Save changes fail. It is safe to run again. **Older builds are unaffected:** supabase-kt ignores the two new columns, their new listings get no pin, and they still edit through `update_my_food_post`, which this file does not change and which never touches the pin.
+
+- **`food_posts.pickup_latitude numeric(8,6)` and `pickup_longitude numeric(9,6)`**, both nullable; existing listings get NULL. The check constraint `food_posts_pickup_pin_check` requires both set or both NULL, latitude from -90 to 90 and longitude from -180 to 180 (it also refuses NaN).
+- **Who sees the pin:** it is part of the listing row, so exactly the people the existing `food_posts` SELECT policy lets see the listing. No policy or grant changes; clients still have SELECT and INSERT only on `food_posts`, and the insert policy is unchanged (a new listing sends its pin in the insert).
+- **`update_my_food_post_with_pin(...)`**: the 12 arguments of `update_my_food_post` plus `p_pickup_latitude` and `p_pickup_longitude`. SECURITY DEFINER with `search_path = public`, executable by `authenticated` only (revoked from PUBLIC and `anon`). It takes the caller from the token, locks the listing, and refuses someone else's, a `REMOVED` and an expired listing with the same texts as `update_my_food_post`; then it refuses a half-set pin ("Send both pickup pin coordinates, or neither.") or one out of range ("The pickup pin is not a valid map position."); then it calls `update_my_food_post` for every other field and its checks, and stores the pin rounded to 6 decimals. One transaction: when anything is refused, nothing changes. A pin can be added or moved but not removed: with both pin arguments NULL the stored pin (or its absence) stays.
+- **The phone's location** is used on the phone for distances and is never sent to Supabase or stored. The one exception is "Use my location" on Post and Edit, which puts the pin at the phone's position; the donor then saves that pin with the listing.
+- **Nothing else changes:** no Phase 3, 4 or 5 function, trigger or policy, and no RLS is widened. The server does not require a pin, so older builds can still post; the new build requires one on Post.
+
+After running it, run `tests/phase5_maps_check.sql` and `tests/phase5_maps_live_safety_check.sql` (below).
+
 ## Safety checks (`tests/`)
 
 The files in `tests/` are not migrations and change nothing. `tests/phase4_live_safety_check.sql` checks that the live Phase 4 rules still refuse what they should. Paste it into the SQL Editor (role `postgres`) and run it. It pretends to be the two participants of the most recent chat and the newest other account, tries forbidden actions, and reports each check as PASS, FAIL or SKIP. It always ends with an error on purpose (`SAFETY CHECK FINISHED: …`); the error rolls back everything the check did. It needs at least one chat with messages, and a third account for the outsider checks.
