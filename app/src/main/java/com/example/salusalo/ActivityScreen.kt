@@ -18,11 +18,14 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostStatus
+import com.example.salusalo.model.GeoPin
+import com.example.salusalo.model.pickupPin
 import com.example.salusalo.model.ReservationStatus
 import com.example.salusalo.model.formatPeso
 import com.example.salusalo.model.reservationTotal
@@ -74,7 +77,9 @@ private data class ActivityRecord(
     val canRate: Boolean = false,
     // The listing's donor, for "Rate <name>"; null when unknown.
     val donorName: String? = null,
-    val priced: Boolean = false
+    val priced: Boolean = false,
+    // The listing's pickup pin, for "Directions" on a reservation this account made.
+    val pickupPin: GeoPin? = null
 )
 
 /** The review page that is open: which reservation, with what it showed when opened. */
@@ -144,6 +149,9 @@ fun ActivityScreen(
     var activeOnly by rememberSaveable { mutableStateOf(false) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var notice by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
+    // "No maps app…" under Directions, for the record that is open.
+    var directionsError by remember(selectedId) { mutableStateOf("") }
     // Every record comes from Supabase: this account's listings (removed ones
     // are left out by the repository) and its reservations as recipient and donor.
     val myListingRecords = myPosts
@@ -204,6 +212,7 @@ fun ActivityScreen(
                 post.pickupLocation
             },
             uri = post.displayImageUrl,
+            pickupPin = post.pickupPin,
             details = when {
                 claimed && priced ->
                     "Price: ${formatPeso(reservation.unitPrice)} per unit\nTotal: $total, paid at pickup."
@@ -623,6 +632,20 @@ fun ActivityScreen(
                             selectedId = null
                         }) {
                             Text(if (record.donorCanClaim) "Message recipient" else "Message donor")
+                        }
+                    }
+                    // Directions to the pickup pin while this account's reservation is open;
+                    // the same link and fallbacks as the Pickup location page.
+                    record.pickupPin?.takeIf {
+                        record.reservationId != null && !record.donorCanClaim && record.status == "Reserved"
+                    }?.let { pin ->
+                        OutlinedButton(onClick = {
+                            directionsError = if (openDirections(context, pin)) "" else "No maps app is available on this device."
+                        }) {
+                            Text("Directions")
+                        }
+                        if (directionsError.isNotBlank()) {
+                            Text(directionsError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                         }
                     }
                     // Only a claimed pickup this account received can be rated.
