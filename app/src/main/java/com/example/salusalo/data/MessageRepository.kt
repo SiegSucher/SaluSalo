@@ -64,6 +64,9 @@ class MessageRepository {
     fun messageInserts(conversationId: String): Flow<ChatMessage> =
         realtimeInserts("messages", "conversation_id", conversationId)
 
+    /** New messages in all of the caller's threads (the messages RLS lets only those through). */
+    fun allMessageInserts(): Flow<ChatMessage> = realtimeInserts("messages")
+
     private suspend fun ConversationSummary.withSignedImage() =
         copy(displayImageUrl = bucket.signedUrlOrNull(foodImagePath))
 }
