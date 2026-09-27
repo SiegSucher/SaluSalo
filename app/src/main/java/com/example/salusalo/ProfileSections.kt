@@ -23,6 +23,11 @@ import com.example.salusalo.model.isExpired
 import androidx.compose.foundation.background
 import coil3.compose.AsyncImage
 import com.example.salusalo.data.PasswordChangeException
+import com.example.salusalo.data.VerificationException
+import com.example.salusalo.model.RatingSummary
+import com.example.salusalo.model.ReviewItem
+import com.example.salusalo.model.formatRatingAverage
+import com.example.salusalo.model.reviewCountText
 import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.supabaseErrorText
 import com.example.salusalo.model.UserProfile
@@ -58,14 +63,15 @@ fun ProfileSections(
     responseRate: ResponseRate?,
     responseRateFailed: Boolean,
     onReloadResponseRate: () -> Unit,
+    ratingSummary: RatingSummary?,
+    receivedReviews: List<ReviewItem>?,
+    reviewsFailed: Boolean,
+    onReloadReviews: () -> Unit,
     notificationViewModel: NotificationViewModel,
     savedListingViewModel: SavedListingViewModel,
     onOpenListing: (FoodPost) -> Unit
 ) {
     val context = LocalContext.current
-    val prefs = remember {
-        context.getSharedPreferences("salusalo_profile", 0)
-    }
 
     var history by rememberSaveable {
         mutableStateOf(arrayListOf(initialPage))
@@ -101,9 +107,9 @@ fun ProfileSections(
         }
     }
 
-    var verificationRequested by rememberSaveable {
-        mutableStateOf(prefs.getBoolean("demoVerificationRequested", false))
-    }
+    // Email verification (Firebase): sending the email and checking the link.
+    var sendingEmail by remember { mutableStateOf(false) }
+    var checkingEmail by remember { mutableStateOf(false) }
 
     // Passwords are kept only while this page is open.
     var currentPassword by remember { mutableStateOf("") }
@@ -140,9 +146,7 @@ fun ProfileSections(
         "claims" -> "Successful Claims"
         "donations" -> "Successful Donations"
         "response" -> "Response Rate"
-        "verification" -> "Manage Verification"
-        "verificationSteps" -> "Verification Process"
-        "verificationStatus" -> "Request Status"
+        "verification" -> "Email Verification"
         "saved" -> "Saved Listings"
         "notifications" -> "Notification Preferences"
         "account" -> "Account Details"
@@ -374,98 +378,79 @@ fun ProfileSections(
                             }
 
                             "verification" -> {
+                                // The stored value, set only from the Firebase token.
+                                val verified = profile?.emailVerified == true
+                                val email = profile?.email.orEmpty()
                                 SectionCard(pale = true) {
                                     Text(
-                                        "Identity Verified",
+                                        if (verified) "Email verified" else "Email not verified",
                                         fontSize = 23.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = SectionGreen
+                                        color = if (verified) SectionGreen else SectionDark
                                     )
-                                    Text("Demo badge • Mar 15, 2023")
+                                    Text(email)
                                     Text(
-                                        "This example badge reproduces the profile " +
-                                                "design. No identity review has taken place.",
+                                        "The badge only means that this email address was " +
+                                                "confirmed. It is not an identity check.",
                                         fontSize = 12.sp
                                     )
                                 }
 
-                                SectionLink(
-                                    "How verification works",
-                                    "See the proposed review process"
-                                ) {
-                                    navigate("verificationSteps")
-                                }
-
-                                SectionLink(
-                                    "Verification request",
-                                    if (verificationRequested) {
-                                        "Demo request pending"
-                                    } else {
-                                        "Try the request preview"
-                                    }
-                                ) {
-                                    navigate("verificationStatus")
-                                }
-                            }
-
-                            "verificationSteps" -> {
-                                SectionCard {
-                                    Text("1. Submit account information",
-                                        fontWeight = FontWeight.Bold)
-                                    Text("A future verification flow would collect " +
-                                            "the information required for review.")
-
-                                    Text("2. Review",
-                                        fontWeight = FontWeight.Bold)
-                                    Text("An authorized reviewer would check the request.")
-
-                                    Text("3. Receive a result",
-                                        fontWeight = FontWeight.Bold)
-                                    Text("The account would show its actual review status.")
-                                }
-
-                                Text(
-                                    "This prototype uses a demo request and does " +
-                                            "not collect identity documents.",
-                                    fontSize = 12.sp
-                                )
-
-                                SectionButton("Try demo request") {
-                                    navigate("verificationStatus")
-                                }
-                            }
-
-                            "verificationStatus" -> {
-                                SectionCard {
+                                if (!verified) {
                                     Text(
-                                        if (verificationRequested) {
-                                            "Demo request pending"
-                                        } else {
-                                            "No demo request yet"
-                                        },
-                                        fontSize = 21.sp,
-                                        fontWeight = FontWeight.Bold
+                                        "We'll send a link to $email. Open it, then come back " +
+                                                "and tap \u201cI've confirmed my email\u201d.",
+                                        fontSize = 12.sp
                                     )
-                                    Text(
-                                        "No documents will be sent. This only " +
-                                                "changes the local demonstration status."
-                                    )
-                                }
 
-                                SectionButton(
-                                    if (verificationRequested) {
-                                        "Reset demo request"
-                                    } else {
-                                        "Submit demo request"
+                                    SectionButton(
+                                        if (sendingEmail) "Sending…" else "Send verification email",
+                                        enabled = !sendingEmail && !checkingEmail && profile != null
+                                    ) {
+                                        sendingEmail = true
+                                        feedback = ""
+                                        scope.launch {
+                                            runCatching { userRepository.sendVerificationEmail() }
+                                                .onSuccess {
+                                                    feedback = "Verification email sent to $email. " +
+                                                            "If you don't see it, check your spam folder."
+                                                }
+                                                .onFailure { error ->
+                                                    feedback = (error as? VerificationException)?.message
+                                                        ?: "The verification email could not be sent. " +
+                                                        "Check your internet connection and try again."
+                                                }
+                                            sendingEmail = false
+                                        }
                                     }
-                                ) {
-                                    verificationRequested = !verificationRequested
-                                    prefs.edit()
-                                        .putBoolean(
-                                            "demoVerificationRequested",
-                                            verificationRequested
-                                        )
-                                        .apply()
+
+                                    SectionButton(
+                                        if (checkingEmail) "Checking…" else "I've confirmed my email",
+                                        enabled = !sendingEmail && !checkingEmail && profile != null
+                                    ) {
+                                        checkingEmail = true
+                                        feedback = ""
+                                        scope.launch {
+                                            // Reloads the Firebase user and refreshes the token, so
+                                            // the server reads the new email_verified claim.
+                                            runCatching { userRepository.syncEmailVerified(forceRefresh = true) }
+                                                .onSuccess { confirmed ->
+                                                    profile?.let { onProfileUpdated(it.copy(emailVerified = confirmed)) }
+                                                    feedback = if (confirmed) {
+                                                        "Your email is confirmed. Your profile now shows " +
+                                                                "the Email verified badge."
+                                                    } else {
+                                                        "Your email is not confirmed yet. Open the link " +
+                                                                "in the email we sent, then try again."
+                                                    }
+                                                }
+                                                .onFailure {
+                                                    feedback = "Your email could not be checked. Check " +
+                                                            "your internet connection and try again."
+                                                }
+                                            checkingEmail = false
+                                        }
+                                    }
                                 }
                             }
 
@@ -758,7 +743,7 @@ fun ProfileSections(
 
                                 SectionLink(
                                     "Verification",
-                                    "Review the example verification process"
+                                    "Confirm your email address"
                                 ) { navigate("verification") }
 
                                 SectionLink(
@@ -778,75 +763,115 @@ fun ProfileSections(
                                 }
 
                                 SectionCard {
-                                    Text("Understand verification",
+                                    Text("What the Email verified badge means",
                                         fontWeight = FontWeight.Bold)
                                     Text(
-                                        "A verification badge does not guarantee " +
-                                                "food quality or another person's conduct."
+                                        "It only shows that the person confirmed their email " +
+                                                "address. It is not an identity check, and it does " +
+                                                "not guarantee the food's quality or anyone's conduct."
+                                    )
+                                }
+
+                                SectionCard {
+                                    Text("Ratings and reviews",
+                                        fontWeight = FontWeight.Bold)
+                                    Text(
+                                        "After a donor marks your pickup as claimed, you can rate " +
+                                                "them from the reservation in Activity \u2192 Purchases " +
+                                                "or Claims. Your name, stars and comment are shown to " +
+                                                "other users."
                                     )
                                 }
 
                                 SectionLink(
-                                    "How verification works",
-                                    "Learn about the proposed review process"
-                                ) { navigate("verificationSteps") }
+                                    "Email verification",
+                                    "Confirm your email address"
+                                ) { navigate("verification") }
 
                                 SectionLink(
                                     "Report a concern",
-                                    "Preview the reporting form"
+                                    "Where to find the Report buttons"
                                 ) { navigate("report") }
                             }
 
                             "report" -> {
-                                var reason by rememberSaveable {
-                                    mutableStateOf("")
-                                }
-
+                                // Reports are sent from the listing, the Donor/Seller page
+                                // or the chat; there is no report without a target.
                                 SectionCard {
-                                    OutlinedTextField(
-                                        value = reason,
-                                        onValueChange = { reason = it },
-                                        label = { Text("Describe the concern") },
-                                        placeholder = {
-                                            Text("e.g., The pickup details were incorrect")
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        minLines = 4
+                                    Text(
+                                        "Report a listing: open it and tap \u201cReport this " +
+                                                "listing\u201d at the bottom of its details."
+                                    )
+                                    Text(
+                                        "Report a donor or seller: open one of their listings, " +
+                                                "tap the Donor or Seller row, then tap \u201cReport " +
+                                                "<name>\u201d."
+                                    )
+                                    Text(
+                                        "Report someone you chat with: open the chat and tap " +
+                                                "the flag at the top right."
                                     )
                                 }
 
-                                SectionButton("Preview report") {
-                                    feedback = if (reason.isBlank()) {
-                                        "Describe the concern first."
-                                    } else {
-                                        "Report preview ready. Nothing was submitted."
-                                    }
-                                }
+                                Text(
+                                    "Reports go to the Salu-Salo team. The person you report " +
+                                            "is not told. You can send up to 10 reports a day.",
+                                    fontSize = 12.sp
+                                )
                             }
 
                             "reviews" -> {
+                                // Reviews about this account (names only), newest first.
+                                LaunchedEffect(page) { onReloadReviews() }
+                                val summary = ratingSummary
+                                val average = summary?.average
                                 SectionCard(pale = true) {
                                     Text(
-                                        "★ 4.8",
+                                        average?.let { "\u2605 ${formatRatingAverage(it)}" } ?: "—",
                                         fontSize = 35.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = SectionGreen
                                     )
-                                    Text("56 reviews • demo summary")
+                                    if (summary != null) {
+                                        Text(
+                                            if (summary.count > 0) reviewCountText(summary.count)
+                                            else "No reviews yet"
+                                        )
+                                    }
+                                    Text(
+                                        "Reviews from people who picked up your food.",
+                                        fontSize = 12.sp
+                                    )
                                 }
 
-                                listOf(
-                                    "Juan R." to "Very responsive and easy to coordinate with.",
-                                    "Maria C." to "Smooth transaction. Thank you!",
-                                    "Luis P." to "Great donor! Items were as described.",
-                                    "Anna S." to "Pickup instructions were clear.",
-                                    "Rico D." to "Friendly and helpful."
-                                ).forEach { (reviewer, comment) ->
-                                    SectionCard {
-                                        Text(reviewer, fontWeight = FontWeight.Bold)
-                                        Text("★★★★★", color = Color(0xFFFFAD08))
-                                        Text(comment)
-                                        Text("Example review", fontSize = 10.sp)
+                                val reviews = receivedReviews
+                                when {
+                                    reviews == null && reviewsFailed -> {
+                                        Text(
+                                            "Your reviews could not be loaded. " +
+                                                    "Check your internet connection and try again.",
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                        SectionButton("Try again") { onReloadReviews() }
+                                    }
+
+                                    reviews == null ->
+                                        Text("Loading your reviews…", fontSize = 13.sp)
+
+                                    reviews.isEmpty() ->
+                                        SectionCard { Text(NO_RATING_LINE) }
+
+                                    else -> {
+                                        reviews.forEach { review ->
+                                            SectionCard { ReviewRow(review) }
+                                        }
+                                        if ((summary?.count ?: 0) > reviews.size) {
+                                            Text(
+                                                "Showing your latest ${reviews.size} reviews.",
+                                                fontSize = 12.sp
+                                            )
+                                        }
                                     }
                                 }
                             }

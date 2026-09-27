@@ -4,7 +4,7 @@ import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostDraft
 import com.example.salusalo.model.FoodPostEdit
 import com.example.salusalo.model.FoodPostStatus
-import com.example.salusalo.model.ListingDonorName
+import com.example.salusalo.model.ListingDonorProfile
 import com.example.salusalo.model.NewFoodPost
 import com.example.salusalo.model.RemoveFoodPostResult
 import com.google.firebase.auth.FirebaseAuth
@@ -43,7 +43,7 @@ class FoodRepository(
             }
             order("created_at", Order.DESCENDING)
         }.decodeList<FoodPost>()
-        return withDonorNames(posts).map { post -> post.withSignedImageUrl(bucket) }
+        return withDonorProfiles(posts).map { post -> post.withSignedImageUrl(bucket) }
     }
 
     suspend fun getUserFoodPosts(): List<FoodPost> {
@@ -59,22 +59,31 @@ class FoodRepository(
     }
 
     /**
-     * Adds each donor's name from get_listing_donor_names(), which returns names
-     * only, for listings the caller may see. If the lookup fails the listings
-     * still load, without names.
+     * Adds each donor's name, "Email verified" and rating from
+     * get_listing_donor_profiles(), in one call for the whole list. It returns
+     * names only, for listings the caller may see. If the lookup fails the
+     * listings still load, without names or ratings.
      */
-    suspend fun withDonorNames(posts: List<FoodPost>): List<FoodPost> {
+    suspend fun withDonorProfiles(posts: List<FoodPost>): List<FoodPost> {
         if (posts.isEmpty()) return posts
-        val names = try {
-            supabase.postgrest.rpc("get_listing_donor_names", buildJsonObject {
+        val profiles = try {
+            supabase.postgrest.rpc("get_listing_donor_profiles", buildJsonObject {
                 putJsonArray("p_food_post_ids") { posts.forEach { add(it.id) } }
-            }).decodeList<ListingDonorName>().associate { it.foodPostId to it.donorName }
+            }).decodeList<ListingDonorProfile>().associateBy { it.foodPostId }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             return posts
         }
-        return posts.map { post -> post.copy(donorName = names[post.id]) }
+        return posts.map { post ->
+            val donor = profiles[post.id] ?: return@map post
+            post.copy(
+                donorName = donor.donorName,
+                donorRatingAverage = donor.ratingAverage,
+                donorReviewCount = donor.ratingCount,
+                donorEmailVerified = donor.emailVerified
+            )
+        }
     }
 
     /**

@@ -2,7 +2,7 @@
 
 Salu-Salo is an Android app for sharing surplus food within a community to reduce food waste. Donors post surplus food with a photo, quantity, pickup location and expiry date. Recipients browse the available listings and reserve some or all of a listing for pickup. The UI uses Philippine pesos (₱) and Philippine sample locations.
 
-**Status (2026-09-27):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Fixes to the demo parts of Phase 2 (real donor names, listing details, up to 4 photos, editing, saved listings; `docs/PROJECT_STATUS.md` §11) passed on two phones the same day, with the migration `20260929_phase2_listing_details.sql`. Fixes to the demo parts of Phase 3 (a Reserve review page and receipt, removing reserved listings, real Activity and Profile records; §12) passed on two phones on 2026-09-27 with the migration `20260930_phase3_demo_fixes.sql`, and were merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`). Fixes to the demo parts of Phase 4 (the Profile bell and Settings, a real notification sound, a real response rate, a live Messages inbox and a chat badge that counts unread messages; §13) passed a short test on two phones on 2026-09-27 with the migration `20261001_phase4_demo_fixes.sql`, on branch `claude/phase4-demo-fixes`; they are not merged into `master` yet. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
+**Status (2026-09-27):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Fixes to the demo parts of Phase 2 (real donor names, listing details, up to 4 photos, editing, saved listings; `docs/PROJECT_STATUS.md` §11) passed on two phones the same day, with the migration `20260929_phase2_listing_details.sql`. Fixes to the demo parts of Phase 3 (a Reserve review page and receipt, removing reserved listings, real Activity and Profile records; §12) passed on two phones on 2026-09-27 with the migration `20260930_phase3_demo_fixes.sql`, and were merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`). Fixes to the demo parts of Phase 4 (the Profile bell and Settings, a real notification sound, a real response rate, a live Messages inbox and a chat badge that counts unread messages; §13) passed a short test on two phones on 2026-09-27 with the migration `20261001_phase4_demo_fixes.sql`, and were merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`). Phase 5 part 1 (ratings and reviews, reports, and an "Email verified" badge; §14) passed on two phones on 2026-09-28 with the migration `20261002_phase5_reviews_reports.sql`, on branch `claude/phase5-reviews-reports-v6ahqn`; it is not merged into `master` yet. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
 
 ## Features
 
@@ -12,10 +12,11 @@ Working against the live backend:
 - **Food listings:** post a listing with a name, up to 4 photos, category, quantity, price, pickup location, expiry date, pickup window, handover, allergens and storage notes. Browse the feed of available, unexpired listings, newest first, with each donor's display name. Edit or delete your own listings, and bookmark other people's in Saved Listings.
 - **Reservations:** reserve part or all of another user's listing. The recipient can cancel until the donor marks the reservation claimed. The donor sees the recipient's display name, but not their email or phone number. The server updates the remaining quantity atomically.
 - **Activity:** the My Listings, My Reservations, My Donations, Purchases and Claims tabs, with totals of completed reservations. Listings can have a price, which is paid at pickup (no online payments).
-- **Messages:** message a listing's donor from its details screen or from a reservation; live chat and a Messages inbox with unread counts. Participants see each other's display name only.
-- **Alerts:** in-app alerts for new messages and for reservations being made, cancelled or claimed, with unread badges and settings saved to your account.
+- **Messages:** message a listing's donor from its details screen or from a reservation; live chat and a Messages inbox that stays live while the app is open, with unread counts and a chat badge that adds them up. Participants see each other's display name only.
+- **Alerts:** in-app alerts for new messages and for reservations being made, cancelled or claimed, with unread badges and settings saved to your account. While the app is open, a new alert plays the phone's notification sound (a switch saved on the phone).
+- **Response rate:** your own share of chats started by others in the last 30 days that you replied to, shown only to you on Profile.
 
-Demo or preview-only, with no backend yet: reviews and ratings, the verification badge and pages, and Report a concern. The response rate, a notification sound for new alerts while the app is open, and a live Messages inbox passed testing on branch `claude/phase4-demo-fixes` (§13), but are not merged into `master` yet. There are no push notifications yet. Most settings are saved only on the device; the profile name and photo and the notification preferences come from Supabase.
+Demo or preview-only on `master`, with no backend yet: reviews and ratings, the verification badge and pages, and Report a concern. Phase 5 part 1 replaces them on branch `claude/phase5-reviews-reports-v6ahqn` (passed on two phones; not merged yet). There are no push notifications yet. Most settings are saved only on the device; the profile name and photo and the notification preferences come from Supabase.
 
 ## Tech stack
 
@@ -79,6 +80,7 @@ Skip this section if you use the project's existing Supabase backend.
    8. `20260929_phase2_listing_details.sql`: the listing details and extra photos, editing through `update_my_food_post`, donor names and saved listings. Don't run `20260923_phase2_food_posts.sql` again after it.
    9. `20260930_phase3_demo_fixes.sql`: removing reserved listings through `remove_my_food_post` (clients have no DELETE on listings), the `REMOVED` status and saved-listing names.
    10. `20261001_phase4_demo_fixes.sql`: `get_my_response_rate()`, the caller's own response rate.
+   11. `20261002_phase5_reviews_reports.sql` (Phase 5 part 1, branch `claude/phase5-reviews-reports-v6ahqn`): reviews, reports and `users.email_verified`, with their SECURITY DEFINER functions. Clients can't read or write the two new tables directly.
 2. **Third-Party Auth.** In Supabase, open **Authentication → Third-Party Auth** and add a Firebase integration for the project ID `salusalo`.
 3. **Custom claim.** Every Firebase user needs the custom claim `role: authenticated`. A trusted Admin SDK or Cloud Function must add it; that code is not in this repository. Existing users must sign in again or refresh their ID token after the claim is added.
 
@@ -106,13 +108,15 @@ app/src/main/java/com/example/salusalo/
 ├── ProfileScreen.kt     Profile (with ProfileSections.kt)
 ├── AlertScreen.kt       Alerts
 ├── ChatScreen.kt        Chat and the Messages inbox
-├── FoodActions.kt       Preview-only pickup and checkout dialogs
+├── FoodActions.kt       Pickup location and Donor/Seller pages, Reserve review page and receipt
+├── ReviewsAndReports.kt Rate and Report pages (Phase 5 part 1)
 ├── data/                Repositories and the Supabase client
 ├── model/               Serializable data classes for the Supabase tables
 ├── viewmodel/           Food, Saved listing, Reservation, Message and Notification ViewModels
 └── ui/theme/            Template theme (not currently used)
 supabase/
 ├── migrations/          SQL migrations, applied by hand
+├── tests/               Read-only checks, live safety checks and the reports query (SQL Editor)
 └── README.md            Supabase and Firebase setup
 docs/PROJECT_STATUS.md   Detailed status, manual test plan and results
 CLAUDE.md                Architecture and working rules for Claude Code
@@ -126,7 +130,7 @@ CLAUDE.md                Architecture and working rules for Claude Code
 | 2 | Food Listings | Complete |
 | 3 | Reservations | Complete |
 | 4 | Messaging and Notifications | Complete |
-| 5 | Maps, Reviews, Reports | Not started |
+| 5 | Maps, Reviews, Reports | Part 1 (reviews, reports, Email verified) passed on two phones (2026-09-28), not merged yet; part 2 (Maps) not started |
 | 6 | Admin and Final Release | Not started |
 
 Known issues, and checks that still have no test record, are listed in [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
@@ -138,6 +142,7 @@ Known issues, and checks that still have no test record, are listed in [`docs/PR
 - The app can only read the `conversations`, `messages` and `notifications` tables; messages are sent through a server function, and alerts are created only by the database.
 - The app can only read the `reservations` table. Reserving, cancelling and claiming go through server functions (RPCs); reserving and cancelling change the listing's quantity in the same transaction.
 - The server enforces the ownership rules: no one can reserve their own listing, only the recipient can cancel, and only the listing's donor can mark a reservation claimed.
+- Phase 5 part 1 (passed on two phones; not merged yet): reviews and reports are written only through server functions that take the caller from the token; the app can't read the `reviews` or `reports` tables at all, and other people's reviews come back with names only. `users.email_verified` is set only from the Firebase token.
 
 ## Documentation
 

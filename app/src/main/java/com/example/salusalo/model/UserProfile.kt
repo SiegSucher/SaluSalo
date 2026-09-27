@@ -18,7 +18,10 @@ data class UserProfile(
     @SerialName("created_at")
     val createdAt: String? = null,
     @SerialName("updated_at")
-    val updatedAt: String? = null
+    val updatedAt: String? = null,
+    /** Set only by sync_my_email_verified() from the Firebase token; shows the "Email verified" badge. */
+    @SerialName("email_verified")
+    val emailVerified: Boolean = false
 )
 
 @Serializable

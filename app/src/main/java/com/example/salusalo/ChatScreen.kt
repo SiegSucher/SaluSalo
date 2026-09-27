@@ -21,10 +21,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -52,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.example.salusalo.model.ChatMessage
 import com.example.salusalo.model.ConversationSummary
+import com.example.salusalo.model.ReportTarget
 import com.example.salusalo.model.parseTimestamp
 import com.example.salusalo.viewmodel.MessageViewModel
 import java.time.LocalDate
@@ -86,6 +91,8 @@ fun ChatScreen(
     LaunchedEffect(conversation?.id, initialDraft) {
         if (conversation != null && draft.isEmpty() && initialDraft.isNotEmpty()) draft = initialDraft
     }
+    // Reporting the other person in this chat (for example a recipient who didn't show up).
+    var reporting by rememberSaveable(conversation?.id) { mutableStateOf(false) }
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
@@ -133,6 +140,15 @@ fun ChatScreen(
                                 )
                             }
                         }
+                        conversation?.let {
+                            IconButton(onClick = { reporting = true }) {
+                                Icon(
+                                    Icons.Outlined.Flag,
+                                    contentDescription = "Report ${it.otherName}",
+                                    tint = CGray
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -161,6 +177,17 @@ fun ChatScreen(
                             }
                         }
                     }
+                }
+
+                val chat = conversation
+                if (reporting && chat != null) {
+                    ReportPage(
+                        target = ReportTarget.CHAT,
+                        targetId = chat.id,
+                        heading = "Report ${chat.otherName}",
+                        prompt = "Why are you reporting ${chat.otherName}?",
+                        onClose = { reporting = false }
+                    )
                 }
 
                 if (conversation != null) {

@@ -13,7 +13,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 class ReservationRepository(
-    private val userRepository: UserRepository = UserRepository()
+    private val userRepository: UserRepository = UserRepository(),
+    private val foodRepository: FoodRepository = FoodRepository(userRepository)
 ) {
     private val supabase = SupabaseClientProvider.client
     private val postgrest = supabase.postgrest
@@ -53,11 +54,13 @@ class ReservationRepository(
         supabase.from("reservations").select { filter { filter("recipient_id", FilterOperator.EQ, profileId) } }
             .decodeList<Reservation>().toDisplays()
 
+    // The recipient's listings also get their donor's name ("Rate <name>").
     private suspend fun List<Reservation>.toDisplays(): List<ReservationDisplay> {
         if (isEmpty()) return emptyList()
         val ids = map { it.foodPostId }.toSet()
-        val posts = supabase.from("food_posts").select().decodeList<FoodPost>()
-            .filter { it.id in ids }.map { it.withSignedImageUrl(bucket) }.associateBy { it.id }
+        val reserved = supabase.from("food_posts").select().decodeList<FoodPost>().filter { it.id in ids }
+        val posts = foodRepository.withDonorProfiles(reserved)
+            .map { it.withSignedImageUrl(bucket) }.associateBy { it.id }
         return mapNotNull { reservation -> posts[reservation.foodPostId]?.let { ReservationDisplay(reservation, it) } }
     }
 }

@@ -4,6 +4,8 @@ import android.os.Bundle
 import coil3.compose.AsyncImage
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.ListingHandover
+import com.example.salusalo.model.ReportTarget
+import com.example.salusalo.model.donorRatingLabel
 import com.example.salusalo.model.parseTimestamp
 import com.example.salusalo.viewmodel.SavedListingViewModel
 import androidx.compose.foundation.pager.HorizontalPager
@@ -194,6 +196,18 @@ private fun SaluSaloApp() {
             }.onSuccess { profile ->
                 currentProfile = profile
                 screen = "home"
+                // Copy Firebase's email_verified into the profile in the background.
+                // It never blocks or signs anyone out; on any failure (offline, a
+                // reload or RPC error) the stored value stays and nothing is shown.
+                appScope.launch {
+                    runCatching { profileRepository.syncEmailVerified(forceRefresh = false) }
+                        .onSuccess { verified ->
+                            currentProfile = currentProfile
+                                ?.takeIf { it.id == profile.id }
+                                ?.copy(emailVerified = verified)
+                                ?: currentProfile
+                        }
+                }
             }.onFailure { error ->
                 message = profileErrorMessage(error)
             }
@@ -2102,6 +2116,7 @@ private fun FoodPost.toHomeFood(): HomeFood {
         status = if (urgent) "Expires soon" else "Available",
         pickupLocation = pickupLocation,
         donorName = donorName?.takeIf { it.isNotBlank() } ?: "Donor name unavailable",
+        donorRating = donorRatingLabel,
         photo = R.drawable.food_produce,
         imageUrl = displayImageUrl,
         urgent = urgent,
@@ -2121,6 +2136,8 @@ private data class HomeFood(
     // Listing price per unit (0 = free). The amount owed comes from the reservation.
     val unitPrice: Double = 0.0,
     val donorName: String,
+    // "★ 4.7 (12)", or null when the donor has no reviews.
+    val donorRating: String? = null,
     val photo: Int,
     val imageUrl: String? = null,
     val urgent: Boolean,
@@ -2346,9 +2363,18 @@ private fun AvailableFoodCard(
                         food.donorName,
                         fontSize = 9.sp,
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(1f, fill = food.donorRating == null)
                             .padding(end = 5.dp)
                     )
+
+                    food.donorRating?.let {
+                        Text(
+                            it,
+                            fontSize = 9.sp,
+                            color = RatingAmber,
+                            modifier = Modifier.padding(end = 5.dp)
+                        )
+                    }
                 }
             }
         }
@@ -2408,11 +2434,21 @@ private fun FoodDetailsScreen(
         }
     }
 
+    var reporting by rememberSaveable(food.id) {
+        mutableStateOf(false)
+    }
+
     if (foodAction.isNotEmpty()) {
         FoodActionsDialog(
             action = foodAction,
+            foodPostId = food.id,
             foodTitle = food.title,
             provider = food.donorName,
+            donorName = food.post.donorName?.takeIf { it.isNotBlank() },
+            isOwnListing = isOwnFood,
+            donorEmailVerified = food.post.donorEmailVerified,
+            donorRatingAverage = food.post.donorRatingAverage,
+            donorReviewCount = food.post.donorReviewCount,
             photo = food.photo,
             pickupLocation = food.pickupLocation,
             imageUrl = food.imageUrl,
@@ -2420,6 +2456,16 @@ private fun FoodDetailsScreen(
             status = food.status,
             onClose = { foodAction = "" },
             onMessage = { draft -> messageDonor(draft) }
+        )
+    }
+
+    if (reporting && !isOwnFood) {
+        ReportPage(
+            target = ReportTarget.LISTING,
+            targetId = food.id,
+            heading = "Report listing",
+            prompt = "What's wrong with ${food.title}?",
+            onClose = { reporting = false }
         )
     }
 
@@ -2657,8 +2703,18 @@ private fun FoodDetailsScreen(
                             Text(
                                 food.donorName,
                                 fontSize = 11.sp,
-                                maxLines = 2
+                                maxLines = 2,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
+
+                            food.donorRating?.let {
+                                Text(
+                                    "  $it",
+                                    fontSize = 11.sp,
+                                    color = RatingAmber,
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }
@@ -2814,7 +2870,7 @@ private fun FoodDetailsScreen(
                         FoodInfoRow(
                             icon = Icons.Outlined.Person,
                             title = if (donation) "Donor" else "Seller",
-                            value = food.donorName,
+                            value = food.donorRating?.let { "${food.donorName} • $it" } ?: food.donorName,
                             onClick = { foodAction = "provider" }
                         )
                     }
@@ -2966,6 +3022,21 @@ private fun FoodDetailsScreen(
                     textAlign = TextAlign.Center,
                     color = DarkGreen
                 )
+
+                if (!isOwnFood) {
+                    Spacer(Modifier.height(10.dp))
+
+                    TextButton(
+                        onClick = { reporting = true },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text(
+                            "Report this listing",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
         }
     }
