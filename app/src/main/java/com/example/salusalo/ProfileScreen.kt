@@ -8,6 +8,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.salusalo.model.ReservationStatus
 import coil3.compose.AsyncImage
 import com.example.salusalo.data.MessageRepository
+import com.example.salusalo.data.ReviewRepository
+import com.example.salusalo.model.RatingSummary
+import com.example.salusalo.model.ReviewItem
+import com.example.salusalo.model.dateText
+import com.example.salusalo.model.formatRatingAverage
+import com.example.salusalo.model.reviewCountText
+import com.example.salusalo.model.starsText
 import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.encodeProfilePhoto
 import com.example.salusalo.data.supabaseErrorText
@@ -53,13 +60,6 @@ private val PCream = Color(0xFFFCFBF6)
 private val PPale = Color(0xFFF0F5E8)
 private val PLine = Color(0xFFE4E9DC)
 private val PGold = Color(0xFFFFAD08)
-
-private data class ProfileReview(
-    val initials: String,
-    val name: String,
-    val time: String,
-    val message: String
-)
 
 @Composable
 fun ProfileScreen(
@@ -127,30 +127,35 @@ fun ProfileScreen(
     }
     LaunchedEffect(remoteProfile?.id) { loadResponseRate() }
 
-    val reviews = remember {
-        listOf(
-            ProfileReview(
-                "JR", "Juan R.", "2 days ago",
-                "Very responsive and easy to coordinate with."
-            ),
-            ProfileReview(
-                "MC", "Maria C.", "1 week ago",
-                "Smooth transaction. Thank you!"
-            ),
-            ProfileReview(
-                "LP", "Luis P.", "2 weeks ago",
-                "Great donor! Items were as described."
-            ),
-            ProfileReview(
-                "AS", "Anna S.", "3 weeks ago",
-                "Pickup instructions were clear and easy to follow."
-            ),
-            ProfileReview(
-                "RD", "Rico D.", "1 month ago",
-                "Friendly and helpful. Thank you for sharing!"
-            )
-        )
+    // This account's own rating and the reviews about it (names only), loaded
+    // when Profile opens and again when the reviews page opens. A reload keeps
+    // the last values until it finishes; a failed load clears them.
+    val reviewRepository = remember { ReviewRepository() }
+    var ratingSummary by remember { mutableStateOf<RatingSummary?>(null) }
+    var receivedReviews by remember { mutableStateOf<List<ReviewItem>?>(null) }
+    var reviewsLoading by remember { mutableStateOf(false) }
+    var reviewsFailed by remember { mutableStateOf(false) }
+    fun loadReviews() {
+        if (reviewsLoading) return
+        reviewsLoading = true
+        reviewsFailed = false
+        scope.launch {
+            try {
+                ratingSummary = reviewRepository.getMyRatingSummary()
+                receivedReviews = reviewRepository.getMyReceivedReviews()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                ratingSummary = null
+                receivedReviews = null
+                reviewsFailed = true
+            } finally {
+                reviewsLoading = false
+            }
+        }
     }
+    LaunchedEffect(remoteProfile?.id) { loadReviews() }
+    val emailVerified = remoteProfile?.emailVerified == true
 
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -281,10 +286,12 @@ fun ProfileScreen(
                     )
                 }
 
+                // Green once Firebase has confirmed the email; grey until then.
+                // Both open the Verification page.
                 Surface(
                     modifier = Modifier.clickable { page = "verification" },
                     shape = RoundedCornerShape(20.dp),
-                    color = PPale
+                    color = if (emailVerified) PPale else Color(0xFFEDEEF0)
                 ) {
                     Row(
                         modifier = Modifier.padding(
@@ -294,25 +301,19 @@ fun ProfileScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            Icons.Outlined.VerifiedUser,
+                            if (emailVerified) Icons.Outlined.MarkEmailRead else Icons.Outlined.MarkEmailUnread,
                             contentDescription = null,
-                            tint = PGreen,
+                            tint = if (emailVerified) PGreen else PGray,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            "Identity Verified",
-                            color = PGreen,
+                            if (emailVerified) "Email verified" else "Email not verified",
+                            color = if (emailVerified) PGreen else PGray,
                             fontSize = 10.sp
                         )
                     }
                 }
-
-                Text(
-                    "Demo verification & rating",
-                    fontSize = 9.sp,
-                    color = PGray
-                )
             }
 
             Column {
@@ -376,7 +377,9 @@ fun ProfileScreen(
                     page = "donations"
                 }
                 ProfileStat(
-                    Icons.Outlined.Star, "4.8", "Overall\nRating",
+                    Icons.Outlined.Star,
+                    ratingSummary?.average?.let(::formatRatingAverage) ?: "—",
+                    "Overall\nRating",
                     iconColor = PGold
                 ) {
                     page = "reviews"
@@ -394,12 +397,6 @@ fun ProfileScreen(
                     page = "membership"
                 }
             }
-            Text(
-                "Verified badge and rating are demo values",
-                modifier = Modifier.padding(top = 6.dp),
-                fontSize = 10.sp,
-                color = PGray
-            )
             }
         }
 
@@ -417,8 +414,11 @@ fun ProfileScreen(
                         color = PDark
                     )
                     Text(
-                        "Example verified profile. Verification helps build " +
-                                "trust in the community.",
+                        if (emailVerified) {
+                            "Your email address is confirmed."
+                        } else {
+                            "Confirm your email address to show the Email verified badge."
+                        },
                         fontSize = 11.sp,
                         lineHeight = 15.sp,
                         color = PGray
@@ -458,26 +458,26 @@ fun ProfileScreen(
                 Spacer(Modifier.width(6.dp))
 
                 Column(Modifier.weight(1f)) {
-                    Text("Identity Verified", fontSize = 11.sp)
+                    Text(if (emailVerified) "Email verified" else "Email not verified", fontSize = 11.sp)
                     Text(
-                        "Verified on Mar 15, 2023 • Demo",
+                        "Confirms the email address, not your identity",
                         fontSize = 9.sp,
                         color = PGray
                     )
                 }
 
                 Surface(
-                    color = Color(0xFFE7F0DA),
+                    color = if (emailVerified) Color(0xFFE7F0DA) else Color(0xFFEDEEF0),
                     shape = RoundedCornerShape(18.dp)
                 ) {
                     Text(
-                        "Verified",
+                        if (emailVerified) "Verified" else "Not verified",
                         modifier = Modifier.padding(
                             horizontal = 8.dp,
                             vertical = 5.dp
                         ),
                         fontSize = 10.sp,
-                        color = PGreen
+                        color = if (emailVerified) PGreen else PGray
                     )
                 }
 
@@ -520,6 +520,8 @@ fun ProfileScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(9.dp)
                     ) {
+                        val average = ratingSummary?.average
+                        val count = ratingSummary?.count ?: 0
                         Icon(
                             Icons.Outlined.Star,
                             contentDescription = null,
@@ -527,14 +529,18 @@ fun ProfileScreen(
                             modifier = Modifier.size(26.dp)
                         )
                         Text(
-                            "4.8",
+                            average?.let(::formatRatingAverage) ?: "—",
                             fontSize = 29.sp,
                             fontWeight = FontWeight.Bold,
                             color = PDark
                         )
                         Text("Overall Rating", fontSize = 10.sp)
-                        Text("★★★★★", color = PGold, fontSize = 13.sp)
-                        Text("(56 reviews)", fontSize = 10.sp)
+                        if (average != null && count > 0) {
+                            Text(starsText(average), color = PGold, fontSize = 13.sp)
+                            Text("(${reviewCountText(count)})", fontSize = 10.sp)
+                        } else if (ratingSummary != null) {
+                            Text("No reviews yet", fontSize = 10.sp)
+                        }
                     }
                 }
 
@@ -548,8 +554,17 @@ fun ProfileScreen(
                         fontSize = 12.sp
                     )
 
-                    reviews.take(3).forEach { review ->
-                        ProfileReviewRow(review)
+                    val recent = receivedReviews
+                    when {
+                        recent == null && reviewsFailed ->
+                            Text("Your reviews could not be loaded.", fontSize = 10.sp, color = PGray)
+                        recent == null ->
+                            Text("Loading your reviews…", fontSize = 10.sp, color = PGray)
+                        recent.isEmpty() ->
+                            Text(NO_RATING_LINE, fontSize = 10.sp, lineHeight = 13.sp, color = PGray)
+                        else -> recent.take(3).forEach { review ->
+                            ProfileReviewRow(review)
+                        }
                     }
 
                     TextButton(
@@ -620,8 +635,8 @@ fun ProfileScreen(
                         fontSize = 13.sp
                     )
                     Text(
-                        "Verified users help build a stronger, safer community " +
-                                "for everyone.",
+                        "Rate the people you get food from, and report anything " +
+                                "that doesn't feel right.",
                         fontSize = 11.sp,
                         lineHeight = 15.sp,
                         color = PGray
@@ -655,6 +670,10 @@ fun ProfileScreen(
             responseRate = responseRate,
             responseRateFailed = responseRateFailed,
             onReloadResponseRate = { loadResponseRate() },
+            ratingSummary = ratingSummary,
+            receivedReviews = receivedReviews,
+            reviewsFailed = reviewsFailed,
+            onReloadReviews = { loadReviews() },
             notificationViewModel = notificationViewModel,
             savedListingViewModel = savedListingViewModel,
             onOpenListing = { post ->
@@ -755,8 +774,13 @@ private fun ProfileStat(
     }
 }
 
+/** A short review row for the Profile panel: initials, name, stars, comment and date. */
 @Composable
-private fun ProfileReviewRow(review: ProfileReview) {
+private fun ProfileReviewRow(review: ReviewItem) {
+    val initials = review.reviewerName.trim().split(Regex("\\s+"))
+        .filter { it.isNotEmpty() }
+        .take(2)
+        .joinToString("") { it.take(1).uppercase() }
     Row(verticalAlignment = Alignment.Top) {
         Box(
             modifier = Modifier
@@ -766,7 +790,7 @@ private fun ProfileReviewRow(review: ProfileReview) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                review.initials,
+                initials,
                 fontSize = 10.sp,
                 color = PGreen
             )
@@ -779,22 +803,26 @@ private fun ProfileReviewRow(review: ProfileReview) {
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             Text(
-                review.name,
+                review.reviewerName,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Medium
             )
-            Text("★★★★★", color = PGold, fontSize = 11.sp)
-            Text(
-                review.message,
-                fontSize = 10.sp,
-                lineHeight = 13.sp,
-                color = PGray
-            )
-            Text(
-                review.time,
-                fontSize = 9.sp,
-                color = PGray
-            )
+            Text(starsText(review.rating), color = PGold, fontSize = 11.sp)
+            review.comment?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    it,
+                    fontSize = 10.sp,
+                    lineHeight = 13.sp,
+                    color = PGray
+                )
+            }
+            review.dateText()?.let {
+                Text(
+                    it,
+                    fontSize = 9.sp,
+                    color = PGray
+                )
+            }
         }
     }
 }
