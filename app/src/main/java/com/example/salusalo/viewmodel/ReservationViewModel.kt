@@ -5,7 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.salusalo.data.MessageRepository
 import com.example.salusalo.data.ReservationRepository
+import com.example.salusalo.data.ReviewRepository
 import com.example.salusalo.data.shortErrorText
+import com.example.salusalo.model.MyReview
 import com.example.salusalo.model.Reservation
 import com.example.salusalo.model.ReservationDisplay
 import kotlinx.coroutines.CancellationException
@@ -25,9 +27,17 @@ sealed interface ReserveResult {
     data class Failed(val message: String) : ReserveResult
 }
 
+/** The outcome of sending a review, shown only on the Rate page. */
+sealed interface ReviewResult {
+    /** [review].created tells whether it was new or changed. */
+    data class Saved(val review: MyReview) : ReviewResult
+    data class Failed(val message: String) : ReviewResult
+}
+
 class ReservationViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = ReservationRepository()
     private val messageRepository = MessageRepository()
+    private val reviewRepository = ReviewRepository()
     private val _myReservations = MutableStateFlow<List<ReservationDisplay>>(emptyList())
     val myReservations = _myReservations.asStateFlow()
     private val _donorReservations = MutableStateFlow<List<ReservationDisplay>>(emptyList())
@@ -45,7 +55,12 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     val message = _message.asStateFlow()
     private val _reserveResult = MutableStateFlow<ReserveResult?>(null)
     val reserveResult = _reserveResult.asStateFlow()
-    /** True from the moment a reserve, cancel or claim is accepted until it has finished. */
+    /** This account's own reviews, by reservation ID, for "Change your review". */
+    private val _myReviews = MutableStateFlow<Map<String, MyReview>>(emptyMap())
+    val myReviews = _myReviews.asStateFlow()
+    private val _reviewResult = MutableStateFlow<ReviewResult?>(null)
+    val reviewResult = _reviewResult.asStateFlow()
+    /** True from the moment a reserve, cancel, claim or review is accepted until it has finished. */
     private val _saving = MutableStateFlow(false)
     val saving = _saving.asStateFlow()
 
@@ -118,6 +133,26 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    /**
+     * Rates the donor of a claimed reservation, or changes the review. Reports
+     * only to the Rate page ([reviewResult]). Returns false when ignored because
+     * another write has not finished yet.
+     */
+    fun submitReview(reservationId: String, rating: Int, comment: String): Boolean = launchWrite {
+        _reviewResult.value = null
+        _reviewResult.value = try {
+            val review = reviewRepository.submitReview(reservationId, rating, comment)
+            _myReviews.value = _myReviews.value + (review.reservationId to review)
+            ReviewResult.Saved(review)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            ReviewResult.Failed(
+                shortErrorText(error, "Your review could not be sent. Check your internet connection and try again.")
+            )
+        }
+    }
+
     fun clearSession() {
         refreshPending = false
         _myReservations.value = emptyList()
@@ -126,10 +161,13 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
         _loadFailed.value = false
         _message.value = null
         _reserveResult.value = null
+        _myReviews.value = emptyMap()
+        _reviewResult.value = null
     }
 
     fun clearMessage() { _message.value = null }
     fun clearReserveResult() { _reserveResult.value = null }
+    fun clearReviewResult() { _reviewResult.value = null }
 
     // A second write asked for before the first has finished (for example a
     // double tap) is ignored, so the same write is never sent twice. The first
@@ -161,13 +199,16 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     // Loads each list on its own, so a failure in one cannot stop the other from
-    // loading. A failure is shown through [loadFailed].
+    // loading. A failure is shown through [loadFailed]. The caller's own reviews
+    // load alongside; if they fail, the last ones are kept and nothing is shown.
     private suspend fun refreshLists() {
         val mine = runCatching { repository.getMyReservations() }
             .onSuccess { _myReservations.value = it }
         val donor = runCatching { repository.getReservationsForMyFoodPosts() }
             .onSuccess { _donorReservations.value = it }
-        listOfNotNull(mine.exceptionOrNull(), donor.exceptionOrNull())
+        val reviews = runCatching { reviewRepository.getMyGivenReviews() }
+            .onSuccess { list -> _myReviews.value = list.associateBy { it.reservationId } }
+        listOfNotNull(mine.exceptionOrNull(), donor.exceptionOrNull(), reviews.exceptionOrNull())
             .firstOrNull { it is CancellationException }?.let { throw it }
         val failed = mine.isFailure || donor.isFailure
         _loadFailed.value = failed

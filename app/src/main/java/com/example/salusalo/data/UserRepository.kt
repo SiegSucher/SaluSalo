@@ -111,6 +111,42 @@ class UserRepository(
     /** A 1-hour signed URL for the user's own profile photo, or null. */
     suspend fun profilePhotoUrl(path: String?): String? = profileImages.signedUrlOrNull(path)
 
+    /**
+     * Copies the email_verified claim of the Firebase ID token into the profile
+     * (sync_my_email_verified). The server reads the claim from the token only
+     * and returns the stored value. The Firebase user is reloaded first. With
+     * [forceRefresh], or when Firebase already says the email is confirmed but
+     * the cached token doesn't, the token is refreshed before the call, so a
+     * link opened a moment ago (or on another phone) counts.
+     */
+    suspend fun syncEmailVerified(forceRefresh: Boolean): Boolean {
+        val user = firebaseAuth.currentUser ?: throw ProfileException.NotSignedIn
+        user.reload().await()
+        val claimVerified = user.getIdToken(false).await().claims["email_verified"] == true
+        if (forceRefresh || (user.isEmailVerified && !claimVerified)) {
+            user.getIdToken(true).await()
+        }
+        return supabase.postgrest.rpc("sync_my_email_verified").decodeAs()
+    }
+
+    /** Sends Firebase's verification email to the signed-in account's address. */
+    suspend fun sendVerificationEmail() {
+        val user = firebaseAuth.currentUser ?: throw ProfileException.NotSignedIn
+        try {
+            user.sendEmailVerification().await()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            throw VerificationException(
+                if (error is FirebaseTooManyRequestsException) {
+                    TOO_MANY_ATTEMPTS
+                } else {
+                    "The verification email could not be sent. Check your internet connection and try again."
+                }
+            )
+        }
+    }
+
     /** True when the signed-in Firebase account has an email/password sign-in. */
     fun hasPassword(): Boolean =
         firebaseAuth.currentUser?.providerData.orEmpty()
@@ -175,6 +211,9 @@ private const val PASSWORD_NOT_CHANGED =
     "Your password could not be changed. Check your internet connection and try again."
 
 class PasswordChangeException(message: String) : Exception(message)
+
+/** A verification-email failure, with a message for the user. */
+class VerificationException(message: String) : Exception(message)
 
 /**
  * The short error text from Supabase (for example "Enter your name." raised by

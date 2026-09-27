@@ -33,9 +33,18 @@ data class FoodPost(
     /** Photos 2–4 as private food-images paths; [imageUrl] stays the cover. */
     @SerialName("extra_image_paths") val extraImagePaths: List<String> = emptyList(),
     @Transient val displayImageUrl: String? = null,
-    /** The donor's name from get_listing_donor_names(); null if it could not be loaded. */
-    @Transient val donorName: String? = null
+    /** The donor's name from get_listing_donor_profiles(); null if it could not be loaded. */
+    @Transient val donorName: String? = null,
+    /** The donor's rating (one decimal) and number of reviews; null and 0 without reviews. */
+    @Transient val donorRatingAverage: Double? = null,
+    @Transient val donorReviewCount: Int = 0,
+    /** True when the donor's email address was confirmed (the "Email verified" badge). */
+    @Transient val donorEmailVerified: Boolean = false
 )
+
+/** "★ 4.7 (12)" for the donor, or null when they have no reviews. */
+val FoodPost.donorRatingLabel: String?
+    get() = ratingLabel(donorRatingAverage, donorReviewCount)
 
 @Serializable
 enum class FoodPostStatus {
@@ -97,13 +106,6 @@ data class RemoveFoodPostResult(
 ) {
     val deleted: Boolean get() = outcome == "DELETED"
 }
-
-/** Row returned by get_listing_donor_names(). */
-@Serializable
-data class ListingDonorName(
-    @SerialName("food_post_id") val foodPostId: String,
-    @SerialName("donor_name") val donorName: String? = null
-)
 
 data class FoodPostDraft(
     val name: String,
