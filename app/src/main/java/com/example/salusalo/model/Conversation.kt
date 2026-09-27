@@ -3,6 +3,7 @@ package com.example.salusalo.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import kotlin.math.roundToInt
 
 @Serializable
 data class Conversation(
@@ -39,6 +40,22 @@ data class ChatMessage(
     val body: String,
     @SerialName("created_at") val createdAt: String
 )
+
+/**
+ * get_my_response_rate(): the caller's own counts over the last [periodDays] days.
+ * [received] = chats whose first message the other person sent in that period;
+ * [replied] = those in which the caller answered after that first message.
+ */
+@Serializable
+data class ResponseRate(
+    val received: Int,
+    val replied: Int,
+    @SerialName("period_days") val periodDays: Int
+) {
+    /** round(replied ÷ received × 100); null when no one started a chat, never 0% or 100%. */
+    val percent: Int?
+        get() = if (received > 0) (replied * 100.0 / received).roundToInt() else null
+}
 
 /**
  * Parses a Postgres timestamp as PostgREST or Realtime sends it

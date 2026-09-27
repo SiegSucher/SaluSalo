@@ -14,6 +14,7 @@ import com.example.salusalo.viewmodel.NotificationViewModel
 import com.example.salusalo.viewmodel.SavedListingViewModel
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.ReservationDisplay
+import com.example.salusalo.model.ResponseRate
 import com.example.salusalo.model.parseTimestamp
 import com.example.salusalo.model.reservationTotal
 import com.example.salusalo.model.FoodPostStatus
@@ -54,6 +55,9 @@ fun ProfileSections(
     recordsLoaded: Boolean,
     recordsFailed: Boolean,
     onReloadRecords: () -> Unit,
+    responseRate: ResponseRate?,
+    responseRateFailed: Boolean,
+    onReloadResponseRate: () -> Unit,
     notificationViewModel: NotificationViewModel,
     savedListingViewModel: SavedListingViewModel,
     onOpenListing: (FoodPost) -> Unit
@@ -296,9 +300,13 @@ fun ProfileSections(
                             }
 
                             "response" -> {
+                                // Only this account's own numbers (get_my_response_rate).
+                                LaunchedEffect(page) { onReloadResponseRate() }
+                                val rate = responseRate
+                                val days = rate?.periodDays ?: 30
                                 SectionCard(pale = true) {
                                     Text(
-                                        "92%",
+                                        rate?.percent?.let { "$it%" } ?: "—",
                                         fontSize = 42.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = SectionGreen
@@ -307,26 +315,56 @@ fun ProfileSections(
                                         "Response rate",
                                         fontWeight = FontWeight.SemiBold
                                     )
-                                    Text("Demo reporting period: last 30 days")
+                                    Text("Last $days days")
                                 }
 
-                                SectionCard {
-                                    Text("Example response summary",
-                                        fontWeight = FontWeight.Bold)
-                                    Text("Conversations received: 50")
-                                    Text("Conversations replied to: 46")
-                                    Text("Conversations without a reply: 4")
-                                    HorizontalDivider()
-                                    Text("46 ÷ 50 × 100 = 92%")
+                                when {
+                                    rate == null && responseRateFailed -> {
+                                        Text(
+                                            "Your response rate could not be loaded. " +
+                                                    "Check your internet connection and try again.",
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                        SectionButton("Try again") { onReloadResponseRate() }
+                                    }
+
+                                    rate == null ->
+                                        Text("Loading your response rate…", fontSize = 13.sp)
+
+                                    rate.received == 0 ->
+                                        SectionCard {
+                                            Text(
+                                                "No one has started a chat with you in the " +
+                                                        "last $days days, so there is no rate yet."
+                                            )
+                                        }
+
+                                    else -> SectionCard {
+                                        Text("Your last $days days",
+                                            fontWeight = FontWeight.Bold)
+                                        Text("Chats started by others: ${rate.received}")
+                                        Text("Chats you replied to: ${rate.replied}")
+                                        Text("Chats without a reply: ${rate.received - rate.replied}")
+                                        HorizontalDivider()
+                                        val exact = rate.replied * 100 % rate.received == 0
+                                        Text(
+                                            "${rate.replied} ÷ ${rate.received} × 100 " +
+                                                    "${if (exact) "=" else "≈"} ${rate.percent}%"
+                                        )
+                                    }
                                 }
 
                                 SectionCard {
                                     Text("How it works",
                                         fontWeight = FontWeight.Bold)
                                     Text(
-                                        "This example measures the share of " +
-                                                "received conversations that got a reply. " +
-                                                "Your actual messages are not being tracked."
+                                        "Counts chats that someone else started with you in " +
+                                                "the last $days days. A chat counts as replied once " +
+                                                "you send a message after their first message. Chats " +
+                                                "you started are not counted. A note sent with a " +
+                                                "reservation starts a chat too. Only you can see " +
+                                                "your response rate."
                                     )
                                 }
 

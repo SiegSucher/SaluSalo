@@ -7,15 +7,18 @@ import com.example.salusalo.viewmodel.ReservationViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.salusalo.model.ReservationStatus
 import coil3.compose.AsyncImage
+import com.example.salusalo.data.MessageRepository
 import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.encodeProfilePhoto
 import com.example.salusalo.data.supabaseErrorText
+import com.example.salusalo.model.ResponseRate
 import com.example.salusalo.model.UserProfile
 import androidx.compose.ui.layout.ContentScale
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -97,6 +100,32 @@ fun ProfileScreen(
 
     var page by rememberSaveable { mutableStateOf("") }
     var notice by rememberSaveable { mutableStateOf("") }
+
+    // This account's own response rate (get_my_response_rate), loaded when
+    // Profile opens and again when the Response Rate page opens. A reload keeps
+    // the last numbers until it finishes; a failed load clears them.
+    val messageRepository = remember { MessageRepository() }
+    var responseRate by remember { mutableStateOf<ResponseRate?>(null) }
+    var responseRateLoading by remember { mutableStateOf(false) }
+    var responseRateFailed by remember { mutableStateOf(false) }
+    fun loadResponseRate() {
+        if (responseRateLoading) return
+        responseRateLoading = true
+        responseRateFailed = false
+        scope.launch {
+            try {
+                responseRate = messageRepository.getMyResponseRate()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                responseRate = null
+                responseRateFailed = true
+            } finally {
+                responseRateLoading = false
+            }
+        }
+    }
+    LaunchedEffect(remoteProfile?.id) { loadResponseRate() }
 
     val reviews = remember {
         listOf(
@@ -280,7 +309,7 @@ fun ProfileScreen(
                 }
 
                 Text(
-                    "Demo verification & statistics",
+                    "Demo verification & rating",
                     fontSize = 9.sp,
                     color = PGray
                 )
@@ -353,7 +382,9 @@ fun ProfileScreen(
                     page = "reviews"
                 }
                 ProfileStat(
-                    Icons.Outlined.Schedule, "92%", "Response\nRate"
+                    Icons.Outlined.Schedule,
+                    responseRate?.percent?.let { "$it%" } ?: "—",
+                    "Response\nRate"
                 ) {
                     page = "response"
                 }
@@ -364,7 +395,7 @@ fun ProfileScreen(
                 }
             }
             Text(
-                "Verified badge, rating and response rate are demo values",
+                "Verified badge and rating are demo values",
                 modifier = Modifier.padding(top = 6.dp),
                 fontSize = 10.sp,
                 color = PGray
@@ -621,6 +652,9 @@ fun ProfileScreen(
             recordsLoaded = reservationsLoaded,
             recordsFailed = reservationsFailed,
             onReloadRecords = { reservationViewModel.refresh() },
+            responseRate = responseRate,
+            responseRateFailed = responseRateFailed,
+            onReloadResponseRate = { loadResponseRate() },
             notificationViewModel = notificationViewModel,
             savedListingViewModel = savedListingViewModel,
             onOpenListing = { post ->

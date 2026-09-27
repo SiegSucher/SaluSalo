@@ -3,6 +3,7 @@ package com.example.salusalo.data
 import com.example.salusalo.model.ChatMessage
 import com.example.salusalo.model.Conversation
 import com.example.salusalo.model.ConversationSummary
+import com.example.salusalo.model.ResponseRate
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
@@ -50,6 +51,10 @@ class MessageRepository {
             put("p_conversation_id", conversationId); put("p_body", text)
         }).decodeAs()
     }
+
+    /** The caller's own response rate; the server takes the caller from the token. */
+    suspend fun getMyResponseRate(): ResponseRate =
+        postgrest.rpc("get_my_response_rate").decodeList<ResponseRate>().first()
 
     suspend fun markRead(conversationId: String) {
         postgrest.rpc("mark_conversation_read", buildJsonObject { put("p_conversation_id", conversationId) })
