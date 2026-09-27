@@ -84,6 +84,7 @@ fun ProfileScreen(
     val successfulClaims = myReservations.filter { it.reservation.status == ReservationStatus.CLAIMED }
     val successfulDonations = donorReservations.filter { it.reservation.status == ReservationStatus.CLAIMED }
     LaunchedEffect(Unit) { reservationViewModel.refresh() }
+    val unreadAlerts by notificationViewModel.unreadCount.collectAsStateWithLifecycle()
 
     // Name, photo and member-since date come only from the Supabase profile.
     val userRepository = remember { UserRepository() }
@@ -298,7 +299,7 @@ fun ProfileScreen(
 
             Column {
                 IconButton(
-                    onClick = { page = "settings" },
+                    onClick = onAlerts,
                     modifier = Modifier.size(36.dp)
                 ) {
                     Box {
@@ -307,23 +308,26 @@ fun ProfileScreen(
                             contentDescription = "Open alerts",
                             tint = PDark
                         )
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFF6900))
-                        )
+                        // The dot shows only while there are unread alerts.
+                        if (unreadAlerts > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFFF6900))
+                            )
+                        }
                     }
                 }
 
                 IconButton(
-                    onClick = { openAccount() },
+                    onClick = { page = "settings" },
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         Icons.Outlined.Settings,
-                        contentDescription = "Account settings",
+                        contentDescription = "Settings",
                         tint = PDark
                     )
                 }
