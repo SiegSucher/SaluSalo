@@ -78,6 +78,9 @@ data class NewFoodPost(
     val allergens: String?,
     @SerialName("storage_notes") val storageNotes: String?,
     @SerialName("extra_image_paths") val extraImagePaths: List<String>,
+    // The pickup pin: required for a new listing, so no defaults and never null.
+    @SerialName("pickup_latitude") val pickupLatitude: Double,
+    @SerialName("pickup_longitude") val pickupLongitude: Double,
     val status: FoodPostStatus = FoodPostStatus.AVAILABLE
 )
 
@@ -123,10 +126,15 @@ data class FoodPostDraft(
     val pickupEnd: String?,
     val handover: ListingHandover?,
     val allergens: String,
-    val storageNotes: String
+    val storageNotes: String,
+    val pickupPin: GeoPin
 )
 
-/** The fields update_my_food_post() may change. Quantity, unit and photos never change. */
+/**
+ * The fields update_my_food_post_with_pin() may change. Quantity, unit and
+ * photos never change. [pickupPin] null keeps the stored pin (or its absence):
+ * a pin can be added or moved, never removed.
+ */
 data class FoodPostEdit(
     val name: String,
     val description: String,
@@ -138,7 +146,8 @@ data class FoodPostEdit(
     val pickupEnd: String?,
     val handover: ListingHandover?,
     val allergens: String,
-    val storageNotes: String
+    val storageNotes: String,
+    val pickupPin: GeoPin?
 )
 
 /** True when the listing's expiry has passed, whatever its stored status. */

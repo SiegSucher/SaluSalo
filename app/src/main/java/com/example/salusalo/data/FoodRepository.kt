@@ -94,6 +94,8 @@ class FoodRepository(
     suspend fun createFoodPost(draft: FoodPostDraft, photos: List<ByteArray>): FoodPost {
         require(photos.isNotEmpty() && photos.all { it.isNotEmpty() }) { "Choose a food image before posting." }
         require(photos.size <= MAX_LISTING_PHOTOS) { "Choose at most $MAX_LISTING_PHOTOS photos." }
+        val pin = draft.pickupPin.rounded()
+        require(pin.isValid) { "Place the pickup pin on the map." }
         val profile = userRepository.getCurrentProfile()
         val firebaseUid = firebaseAuth.currentUser?.uid
             ?: throw ProfileException.NotSignedIn
@@ -132,7 +134,9 @@ class FoodRepository(
             handover = draft.handover?.code,
             allergens = draft.allergens.trim().ifBlank { null },
             storageNotes = draft.storageNotes.trim().ifBlank { null },
-            extraImagePaths = paths.drop(1)
+            extraImagePaths = paths.drop(1),
+            pickupLatitude = pin.latitude,
+            pickupLongitude = pin.longitude
         )
 
         // Remove the uploaded photos only when the insert itself fails. Once the
@@ -148,12 +152,15 @@ class FoodRepository(
     }
 
     /**
-     * Edits the caller's own listing through update_my_food_post(). The server
-     * finds the caller from the token and refuses anyone else's listing. Every
-     * parameter is sent, including nulls.
+     * Edits the caller's own listing, including its pickup pin, through
+     * update_my_food_post_with_pin(). The server finds the caller from the token
+     * and refuses anyone else's listing. Every parameter is sent, including
+     * nulls; a null pin keeps the stored one.
      */
-    suspend fun updateMyFoodPost(postId: String, edit: FoodPostEdit): FoodPost =
-        supabase.postgrest.rpc("update_my_food_post", buildJsonObject {
+    suspend fun updateMyFoodPost(postId: String, edit: FoodPostEdit): FoodPost {
+        val pin = edit.pickupPin?.rounded()
+        require(pin == null || pin.isValid) { "Place the pickup pin on the map." }
+        return supabase.postgrest.rpc("update_my_food_post_with_pin", buildJsonObject {
             put("p_food_post_id", postId)
             put("p_name", edit.name.trim())
             put("p_description", edit.description.trim().ifBlank { null })
@@ -166,7 +173,10 @@ class FoodRepository(
             put("p_handover", edit.handover?.code)
             put("p_allergens", edit.allergens.trim().ifBlank { null })
             put("p_storage_notes", edit.storageNotes.trim().ifBlank { null })
+            put("p_pickup_latitude", pin?.latitude)
+            put("p_pickup_longitude", pin?.longitude)
         }).decodeAs<FoodPost>().withSignedImageUrl(bucket)
+    }
 
     /**
      * 1-hour signed URLs for photos 2–4 (the cover is already signed). Each

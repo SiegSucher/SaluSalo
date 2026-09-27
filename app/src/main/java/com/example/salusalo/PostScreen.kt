@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostDraft
 import com.example.salusalo.model.FoodPostEdit
+import com.example.salusalo.model.GeoPin
+import com.example.salusalo.model.pickupPin
 import com.example.salusalo.model.parseTimestamp
 import com.example.salusalo.viewmodel.EditResult
 import com.example.salusalo.model.ListingHandover
@@ -55,6 +58,12 @@ private val PostGreen = Color(0xFF3F792B)
 private val PostCream = Color(0xFFFAF8F1)
 private val PostPale = Color(0xFFEDF3E1)
 private val PostDark = Color(0xFF213420)
+
+/** Keeps the pickup pin across rotation: [latitude, longitude], or nothing. */
+private val PinSaver = listSaver<GeoPin?, Double>(
+    save = { pin -> if (pin == null) emptyList() else listOf(pin.latitude, pin.longitude) },
+    restore = { values -> if (values.size == 2) GeoPin(values[0], values[1]) else null }
+)
 
 @Composable
 fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
@@ -74,6 +83,7 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
     var quantity by rememberSaveable { mutableStateOf("") }
     var unit by rememberSaveable { mutableStateOf("") }
     var location by rememberSaveable { mutableStateOf("") }
+    var pickupPin by rememberSaveable(stateSaver = PinSaver) { mutableStateOf<GeoPin?>(null) }
     var distribution by rememberSaveable {
         mutableStateOf(ListingHandover.MEET_AT_PICKUP_LOCATION.label)
     }
@@ -172,6 +182,7 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
             !donation && amount != null && amount > BigDecimal("99999.99") -> "Enter a price of at most ₱99,999.99."
             location.isBlank() -> "Enter the pickup location."
             textLength(location) > 300 -> "The pickup location must be 300 characters or fewer."
+            pickupPin == null -> "Place the pickup pin on the map."
             expiry <= now -> "Choose a future expiration date and time."
             pickupStart <= now -> "Choose a future pickup start time."
             pickupEnd <= pickupStart -> "Pickup must end after it starts."
@@ -378,6 +389,14 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                     Text(
                         "Enter an address or landmark recipients can recognize.",
                         fontSize = 11.sp
+                    )
+
+                    PickupPinPicker(
+                        pin = pickupPin,
+                        onPinChange = { pickupPin = it },
+                        savedPin = null,
+                        editing = false,
+                        accent = PostGreen
                     )
 
                     PostDateButton("Pickup starts", pickupStart) {
@@ -590,8 +609,9 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                     enabled = !saving && !backendSaving,
                     onClick = {
                         error = validate()
+                        val pin = pickupPin
 
-                        if (error.isBlank()) {
+                        if (error.isBlank() && pin != null) {
                             // Only an accepted request is waited for, so the
                             // button can never stay on "Posting…".
                             saving = foodViewModel.createPost(
@@ -609,7 +629,8 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                                     pickupEnd = Instant.ofEpochMilli(pickupEnd).toString(),
                                     handover = ListingHandover.fromLabel(distribution),
                                     allergens = allergens,
-                                    storageNotes = storage
+                                    storageNotes = storage,
+                                    pickupPin = pin
                                 ),
                                 photos.map { Uri.parse(it) }
                             )
@@ -722,6 +743,8 @@ fun EditListingDialog(
     }
     var description by rememberSaveable(post.id) { mutableStateOf(post.description.orEmpty()) }
     var location by rememberSaveable(post.id) { mutableStateOf(post.pickupLocation) }
+    // Older listings have no pin; one can be added or moved here, never removed.
+    var pickupPin by rememberSaveable(post.id, stateSaver = PinSaver) { mutableStateOf(post.pickupPin) }
     var expiry by rememberSaveable(post.id) { mutableStateOf(epochMillis(post.expirationDate)) }
     var pickupStart by rememberSaveable(post.id) { mutableStateOf(epochMillis(post.pickupStart)) }
     var pickupEnd by rememberSaveable(post.id) { mutableStateOf(epochMillis(post.pickupEnd)) }
@@ -880,6 +903,13 @@ fun EditListingDialog(
                         location,
                         { location = it }
                     )
+                    PickupPinPicker(
+                        pin = pickupPin,
+                        onPinChange = { pickupPin = it },
+                        savedPin = post.pickupPin,
+                        editing = true,
+                        accent = PostGreen
+                    )
                     PostDateButton("Pickup starts", pickupStart) {
                         chooseDateTime(pickupStart) { pickupStart = it }
                     }
@@ -938,7 +968,9 @@ fun EditListingDialog(
                                     pickupEnd = pickupEnd.takeIf { it != 0L }?.let { Instant.ofEpochMilli(it).toString() },
                                     handover = ListingHandover.fromLabel(handover),
                                     allergens = allergens,
-                                    storageNotes = storage
+                                    storageNotes = storage,
+                                    // Null only for an older listing that still has no pin.
+                                    pickupPin = pickupPin
                                 )
                             )
                         }
