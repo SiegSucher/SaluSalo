@@ -2,7 +2,7 @@
 
 Salu-Salo is an Android app for sharing surplus food within a community to reduce food waste. Donors post surplus food with a photo, quantity, pickup location and expiry date. Recipients browse the available listings and reserve some or all of a listing for pickup. The UI uses Philippine pesos (₱) and Philippine sample locations.
 
-**Status (2026-09-28):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Fixes to the demo parts of Phase 2 (real donor names, listing details, up to 4 photos, editing, saved listings; `docs/PROJECT_STATUS.md` §11) passed on two phones the same day, with the migration `20260929_phase2_listing_details.sql`. Fixes to the demo parts of Phase 3 (a Reserve review page and receipt, removing reserved listings, real Activity and Profile records; §12) passed on two phones on 2026-09-27 with the migration `20260930_phase3_demo_fixes.sql`, and were merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`). Fixes to the demo parts of Phase 4 (the Profile bell and Settings, a real notification sound, a real response rate, a live Messages inbox and a chat badge that counts unread messages; §13) passed a short test on two phones on 2026-09-27 with the migration `20261001_phase4_demo_fixes.sql`, and were merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`). Phase 5 part 1 (ratings and reviews, reports, and an "Email verified" badge; §14) passed on two phones on 2026-09-28 with the migration `20261002_phase5_reviews_reports.sql`, and was merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`). Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
+**Status (2026-09-28):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Fixes to the demo parts of Phase 2 (real donor names, listing details, up to 4 photos, editing, saved listings; `docs/PROJECT_STATUS.md` §11) passed on two phones the same day, with the migration `20260929_phase2_listing_details.sql`. Fixes to the demo parts of Phase 3 (a Reserve review page and receipt, removing reserved listings, real Activity and Profile records; §12) passed on two phones on 2026-09-27 with the migration `20260930_phase3_demo_fixes.sql`, and were merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`). Fixes to the demo parts of Phase 4 (the Profile bell and Settings, a real notification sound, a real response rate, a live Messages inbox and a chat badge that counts unread messages; §13) passed a short test on two phones on 2026-09-27 with the migration `20261001_phase4_demo_fixes.sql`, and were merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`). Phase 5 part 1 (ratings and reviews, reports, and an "Email verified" badge; §14) passed on two phones on 2026-09-28 with the migration `20261002_phase5_reviews_reports.sql`, and was merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`). Phase 5 part 2 (Maps; §15) is in code on branch `claude/phase5-maps`, with the migration `20261003_phase5_maps.sql`; it has not been built or tested yet, and the migration has not been applied. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
 
 ## Features
 
@@ -17,6 +17,8 @@ Working against the live backend:
 - **Response rate:** your own share of chats started by others in the last 30 days that you replied to, shown only to you on Profile.
 - **Reviews and reports:** after a claimed pickup, the recipient can rate the donor or seller (1–5 stars and an optional comment); ratings show next to donor names, on the Donor/Seller page and on Profile. Listings, donors and chat partners can be reported. An "Email verified" badge is set only from the Firebase token.
 
+On branch `claude/phase5-maps` (not built or tested yet): a pickup pin on an OpenStreetMap map when posting or editing a listing (tap the map or "Use my location"), the distance to each pinned listing on Home and in its details, a Nearby filter (5 km) and a Nearest sort, and a map with Directions (Google Maps) on the pickup location page and for open reservations.
+
 There are no push notifications yet. Most settings are saved only on the device; the profile name and photo and the notification preferences come from Supabase.
 
 ## Tech stack
@@ -27,6 +29,7 @@ There are no push notifications yet. Most settings are saved only on the device;
 | Sign-in | Firebase Authentication (email/password, and Google through Credential Manager) |
 | Backend | Supabase Postgres (PostgREST and RPCs), Storage and Realtime, through supabase-kt 3.5 on Ktor (OkHttp engine) |
 | Images | Coil 3 |
+| Maps (branch `claude/phase5-maps`) | osmdroid 6.1.20 with OpenStreetMap tiles (no API key); the phone's location through the platform LocationManager (`androidx.core`), no location library |
 | Build | Gradle 9.4.1 wrapper, Android Gradle Plugin 9.2.1, Kotlin 2.2.10, JDK 21; compileSdk 37, targetSdk 36, minSdk 24 |
 
 Supabase trusts Firebase through Third-Party Auth: the app sends the signed-in user's Firebase ID token as its Supabase access token, and row-level security (RLS) checks it. Navigation is plain Compose state, with no navigation library and no dependency injection. [`CLAUDE.md`](CLAUDE.md) describes the architecture in detail.
@@ -131,7 +134,7 @@ CLAUDE.md                Architecture and working rules for Claude Code
 | 2 | Food Listings | Complete |
 | 3 | Reservations | Complete |
 | 4 | Messaging and Notifications | Complete |
-| 5 | Maps, Reviews, Reports | Part 1 (reviews, reports, Email verified) passed on two phones (2026-09-28) and was merged through PR #9; part 2 (Maps) not started |
+| 5 | Maps, Reviews, Reports | Part 1 (reviews, reports, Email verified) passed on two phones (2026-09-28) and was merged through PR #9; part 2 (Maps) in code on branch `claude/phase5-maps`, not built or tested |
 | 6 | Admin and Final Release | Not started |
 
 Known issues, and checks that still have no test record, are listed in [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
@@ -144,6 +147,8 @@ Known issues, and checks that still have no test record, are listed in [`docs/PR
 - The app can only read the `reservations` table. Reserving, cancelling and claiming go through server functions (RPCs); reserving and cancelling change the listing's quantity in the same transaction.
 - The server enforces the ownership rules: no one can reserve their own listing, only the recipient can cancel, and only the listing's donor can mark a reservation claimed.
 - Phase 5 part 1 (passed on two phones; merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`)): reviews and reports are written only through server functions that take the caller from the token; the app can't read the `reviews` or `reports` tables at all, and other people's reviews come back with names only. `users.email_verified` is set only from the Firebase token.
+- Phase 5 part 2 (branch `claude/phase5-maps`, not built or tested): a listing's pickup pin is visible exactly to the people who can see the listing, and changes only through the insert and the `update_my_food_post_with_pin` server function, which takes the caller from the token; the app still has no UPDATE or DELETE on `food_posts`. The phone's location is used on the phone for distances, and is never sent to Supabase or stored. The one exception is "Use my location" on Post and Edit, which puts the pin at the phone's position; the donor then saves that pin with the listing, and the note says who sees it. Location access is foreground only and asked for only when it's needed.
+- Maps use OpenStreetMap's free tile servers, following their usage policy: a User-Agent that names the app, "© OpenStreetMap contributors" on every map, tiles cached in the app's own cache folder, and no bulk or offline downloading. There is no map API key. These servers suit testing and a small user base; before a large public release, consider a tile provider meant for apps, and keep its key out of the repo like the Supabase keys.
 
 ## Documentation
 
