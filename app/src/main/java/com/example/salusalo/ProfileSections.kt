@@ -47,7 +47,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 
 private val SectionGreen = Color(0xFF347523)
 private val SectionCream = Color(0xFFFCFBF6)
@@ -181,10 +180,9 @@ fun ProfileSections(
 
     Dialog(
         onDismissRequest = { back() },
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false
-        )
+        properties = EdgeToEdgeDialog
     ) {
+        DarkSystemBarIcons()
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = SectionCream

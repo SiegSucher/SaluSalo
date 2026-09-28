@@ -16,11 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Verified
 import com.example.salusalo.data.ReviewRepository
@@ -599,6 +602,31 @@ fun ReservationReviewDialog(
     }
 }
 
+/**
+ * For full-screen dialog pages with text boxes. The dialog draws edge to edge,
+ * so the page receives the keyboard's size and imePadding() (or
+ * safeDrawingPadding()) keeps the focused text box above it. Each page pads
+ * its header for the status bar and its bottom for the navigation bar, and
+ * calls [DarkSystemBarIcons].
+ */
+internal val EdgeToEdgeDialog = DialogProperties(
+    usePlatformDefaultWidth = false,
+    decorFitsSystemWindows = false
+)
+
+/** Dark status-bar and navigation-bar icons over a light edge-to-edge dialog page. */
+@Composable
+internal fun DarkSystemBarIcons() {
+    val view = LocalView.current
+    LaunchedEffect(view) {
+        val window = (view.parent as? DialogWindowProvider)?.window ?: return@LaunchedEffect
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
+        }
+    }
+}
+
 /** Full-screen page with a Back button and a title, shared by the pages above and ReviewsAndReports.kt. */
 @Composable
 internal fun ActionPage(
@@ -608,10 +636,9 @@ internal fun ActionPage(
 ) {
     Dialog(
         onDismissRequest = onBack,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false
-        )
+        properties = EdgeToEdgeDialog
     ) {
+        DarkSystemBarIcons()
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = ActionCream

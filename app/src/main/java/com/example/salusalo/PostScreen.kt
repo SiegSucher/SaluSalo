@@ -36,7 +36,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostDraft
 import com.example.salusalo.model.FoodPostEdit
@@ -768,12 +767,16 @@ fun EditListingDialog(
 
     Dialog(
         onDismissRequest = { if (!waiting) onClose(null) },
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = EdgeToEdgeDialog
     ) {
+        DarkSystemBarIcons()
+        // Clear of the status bar, the navigation bar and the keyboard, so the
+        // focused text box scrolls into view above the keyboard.
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(PostCream)
+                .safeDrawingPadding()
         ) {
             Row(
                 modifier = Modifier
@@ -796,7 +799,6 @@ fun EditListingDialog(
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .imePadding()
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
