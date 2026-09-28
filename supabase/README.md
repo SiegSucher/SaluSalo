@@ -53,12 +53,20 @@ error with **Try again**, and the backup script still works.
 
 1. Open https://console.cloud.google.com and pick the project **salusalo** (the
    Firebase project) in the project picker at the top.
+   **Check that the box at the top left says salusalo before creating anything:**
+   the console opens on the project used last, and a key from another project
+   is refused (the function answers 500 "the FIREBASE_AUTH_ADMIN_KEY secret is
+   missing or invalid"). These links open the right project directly:
+   https://console.cloud.google.com/iam-admin/roles?project=salusalo and
+   https://console.cloud.google.com/iam-admin/serviceaccounts?project=salusalo
 2. Menu ☰ → **IAM & Admin** → **Roles** → **+ Create role**.
 3. Title `Salu-Salo role setter`, ID `salusaloRoleSetter`, Role launch stage
    **General Availability**.
-4. **+ Add permissions** → in the filter type `firebaseauth.users.get`, tick
-   it, then type `firebaseauth.users.update`, tick it → **Add**. The role lists
-   exactly these two permissions → **Create**.
+4. **+ Add permissions** → **Filter permissions by role** → **Firebase
+   Authentication Admin** → tick `firebaseauth.users.get` and
+   `firebaseauth.users.update` → **Add**. (Typing the permission names into the
+   filter didn't find them on 2026-09-28.) The role lists exactly these two
+   permissions → **Create**.
    - `firebaseauth.users.get` is what `accounts:lookup` (reading the account's
      claims) needs, and `firebaseauth.users.update` what `accounts:update`
      (writing them) needs. Nothing else is needed.
@@ -76,7 +84,9 @@ error with **Try again**, and the backup script still works.
 
 **C. JSON key**
 
-8. Click `salusalo-role-setter@salusalo.iam.gserviceaccount.com` → **Keys** tab
+8. Check that the account's email ends with `@salusalo.iam.gserviceaccount.com`;
+   any other ending means it is in another project (delete it and start again
+   at step 1). Click `salusalo-role-setter@salusalo.iam.gserviceaccount.com` → **Keys** tab
    → **Add key** → **Create new key** → **JSON** → **Create**. The browser
    downloads a file named like `salusalo-<12 characters>.json`.
    - If Google Cloud says key creation is disabled, an organisation policy
@@ -100,8 +110,14 @@ error with **Try again**, and the backup script still works.
 
 **F. Deploy with JWT verification off**
 
-11. **Edge Functions** → **Deploy a new function** → **Via Editor**. Name the
-    function `set-firebase-role` (exactly this: the app calls it by name).
+11. **Edge Functions** → **Deploy a new function** → **Via Editor**. Set the
+    function's name to `set-firebase-role` **before the first deploy** (exactly
+    this: the app calls it at that address). Renaming it later changes only its
+    label, not its address (on 2026-09-28 the editor's random `quick-api`), and
+    the app then gets 404 "Requested function was not found". In the Edge
+    Functions list, the **URL** column must end with
+    `/functions/v1/set-firebase-role`; if not, delete the function and deploy
+    again.
     Replace all of the sample code in `index.ts` with the whole of
     `functions/set-firebase-role/index.ts` from this repo → **Deploy function**.
 12. Open the function (**Edge Functions** → `set-firebase-role`) and, in its
@@ -128,7 +144,8 @@ error with **Try again**, and the backup script still works.
 
 **H. Check**
 
-14. **Edge Functions** → `set-firebase-role` → **Test**: send a POST (any
+14. **Edge Functions** → `set-firebase-role` → **Test** (the button at the top
+    right of the function's page): send a POST (any
     headers the panel adds are not a Firebase token). Expected: HTTP **401**
     with the body `{"error":"Invalid or missing Firebase ID token."}`, and the
     function's **Logs** show one line `set-firebase-role: refused (...)` with a
