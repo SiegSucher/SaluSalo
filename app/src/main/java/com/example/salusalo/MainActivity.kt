@@ -52,6 +52,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.horizontalScroll
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
@@ -284,10 +285,13 @@ private fun SaluSaloApp() {
         }
     }
 
-    // Back on Create Account and Forgot password goes to Sign In. On Home, Sign In
-    // and the welcome pages it closes the app; Home never signs out (Profile's Log out does).
-    BackHandler(enabled = screen == "signup" || screen == "forgot") {
-        screen = "signin"
+    // Back on Create Account and Forgot password goes to Sign In. On Home it moves the
+    // app to the background, like the Home button: some phones (the test Xiaomi) would
+    // otherwise close it, and a fresh start without "Keep me signed in" signs out.
+    // On Sign In and the welcome pages it closes the app.
+    val activity = LocalActivity.current
+    BackHandler(enabled = screen == "home" || screen == "signup" || screen == "forgot") {
+        if (screen == "home") activity?.moveTaskToBack(true) else screen = "signin"
     }
 
     Surface(

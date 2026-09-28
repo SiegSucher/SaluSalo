@@ -68,7 +68,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 
 - **Auth flows.** Sign-up (with display name), sign-in, password-reset email and sign-out through Firebase, in `SaluSaloApp()` (`MainActivity.kt` L113–325).
   - An existing session is restored on launch (`LaunchedEffect(firebaseAuth.currentUser?.uid)`, L156–160).
-  - System Back on the Home page signed the user out (L162–171) until §17; since then it closes the app, and only Profile's Log out signs out.
+  - System Back on the Home page signed the user out (L162–171) until §17. §17 made it close the app, which on the test Xiaomi still ended the session: without "Keep me signed in" a fresh start signs out. Since §19's test it moves the app to the background, like the Home button. Only Profile's Log out signs out.
 - **Profile creation.** After sign-up the ID token is force-refreshed so it includes the `role: authenticated` claim, which, since §18, `UserRepository.ensureSupabaseRole()` gets from the `set-firebase-role` Edge Function (before §18 the developer's Admin SDK script, outside this repo, added it by hand). `UserRepository.loadOrCreateCurrentProfile()` then finds or creates the `public.users` row.
   - New rows are always `RECIPIENT`: the DB default plus the RLS insert check.
 - **Supabase tokens.** `SupabaseClientProvider` sends the Firebase ID token to Supabase, and RLS checks it via `is_salusalo_firebase_jwt()`.
@@ -2071,6 +2071,10 @@ The steps, with the log lines and what to do on a 500 or 502, are in [`supabase/
   - Home → (i) "About the filters" ends with: "Recommended for you: once you have reserved or saved food, the first row shows listings like it, leaving out your own, saved and reserved ones. Food that expires soon or is near you moves up. It is worked out on this phone, and nothing about it is sent."
   - Settings → Food preferences: the caption "Choose food for the ‘For your preferences’ row on Home." became "Choose food for Home's first row (‘Recommended for you’ or ‘For your preferences’)."
 - **Tests:** `RecommendationsTest` (20 JVM tests, §19.5).
+- **Back on Home** (`MainActivity.kt`, added during the test at the developer's request; not part of the recommendations):
+  - The phone's Back button on Home now moves the app to the background (`moveTaskToBack(true)`), like the Home button.
+  - Since §17 it closed the app. On the test Xiaomi that closed it completely, so the next open was a fresh start, which signs out without "Keep me signed in" (§17.6, step 9). Stock Android 12 and later already move such an app to the background themselves.
+  - "Keep me signed in" still applies after a real close: swiped away in Recents, or a phone restart.
 
 Commits: `6397dbc` (the PR #13 merge in the docs), `6008b84` (the expiry rule, the recommender and its tests), `74ef69c` (the Home row), then this document with `CLAUDE.md` and `README.md`.
 
@@ -2121,6 +2125,11 @@ Each check is tagged [New] or [Regression].
 6. [New] Settings → Food preferences: the caption reads "Choose food for Home's first row (‘Recommended for you’ or ‘For your preferences’)." Check only "Bread & pastries" → "Save preferences" → Home: the title stays "Recommended for you", every card in the row is Bread & pastries, and Pandesal is one of them. Then uncheck everything and save.
 7. [New] Home → (i): "About the filters" ends with the paragraph quoted in §19.1.
 8. [Regression] Activity → My Reservations → cancel the Chicken adobo reservation (the "Reservation" dialog appears as before), and unsave Pechay. Home: the row is "Newest listings" again, up to 5 cards, newest first, with no reasons. Chicken adobo and Chicken sopas may show there.
+9. [New] Back on Home, phone 1:
+   - Profile → Log out, then sign in as A with "Keep me signed in" unticked.
+   - On Home press the phone's Back: the phone's home screen shows. Open Salu-Salo from its icon: Home, still signed in as A.
+   - [Regression] "Browse all" → Back: Home, and the app stays open.
+   - [Regression] Swipe Salu-Salo away in Recents and open it: Sign In, because the box was unticked. Sign in as A again for the clean-up.
 
 **Clean-up:** phone 1: delete the 5 test listings (Chicken adobo is kept as `REMOVED`, because it was reserved). Phone 2: delete Chicken sopas.
 
@@ -2145,6 +2154,7 @@ Each check is tagged [New] or [Regression].
 - The row's title is blank for a moment while the history loads.
 - On a recommended card the reason replaces "Expires soon"; the orange color stays, and the details page and the Available food card still say "Expires soon".
 - With a font size above the default, the cards grow taller than the "Help reduce food waste" tile beside them (the tile stays 180 dp).
+- Back on Home: since the app handles Back there itself, Android 16's back-to-home preview animation doesn't play there.
 
 ### 19.7 Results
 
