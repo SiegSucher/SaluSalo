@@ -3,6 +3,7 @@ package com.example.salusalo.data
 import com.example.salusalo.BuildConfig
 import com.google.firebase.auth.FirebaseAuth
 import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
@@ -12,7 +13,9 @@ import kotlinx.coroutines.tasks.await
 /**
  * Uses Firebase's signed ID token for every Supabase request.
  * Supabase must be configured with Firebase Third-Party Auth before requests
- * to protected tables or Storage will succeed.
+ * to protected tables or Storage will succeed, and the token must carry the
+ * claim role: "authenticated" (see [UserRepository.ensureSupabaseRole], which
+ * calls the set-firebase-role Edge Function through the Functions plugin).
  */
 object SupabaseClientProvider {
     val client: SupabaseClient by lazy {
@@ -40,6 +43,8 @@ object SupabaseClientProvider {
             // when a channel joins. It is not refreshed automatically without
             // the Supabase Auth plugin; NotificationViewModel re-sends it.
             install(Realtime)
+            // Edge Functions get the same Firebase token and publishable key.
+            install(Functions)
         }
     }
 }

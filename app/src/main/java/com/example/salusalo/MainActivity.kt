@@ -188,28 +188,34 @@ private fun SaluSaloApp() {
     val profileRepository = remember { UserRepository() }
     val appScope = rememberCoroutineScope()
     var currentProfile by remember { mutableStateOf<UserProfile?>(null) }
+    // The name typed on Create Account, kept so "Try again" creates the profile with it.
+    var signUpName by rememberSaveable { mutableStateOf<String?>(null) }
+    // True while the message is an account setup failure that "Try again" can repeat.
+    var canRetrySetup by rememberSaveable { mutableStateOf(false) }
 
     fun logOut() {
         firebaseAuth.signOut()
         currentProfile = null
+        signUpName = null
         // Also forget the Google account chosen in Credential Manager (best effort).
         appScope.launch { clearGoogleCredentialState(context) }
         screen = "signin"
     }
-    fun openAuthenticatedHome(
-        displayNameOverride: String? = null,
-        refreshFirebaseToken: Boolean = false
-    ) {
+    fun openAuthenticatedHome(displayNameOverride: String? = null) {
         isAuthenticating = true
         appScope.launch {
             runCatching {
-                // A newly created Firebase user may receive its required
-                // Supabase role claim asynchronously from a Cloud Function.
-                if (refreshFirebaseToken) {
-                    firebaseAuth.currentUser?.getIdToken(true)?.await()
-                }
+                // Before the first Supabase call: a new account's token gets the
+                // role claim Supabase requires (the set-firebase-role Edge Function).
+                profileRepository.ensureSupabaseRole()
                 profileRepository.loadOrCreateCurrentProfile(displayNameOverride)
             }.onSuccess { profile ->
+                // An overlapping attempt may have failed first: its dialog is out of date.
+                if (canRetrySetup) {
+                    message = ""
+                    canRetrySetup = false
+                }
+                signUpName = null
                 currentProfile = profile
                 markWelcomeSeen(context)
                 screen = "home"
@@ -226,7 +232,13 @@ private fun SaluSaloApp() {
                         }
                 }
             }.onFailure { error ->
-                message = profileErrorMessage(error)
+                // Nothing to report when an overlapping attempt already reached Home.
+                if (currentProfile == null) {
+                    // The user stays signed in to Firebase, so Sign In offers "Try again".
+                    screen = "signin"
+                    canRetrySetup = true
+                    message = profileErrorMessage(error)
+                }
             }
             isAuthenticating = false
         }
@@ -242,9 +254,9 @@ private fun SaluSaloApp() {
                     .await()
                 setKeepSignedIn(context, keep)
                 isAuthenticating = false
-                // Like sign-up: a new Google user's role claim may arrive later,
-                // and the profile is created with the Google name and email.
-                openAuthenticatedHome(refreshFirebaseToken = true)
+                signUpName = null
+                // A new Google user's profile is created with the Google name and email.
+                openAuthenticatedHome()
             } catch (error: GetCredentialCancellationException) {
                 // The user closed the account picker: nothing to report.
                 isAuthenticating = false
@@ -266,7 +278,7 @@ private fun SaluSaloApp() {
 
     LaunchedEffect(firebaseAuth.currentUser?.uid) {
         if (firebaseAuth.currentUser != null && currentProfile == null) {
-            openAuthenticatedHome()
+            openAuthenticatedHome(signUpName)
         }
     }
 
@@ -372,7 +384,8 @@ private fun SaluSaloApp() {
                                                             displayName = name.trim()
                                                         }
                                                     )
-                                                    openAuthenticatedHome(name.trim(), refreshFirebaseToken = true)
+                                                    signUpName = name.trim()
+                                                    openAuthenticatedHome(name.trim())
                                                 } else {
                                                     message = authErrorMessage(
                                                         task.exception
@@ -404,6 +417,7 @@ private fun SaluSaloApp() {
                                                 isAuthenticating = false
                                                 if (task.isSuccessful) {
                                                     setKeepSignedIn(context, keep)
+                                                    signUpName = null
                                                     openAuthenticatedHome()
                                                 } else {
                                                     message = authErrorMessage(
@@ -423,14 +437,39 @@ private fun SaluSaloApp() {
     }
 
     if (message.isNotEmpty()) {
+        // After a failed account setup the user is still signed in to Firebase,
+        // so "Try again" repeats the setup without signing in again.
+        val retry = canRetrySetup && firebaseAuth.currentUser != null
+        val close = {
+            message = ""
+            canRetrySetup = false
+        }
         AlertDialog(
-            onDismissRequest = { message = "" },
+            onDismissRequest = close,
             title = { Text("Salu-Salo") },
             text = { Text(message) },
             confirmButton = {
-                TextButton(onClick = { message = "" }) {
-                    Text("OK")
+                if (retry) {
+                    TextButton(onClick = {
+                        close()
+                        openAuthenticatedHome(signUpName)
+                    }) {
+                        Text("Try again")
+                    }
+                } else {
+                    TextButton(onClick = close) {
+                        Text("OK")
+                    }
                 }
+            },
+            dismissButton = if (retry) {
+                {
+                    TextButton(onClick = close) {
+                        Text("Close")
+                    }
+                }
+            } else {
+                null
             }
         )
     }
