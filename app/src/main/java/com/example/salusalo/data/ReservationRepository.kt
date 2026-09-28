@@ -40,9 +40,7 @@ class ReservationRepository(
         // donor's own food posts; it does not broaden profile-table RLS access.
         val rows = postgrest.rpc("get_donor_reservations").decodeList<DonorReservationRow>()
         if (rows.isEmpty()) return emptyList()
-        val ids = rows.map { it.foodPostId }.toSet()
-        val posts = supabase.from("food_posts").select().decodeList<FoodPost>()
-            .filter { it.id in ids }.map { it.withSignedImageUrl(bucket) }.associateBy { it.id }
+        val posts = foodPostsById(rows.map { it.foodPostId }).withSignedImageUrls(bucket).associateBy { it.id }
         return rows.mapNotNull { row ->
             posts[row.foodPostId]?.let { post ->
                 ReservationDisplay(row.toReservation(), post, row.recipientName)
@@ -57,11 +55,25 @@ class ReservationRepository(
     // The recipient's listings also get their donor's name ("Rate <name>").
     private suspend fun List<Reservation>.toDisplays(): List<ReservationDisplay> {
         if (isEmpty()) return emptyList()
-        val ids = map { it.foodPostId }.toSet()
-        val reserved = supabase.from("food_posts").select().decodeList<FoodPost>().filter { it.id in ids }
+        val reserved = foodPostsById(map { it.foodPostId })
         val posts = foodRepository.withDonorProfiles(reserved)
-            .map { it.withSignedImageUrl(bucket) }.associateBy { it.id }
+            .withSignedImageUrls(bucket).associateBy { it.id }
         return mapNotNull { reservation -> posts[reservation.foodPostId]?.let { ReservationDisplay(reservation, it) } }
+    }
+
+    /**
+     * Only the listings with these IDs, as far as the caller may see them: the
+     * food_posts SELECT policy decides, as for any read, so removed and expired
+     * listings of the caller's own reservations still load. At most 100 IDs per
+     * request keeps the URL short.
+     */
+    private suspend fun foodPostsById(ids: Collection<String>): List<FoodPost> =
+        ids.distinct().chunked(MAX_IDS_PER_REQUEST).flatMap { chunk ->
+            supabase.from("food_posts").select { filter { isIn("id", chunk) } }.decodeList<FoodPost>()
+        }
+
+    private companion object {
+        const val MAX_IDS_PER_REQUEST = 100
     }
 }
 

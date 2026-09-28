@@ -23,22 +23,29 @@ class SavedListingRepository(
     private val supabase = SupabaseClientProvider.client
     private val bucket = supabase.storage.from("food-images")
 
-    /** The caller's saved rows, newest saved first, with each visible listing, its donor's name and rating, and its cover URL. */
+    /** The caller's saved rows, newest saved first, with each visible listing, its donor's name and rating, and its cover URL (one signing request for the visible covers). */
     suspend fun getSavedListings(): List<SavedListingRow> {
         val rows = supabase.from("saved_listings").select(Columns.raw("food_post_id, created_at, food_posts(*)")) {
             order("created_at", Order.DESCENDING)
         }.decodeList<SavedListingRow>()
-        val named = foodRepository.withDonorProfiles(rows.mapNotNull { it.foodPost }).associateBy { it.id }
+        val named = foodRepository.withDonorProfiles(rows.mapNotNull { it.foodPost })
+            .withSignedImageUrls(bucket).associateBy { it.id }
         val hidden = if (rows.any { it.foodPost == null }) savedNames() else emptyMap()
+        // Covers of listings the caller can no longer see get their own request:
+        // they are the likeliest to fail, which would send the visible covers
+        // down the one-request-per-photo fallback too.
+        val hiddenUrls = bucket.signedUrls(
+            rows.filter { it.foodPost == null }.map { hidden[it.foodPostId]?.imagePath }
+        )
         return rows.map { row ->
             val post = named[row.foodPostId]
             if (post != null) {
-                row.copy(foodPost = post.withSignedImageUrl(bucket))
+                row.copy(foodPost = post)
             } else {
                 val name = hidden[row.foodPostId]
                 row.copy(
                     fallbackName = name?.name,
-                    fallbackImageUrl = bucket.signedUrlOrNull(name?.imagePath)
+                    fallbackImageUrl = name?.imagePath?.let { hiddenUrls[it] }
                 )
             }
         }
