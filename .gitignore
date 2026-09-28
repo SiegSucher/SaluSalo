@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Google Cloud service account keys (for example the set-firebase-role key,
+# which belongs only in the Supabase secret). Not app/google-services.json.
+salusalo-*.json
+*service-account*.json

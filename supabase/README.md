@@ -20,12 +20,181 @@ Before the Android app can read or create user profiles:
 
 1. In Supabase, open Authentication > Third-Party Auth.
 2. Add a Firebase Auth integration with Firebase project ID salusalo.
-3. In Firebase, use a trusted Admin SDK / Cloud Function to put
-   role: authenticated into the ID token for every user.
-4. Existing Firebase users must receive that same custom claim and sign in again
-   or refresh their ID token.
+3. Every Firebase user needs the custom claim role: authenticated in the ID
+   token. Deploy the `set-firebase-role` Edge Function (next section): the app
+   calls it once for an account whose token lacks the claim, then refreshes the
+   token. The developer's local Admin SDK script (not in this repo) stays as a
+   backup; the app picks up a claim it set on the next token refresh.
+4. Existing Firebase users that already have the claim need nothing new; any
+   without it get it the same way on their next sign-in.
 
 Never put a Firebase Admin credential or Supabase service-role key in this app.
+
+## Edge Function `set-firebase-role` (the role for new accounts)
+
+`functions/set-firebase-role/index.ts` gives the **calling** Firebase account
+the custom claim `role: "authenticated"` and nothing else. It verifies the
+caller's Firebase ID token itself (signature against Google's keys, issuer and
+audience `salusalo`, expiry), takes the account only from that token, refuses
+anonymous, disabled, deleted and revoked accounts, keeps every other custom
+claim, and answers at once without calling Google when the token already has
+the role. It has no dependencies. It needs a Google Cloud service account whose
+only role is a custom role with two permissions, and that account's JSON key as
+the Edge Function secret `FIREBASE_AUTH_ADMIN_KEY`. The key must never be put in
+the app, this repo, the docs, a chat or a log. There is no SQL.
+
+The app build that calls it (branch `claude/auto-role-claim`) can be installed
+before or after the setup: until the function works, a new account gets the
+error with **Try again**, and the backup script still works.
+
+### One-time setup
+
+**A. Custom role (Google Cloud console)**
+
+1. Open https://console.cloud.google.com and pick the project **salusalo** (the
+   Firebase project) in the project picker at the top.
+2. Menu ☰ → **IAM & Admin** → **Roles** → **+ Create role**.
+3. Title `Salu-Salo role setter`, ID `salusaloRoleSetter`, Role launch stage
+   **General Availability**.
+4. **+ Add permissions** → in the filter type `firebaseauth.users.get`, tick
+   it, then type `firebaseauth.users.update`, tick it → **Add**. The role lists
+   exactly these two permissions → **Create**.
+   - `firebaseauth.users.get` is what `accounts:lookup` (reading the account's
+     claims) needs, and `firebaseauth.users.update` what `accounts:update`
+     (writing them) needs. Nothing else is needed.
+   - If either permission isn't offered for custom roles, use the last resort
+     under "If the function answers 502" below.
+
+**B. Service account**
+
+5. ☰ → **IAM & Admin** → **Service Accounts** → **+ Create service account**.
+6. Service account name `salusalo-role-setter` (the ID fills in), description
+   `Adds role: authenticated for the set-firebase-role Edge Function` →
+   **Create and continue**.
+7. **Select a role** → **Custom** → **Salu-Salo role setter** → **Continue** →
+   **Done**. Add no other role and no principals.
+
+**C. JSON key**
+
+8. Click `salusalo-role-setter@salusalo.iam.gserviceaccount.com` → **Keys** tab
+   → **Add key** → **Create new key** → **JSON** → **Create**. The browser
+   downloads a file named like `salusalo-<12 characters>.json`.
+   - If Google Cloud says key creation is disabled, an organisation policy
+     (`iam.disableServiceAccountKeyCreation`) blocks it: someone with the
+     Organization Policy Administrator role must allow it for project salusalo
+     (☰ → **IAM & Admin** → **Organization Policies**).
+
+**D. API**
+
+9. ☰ → **APIs & Services** → **Enabled APIs & services**: **Identity Toolkit
+   API** must be in the list (Firebase Authentication normally turned it on). If
+   it isn't: **+ Enable APIs and services** → search `Identity Toolkit API` →
+   **Enable**. No other API is needed.
+
+**E. Supabase secret**
+
+10. Supabase dashboard → the Salu-Salo project → **Edge Functions** →
+    **Secrets**. Name `FIREBASE_AUTH_ADMIN_KEY`; value: open the downloaded file
+    in a text editor and copy all of it, from the first `{` to the last `}` →
+    **Save**. A later change to the secret needs no redeploy.
+
+**F. Deploy with JWT verification off**
+
+11. **Edge Functions** → **Deploy a new function** → **Via Editor**. Name the
+    function `set-firebase-role` (exactly this: the app calls it by name).
+    Replace all of the sample code in `index.ts` with the whole of
+    `functions/set-firebase-role/index.ts` from this repo → **Deploy function**.
+12. Open the function (**Edge Functions** → `set-firebase-role`) and, in its
+    settings, turn **off** the switch that verifies the JWT (enforces a
+    Supabase-signed JWT) → save.
+    - It must be off: Supabase's gateway accepts only JWTs signed by this
+      Supabase project, and the app sends a Firebase ID token, which the
+      function verifies itself. With it on, every call from the app gets 401.
+    - With the Supabase CLI this would be the following in
+      `supabase/config.toml`. This repo has no CLI config, so the dashboard
+      switch is the setting.
+
+      ```toml
+      [functions.set-firebase-role]
+      verify_jwt = false
+      ```
+
+**G. The downloaded key**
+
+13. Delete the downloaded JSON file and empty the Recycle Bin or Trash, or keep
+    it only outside every repository folder (for example in a password
+    manager). `.gitignore` ignores `salusalo-*.json` and
+    `*service-account*.json` as a safety net, not as a place to keep it.
+
+**H. Check**
+
+14. **Edge Functions** → `set-firebase-role` → **Test**: send a POST (any
+    headers the panel adds are not a Firebase token). Expected: HTTP **401**
+    with the body `{"error":"Invalid or missing Firebase ID token."}`, and the
+    function's **Logs** show one line `set-firebase-role: refused (...)` with a
+    reason such as `no_token`, `token_format` or `token_header`.
+    - A boot error instead (the function doesn't start) means this Edge Runtime
+      doesn't take the `export default { fetch }` form, although Supabase's
+      docs say it is equivalent to `Deno.serve`. Then, in the editor, replace
+      the last block of `index.ts`, from `export default {` to the end, with
+      the block below, deploy again and repeat this check:
+
+      ```ts
+      Deno.serve((request: Request) =>
+        handle(request, {
+          fetch,
+          nowSeconds,
+          keyFor: googleKeyLookup(fetch, nowSeconds),
+          secret: () => Deno.env.get(SECRET_NAME),
+        })
+      );
+      ```
+
+### Logs and what they mean
+
+The function logs one line per call and never the token, the key, the Google
+access token, Google's error body or a full UID (at most its first 6
+characters):
+
+- `role set (uid abc123…)`: a new account got the role. Expect one per new
+  account.
+- `role was already set (uid …)` / `role already in the token (uid …)`: nothing
+  was changed.
+- `refused (<reason>)`: `method`, `no_token`, `token_<check>` (for example
+  `token_expired`, `token_signature`, `token_project`), `anonymous`,
+  `account_not_found`, `session_revoked`, `account_disabled`.
+
+### If the function answers 500 or 502
+
+- `the FIREBASE_AUTH_ADMIN_KEY secret is missing or invalid` (500): step 10 —
+  the whole JSON key of a service account of project `salusalo`.
+- `access token failed with HTTP 400` or `401` (502): Google refused the key.
+  It was deleted or disabled, or the secret holds an old key: create a new key
+  (step 8) and replace the secret (step 10).
+- `accounts:lookup failed with HTTP 403` (502): the Identity Toolkit API isn't
+  enabled (step 9), the role lacks `firebaseauth.users.get` (step 4), or the
+  role was granted only a few minutes ago (IAM changes can take a few minutes).
+- `accounts:update failed with HTTP 403` (502): the role lacks
+  `firebaseauth.users.update` (step 4).
+- Last resort, if a 403 stays with both permissions in the role: ☰ → **IAM &
+  Admin** → **IAM** → the pencil next to `salusalo-role-setter` → replace the
+  custom role with **Firebase Authentication Admin** → **Save**. That role can
+  also create and delete accounts, so a leaked key could do more; go back to
+  the custom role when the cause is found.
+
+### The key
+
+- It doesn't expire. It can read any account of the Firebase project and change
+  its details and claims, but (with the custom role) can't create or delete
+  accounts. Treat it like a password.
+- If it ever leaks (committed, pasted in a chat, sent anywhere): ☰ → **IAM &
+  Admin** → **Service Accounts** → `salusalo-role-setter` → **Keys** → the
+  key's delete (trash) icon → **Delete**. Then create a new key (step 8), put it
+  in the secret (step 10) and delete the file (step 13). The old key stops
+  working at once: it can't get new Google access tokens. An access token
+  already issued with it expires within 1 hour at the latest.
+- Rotating the key changes nothing for users: tokens that already carry the
+  role keep it.
 ## Phase 2: food listings
 
 Run `migrations/20260923_phase2_food_posts.sql` in the Supabase SQL Editor after
