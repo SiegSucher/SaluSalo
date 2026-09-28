@@ -13,8 +13,6 @@ data class UserProfile(
     val role: UserRole,
     @SerialName("profile_image_url")
     val profileImageUrl: String? = null,
-    @SerialName("phone_number")
-    val phoneNumber: String? = null,
     @SerialName("created_at")
     val createdAt: String? = null,
     @SerialName("updated_at")

@@ -442,8 +442,6 @@ fun ReservationReviewDialog(
 ) {
     val priced = unitPrice > 0
     val donorRole = if (priced) "seller" else "donor"
-    // Never put the "unavailable" placeholder into a sentence.
-    val donorLabel = donorName?.takeIf { it.isNotBlank() } ?: "the $donorRole"
     var note by rememberSaveable(foodPostId) { mutableStateOf("") }
 
     val reserved = (result as? ReserveResult.Reserved)

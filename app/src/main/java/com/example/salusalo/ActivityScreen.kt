@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -433,7 +434,7 @@ fun ActivityScreen(
 
             item {
                 val tabs = listOf(
-                    "My Listings" to Icons.Outlined.FormatListBulleted,
+                    "My Listings" to Icons.AutoMirrored.Outlined.FormatListBulleted,
                     "My Reservations" to Icons.Outlined.BookmarkBorder,
                     "My Donations" to Icons.Outlined.VolunteerActivism,
                     "Purchases" to Icons.Outlined.ShoppingBag,
@@ -862,7 +863,7 @@ private fun ReferenceActivityCard(
                     record.timeValue,
                     fontSize = 10.sp,
                     lineHeight = 13.sp,
-                    color = if (record.status == "Pending") ARed else AGray
+                    color = AGray
                 )
             }
 
@@ -879,14 +880,12 @@ private fun ReferenceActivityCard(
 @Composable
 private fun ActivityStatus(status: String) {
     val color = when (status) {
-        "Pending" -> AOrange
-        "Confirmed", "Saved locally" -> AGreen
         "Expired", "Cancelled" -> ARed
         else -> AGray
     }
 
     val icon = when (status) {
-        "Pending", "Expired" -> Icons.Outlined.Schedule
+        "Expired" -> Icons.Outlined.Schedule
         "Cancelled" -> Icons.Outlined.Cancel
         else -> Icons.Outlined.CheckCircle
     }

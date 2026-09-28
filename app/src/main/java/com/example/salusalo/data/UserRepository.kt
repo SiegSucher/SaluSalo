@@ -71,15 +71,6 @@ class UserRepository(
         return findProfile(firebaseUid) ?: throw ProfileException.NotFound
     }
 
-    /**
-     * Changes the signed-in user's display name. The database function finds
-     * the row from the token and trims and checks the name (1-120 characters).
-     */
-    suspend fun updateMyName(name: String): UserProfile =
-        supabase.postgrest.rpc("update_my_profile_name", buildJsonObject {
-            put("p_name", name.trim())
-        }).decodeAs()
-
     /** Saves only the authenticated caller's name and bio through the restricted RPC. */
     suspend fun updateMyProfile(name: String, bio: String): UserProfile =
         supabase.postgrest.rpc("update_my_profile_details", buildJsonObject {

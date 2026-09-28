@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -368,7 +369,7 @@ fun ProfileScreen(
         }
         OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)) {
-            Icon(Icons.Outlined.Logout, null, tint = MaterialTheme.colorScheme.error)
+            Icon(Icons.AutoMirrored.Outlined.Logout, null, tint = MaterialTheme.colorScheme.error)
             Spacer(Modifier.width(8.dp))
             Text("Log out", color = MaterialTheme.colorScheme.error)
         }
@@ -449,45 +450,6 @@ private fun ProfileShield() {
             contentDescription = null,
             tint = PGreen,
             modifier = Modifier.size(28.dp)
-        )
-    }
-}
-
-@Composable
-private fun ProfileStat(
-    icon: ImageVector,
-    value: String,
-    caption: String,
-    iconColor: Color = PGreen,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(70.dp)
-            .clickable(onClick = onClick),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = iconColor,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(
-                value,
-                fontSize = if (value.length > 5) 10.sp else 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PDark
-            )
-        }
-
-        Text(
-            caption,
-            fontSize = 10.sp,
-            lineHeight = 14.sp,
-            color = PGray
         )
     }
 }
@@ -587,28 +549,6 @@ private fun ProfileMenuRow(
             contentDescription = null,
             tint = PDark,
             modifier = Modifier.size(20.dp)
-        )
-    }
-}
-
-@Composable
-private fun ProfileToggle(
-    title: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            title,
-            modifier = Modifier.weight(1f),
-            fontSize = 13.sp
-        )
-        Switch(
-            checked = checked,
-            onCheckedChange = onChange
         )
     }
 }

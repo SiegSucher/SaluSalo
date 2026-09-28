@@ -5,7 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -203,7 +203,7 @@ fun ProfileSections(
                             .padding(8.dp)
                     ) {
                         IconButton(onClick = { back() }) {
-                            Icon(Icons.Outlined.ArrowBack, "Back", tint = SectionGreen)
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = SectionGreen)
                         }
 
                         Column(

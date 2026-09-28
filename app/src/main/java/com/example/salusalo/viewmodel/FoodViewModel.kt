@@ -169,7 +169,6 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
     fun clearCreateError() { _createError.value = null }
     fun clearEditResult() { _editResult.value = null }
     fun clearDeleteResult() { _deleteResult.value = null }
-    fun clearError() { _error.value = null }
 
     // A second write asked for before the first has finished (for example a
     // double tap) is ignored, so the same write is never sent twice. The first

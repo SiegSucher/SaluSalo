@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -84,7 +86,7 @@ internal fun SettingsHub(navigate: (String) -> Unit) {
     SettingsCard {
         SettingsRow(Icons.Outlined.Security, "Account & security") { navigate("account") }
         HorizontalDivider()
-        SettingsRow(Icons.Outlined.HelpOutline, "Help & food safety") { navigate("help") }
+        SettingsRow(Icons.AutoMirrored.Outlined.HelpOutline, "Help & food safety") { navigate("help") }
         HorizontalDivider()
         SettingsRow(Icons.Outlined.Info, "About Salu-Salo") { navigate("about") }
     }
@@ -260,7 +262,7 @@ internal fun AccountSecuritySettings(profile: UserProfile?, navigate: (String) -
 internal fun HelpSettings(navigate: (String) -> Unit) {
     SettingsCaption("Support for sharing responsibly.")
     SettingsCard {
-        SettingsRow(Icons.Outlined.MenuBook, "How Salu-Salo works") { navigate("how_it_works") }
+        SettingsRow(Icons.AutoMirrored.Outlined.MenuBook, "How Salu-Salo works") { navigate("how_it_works") }
         HorizontalDivider()
         SettingsRow(Icons.Outlined.People, "Reservations & pickups") { navigate("pickup_help") }
         HorizontalDivider()
@@ -293,7 +295,7 @@ internal fun AboutSettings(navigate: (String) -> Unit) {
         Text("Share surplus food • Find listings • Coordinate pickups")
     }
     SettingsCard {
-        SettingsRow(Icons.Outlined.MenuBook, "How it works") { navigate("how_it_works") }
+        SettingsRow(Icons.AutoMirrored.Outlined.MenuBook, "How it works") { navigate("how_it_works") }
         SettingsRow(Icons.Outlined.Security, "Community guidelines") { navigate("safety") }
     }
     SettingsCaption("Built for a more caring community.")

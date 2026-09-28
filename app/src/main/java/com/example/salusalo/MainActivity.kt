@@ -66,6 +66,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -123,7 +124,6 @@ class MainActivity : ComponentActivity() {
             val auth = FirebaseAuth.getInstance()
             if (!keepSignedIn(this) && auth.currentUser != null) {
                 auth.signOut()
-                clearLocalAccountData(this)
             }
         }
 
@@ -178,12 +178,6 @@ private fun markWelcomeSeen(context: Context) {
     sessionPreferences(context).edit().putBoolean("welcome_seen", true).apply()
 }
 
-// Remove local, account-specific data before another user can sign in on this device.
-private fun clearLocalAccountData(context: Context) {
-    context.getSharedPreferences("salusalo_profile", 0).edit().clear().apply()
-    context.getSharedPreferences("salusalo_local_posts", 0).edit().clear().apply()
-}
-
 @Composable
 private fun SaluSaloApp() {
     val context = LocalContext.current
@@ -198,7 +192,6 @@ private fun SaluSaloApp() {
     fun logOut() {
         firebaseAuth.signOut()
         currentProfile = null
-        clearLocalAccountData(context)
         // Also forget the Google account chosen in Credential Manager (best effort).
         appScope.launch { clearGoogleCredentialState(context) }
         screen = "signin"
@@ -2724,7 +2717,7 @@ private fun FoodDetailsScreen(
                     )
                 ) {
                     Icon(
-                        Icons.Outlined.ArrowBack,
+                        Icons.AutoMirrored.Outlined.ArrowBack,
                         contentDescription = "Back to food listings"
                     )
                 }
