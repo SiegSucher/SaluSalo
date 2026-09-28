@@ -6,7 +6,6 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,17 +13,25 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Directions
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.NearMe
 import androidx.compose.material.icons.outlined.Verified
 import com.example.salusalo.data.ReviewRepository
 import com.example.salusalo.model.DONOR_REVIEWS_LIMIT
@@ -40,11 +47,6 @@ import com.example.salusalo.model.reservationTotal
 import com.example.salusalo.model.reviewCountText
 import com.example.salusalo.viewmodel.ReserveResult
 import kotlinx.coroutines.CancellationException
-
-private val ActionGreen = Color(0xFF28754A)
-private val ActionCream = Color(0xFFF8F7EF)
-private val ActionPale = Color(0xFFE7F1E5)
-private val ActionDark = Color(0xFF203E2C)
 
 /**
  * The Pickup location and Donor/Seller pages of a listing. With a pickup pin,
@@ -107,7 +109,7 @@ fun FoodActionsDialog(
                         contentDescription = foodTitle,
                         modifier = Modifier
                             .size(64.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(SaluRadius.Small)
                     )
 
                     Spacer(Modifier.width(12.dp))
@@ -115,19 +117,20 @@ fun FoodActionsDialog(
                     Column(Modifier.weight(1f)) {
                         Text(
                             foodTitle,
-                            fontWeight = FontWeight.Bold,
-                            color = ActionDark
+                            style = SaluText.FoodTitle,
+                            color = SaluColors.Ink
                         )
 
                         Text(
                             provider,
-                            fontSize = 12.sp,
-                            color = ActionGreen
+                            style = SaluText.Supporting,
+                            color = SaluColors.InkMuted
                         )
 
                         Text(
                             price,
-                            fontSize = 12.sp
+                            style = SaluText.Meta.copy(fontWeight = FontWeight.Bold),
+                            color = if (donation) SaluColors.GreenInk else SaluColors.Ink
                         )
                     }
                 }
@@ -137,22 +140,38 @@ fun FoodActionsDialog(
         when (action) {
             "location" -> {
                 ActionCard {
-                    Text(
-                        "Pickup area",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ActionDark
-                    )
+                    Row(verticalAlignment = Alignment.Top) {
+                        IconBubble(Icons.Outlined.LocationOn, size = 40.dp, iconSize = 22.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Pickup area",
+                                style = SaluText.SectionTitle,
+                                color = SaluColors.Ink,
+                                modifier = Modifier.semantics { heading() }
+                            )
 
-                    Text(address)
+                            Text(address, style = SaluText.Body, color = SaluColors.Ink)
 
-                    if (pickupPin != null && distanceMeters != null) {
-                        Text(
-                            "About ${distanceLabel(distanceMeters)} from you in a straight line; " +
-                                    "the route may be longer.",
-                            fontSize = 12.sp,
-                            color = ActionGreen
-                        )
+                            if (pickupPin != null && distanceMeters != null) {
+                                Spacer(Modifier.height(6.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Outlined.NearMe,
+                                        contentDescription = null,
+                                        tint = SaluColors.GreenInk,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        "About ${distanceLabel(distanceMeters)} from you in a straight line; " +
+                                                "the route may be longer.",
+                                        style = SaluText.Meta,
+                                        color = SaluColors.GreenInk
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -165,11 +184,12 @@ fun FoodActionsDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(260.dp)
-                            .clip(RoundedCornerShape(18.dp))
+                            .clip(SaluRadius.Card)
                     )
 
                     ActionButton(
                         text = "Directions",
+                        icon = Icons.Outlined.Directions,
                         onClick = {
                             if (!openDirections(context, pickupPin)) {
                                 mapError = "No maps app is available on this device."
@@ -179,6 +199,7 @@ fun FoodActionsDialog(
                 } else {
                     ActionButton(
                         text = "Search area in Maps",
+                        icon = Icons.Outlined.Map,
                         onClick = {
                             // A text search for the address as entered; this
                             // listing has no map pin.
@@ -202,16 +223,18 @@ fun FoodActionsDialog(
                 }
 
                 if (mapError.isNotBlank()) {
-                    Text(
-                        mapError,
-                        color = MaterialTheme.colorScheme.error
+                    InlineNotice(
+                        text = mapError,
+                        icon = Icons.Outlined.ErrorOutline,
+                        tone = NoticeTone.Error
                     )
                 }
 
                 ActionCard {
                     Text(
                         "Pickup instructions",
-                        fontWeight = FontWeight.Bold
+                        style = SaluText.FoodTitle,
+                        color = SaluColors.Ink
                     )
 
                     Text(
@@ -222,11 +245,13 @@ fun FoodActionsDialog(
                             "Ask the provider for the exact meeting " +
                                     "point and collection instructions."
                         },
-                        fontSize = 13.sp
+                        style = SaluText.Body,
+                        color = SaluColors.InkMuted
                     )
 
-                    ActionButton(
+                    SaluSecondaryButton(
                         text = "Ask for exact location",
+                        icon = Icons.Outlined.ChatBubbleOutline,
                         onClick = { onMessage("Hi! Where exactly can I pick up $foodTitle?") }
                     )
                 }
@@ -255,59 +280,61 @@ fun FoodActionsDialog(
                 var reporting by rememberSaveable(foodPostId) { mutableStateOf(false) }
 
                 ActionCard {
-                    Text(
-                        provider.take(1).uppercase(),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(ActionPale)
-                            .padding(20.dp),
-                        color = ActionGreen,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Avatar(photoUrl = null, name = provider, size = 72.dp)
 
-                    Text(
-                        provider,
-                        fontSize = 23.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ActionDark
-                    )
+                        Spacer(Modifier.height(4.dp))
 
-                    Text(
-                        if (donation) "Food donor" else "Food seller",
-                        color = ActionGreen
-                    )
+                        Text(
+                            provider,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = SaluColors.Ink,
+                            modifier = Modifier.semantics { heading() }
+                        )
 
-                    if (verified) {
-                        Surface(shape = RoundedCornerShape(20.dp), color = ActionPale) {
+                        Text(
+                            if (donation) "Food donor" else "Food seller",
+                            style = SaluText.Supporting,
+                            color = SaluColors.InkMuted
+                        )
+
+                        if (verified) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                modifier = Modifier
+                                    .clip(SaluRadius.Pill)
+                                    .background(SaluColors.GreenSoft)
+                                    .padding(horizontal = 10.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
                                     Icons.Outlined.Verified,
                                     contentDescription = null,
-                                    tint = ActionGreen,
+                                    tint = SaluColors.GreenInk,
                                     modifier = Modifier.size(15.dp)
                                 )
                                 Spacer(Modifier.width(4.dp))
-                                Text("Email verified", color = ActionGreen, fontSize = 12.sp)
+                                Text("Email verified", color = SaluColors.GreenInk, style = SaluText.Status)
                             }
                         }
-                    }
 
-                    Text(
-                        if (average != null && count > 0) {
-                            "★ ${formatRatingAverage(average)} • ${reviewCountText(count)}"
-                        } else {
-                            "No reviews yet"
-                        },
-                        color = if (count > 0) RatingAmber else ActionDark,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                        Text(
+                            if (average != null && count > 0) {
+                                "★ ${formatRatingAverage(average)} • ${reviewCountText(count)}"
+                            } else {
+                                "No reviews yet"
+                            },
+                            color = if (count > 0) RatingAmber else SaluColors.InkMuted,
+                            style = SaluText.FoodTitle
+                        )
+                    }
 
                     ActionButton(
                         text = if (donation) "Message donor" else "Message seller",
+                        icon = Icons.Outlined.ChatBubbleOutline,
                         onClick = { onMessage("") }
                     )
                 }
@@ -316,28 +343,31 @@ fun FoodActionsDialog(
                 if (count > 0 || reviewsFailed || !loaded.isNullOrEmpty()) {
                     Text(
                         "Reviews",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp
+                        style = SaluText.SectionTitle,
+                        color = SaluColors.Ink,
+                        modifier = Modifier.semantics { heading() }
                     )
 
                     ActionCard {
                         when {
-                            loaded == null && reviewsFailed -> Text(
-                                "Reviews could not be loaded. Check your internet connection and try again.",
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 13.sp
+                            loaded == null && reviewsFailed -> InlineNotice(
+                                text = "Reviews could not be loaded. Check your internet connection and try again.",
+                                icon = Icons.Outlined.ErrorOutline,
+                                tone = NoticeTone.Error
                             )
-                            loaded == null -> Text("Loading reviews…", fontSize = 13.sp)
+                            loaded == null -> SkeletonGroup(description = "Loading reviews") {
+                                repeat(2) { ListRowSkeleton(thumbnail = 32.dp, round = true) }
+                            }
                             else -> {
                                 loaded.forEachIndexed { index, review ->
-                                    if (index > 0) HorizontalDivider()
+                                    if (index > 0) HorizontalDivider(color = SaluColors.Line)
                                     ReviewRow(review)
                                 }
                                 if (count > loaded.size && loaded.size >= DONOR_REVIEWS_LIMIT) {
                                     Text(
                                         "Showing the latest ${loaded.size} reviews.",
-                                        fontSize = 12.sp,
-                                        color = ActionDark
+                                        style = SaluText.Meta,
+                                        color = SaluColors.InkMuted
                                     )
                                 }
                             }
@@ -358,8 +388,9 @@ fun FoodActionsDialog(
 
                 Text(
                     "Listing from this provider",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
+                    style = SaluText.SectionTitle,
+                    color = SaluColors.Ink,
+                    modifier = Modifier.semantics { heading() }
                 )
 
                 ActionCard {
@@ -370,17 +401,18 @@ fun FoodActionsDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(150.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(SaluRadius.Photo)
                     )
 
                     Text(
                         foodTitle,
-                        fontWeight = FontWeight.Bold
+                        style = SaluText.FoodTitle,
+                        color = SaluColors.Ink
                     )
 
-                    Text("$price • $status")
+                    Text("$price • $status", style = SaluText.Supporting, color = SaluColors.InkMuted)
 
-                    ActionButton(
+                    SaluSecondaryButton(
                         text = "Return to food details",
                         onClick = onClose
                     )
@@ -388,16 +420,23 @@ fun FoodActionsDialog(
 
                 // Nobody reports themself.
                 if (!isOwnListing) {
-                    OutlinedButton(
+                    TextButton(
                         onClick = { reporting = true },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 48.dp),
-                        shape = RoundedCornerShape(14.dp)
+                            .heightIn(min = 48.dp)
                     ) {
+                        Icon(
+                            Icons.Outlined.Flag,
+                            contentDescription = null,
+                            tint = SaluColors.PinkInk,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
                         Text(
                             "Report " + (donorName ?: if (donation) "this donor" else "this seller"),
-                            color = MaterialTheme.colorScheme.error
+                            style = MaterialTheme.typography.labelLarge,
+                            color = SaluColors.PinkInk
                         )
                     }
                 }
@@ -460,18 +499,17 @@ fun ReservationReviewDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(160.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(SaluRadius.Photo)
             )
 
             Text(
                 foodTitle,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Bold,
-                color = ActionDark
+                style = MaterialTheme.typography.titleLarge,
+                color = SaluColors.Ink
             )
 
             donorName?.takeIf { it.isNotBlank() }?.let {
-                Text("From $it", fontSize = 13.sp, color = ActionGreen)
+                Text("From $it", style = SaluText.Supporting, color = SaluColors.InkMuted)
             }
         }
 
@@ -479,12 +517,22 @@ fun ReservationReviewDialog(
             val reservation = reserved.reservation
             val paid = reservation.unitPrice > 0
             ActionCard {
-                Text(
-                    "You reserved ${reservation.quantity} $unit of $foodTitle.",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = ActionDark
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconBubble(
+                        Icons.Outlined.CheckCircle,
+                        tint = SaluColors.GreenInk,
+                        background = SaluColors.GreenSoft,
+                        size = 44.dp,
+                        iconSize = 24.dp
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "You reserved ${reservation.quantity} $unit of $foodTitle.",
+                        style = SaluText.FoodTitle,
+                        color = SaluColors.Ink,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
                 Text(
                     if (paid) {
@@ -492,10 +540,11 @@ fun ReservationReviewDialog(
                     } else {
                         "Free — nothing to pay."
                     },
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = ActionGreen
+                    style = SaluText.Price,
+                    color = if (paid) SaluColors.Ink else SaluColors.GreenInk
                 )
+
+                HorizontalDivider(color = SaluColors.Line)
 
                 ActionLine("Pickup location", pickupLocation)
                 ActionLine("Pickup window", pickupWindow)
@@ -507,36 +556,34 @@ fun ReservationReviewDialog(
                         } else {
                             "Your message was sent to $donorName."
                         },
-                        fontSize = 13.sp
+                        style = SaluText.Supporting,
+                        color = SaluColors.InkMuted
                     )
-                    false -> Text(
-                        "Your message could not be sent. You can send it from the chat.",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.error
+                    false -> InlineNotice(
+                        text = "Your message could not be sent. You can send it from the chat.",
+                        icon = Icons.Outlined.ErrorOutline,
+                        tone = NoticeTone.Error
                     )
                     null -> Unit
                 }
 
                 Text(
                     "You'll find this reservation in Activity → My Reservations.",
-                    fontSize = 13.sp
+                    style = SaluText.Supporting,
+                    color = SaluColors.InkMuted
                 )
             }
 
             ActionButton(
                 text = if (paid) "Message seller" else "Message donor",
+                icon = Icons.Outlined.ChatBubbleOutline,
                 onClick = { onMessageDonor(reservation.id) }
             )
 
-            OutlinedButton(
-                onClick = onFinished,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Text("Done", color = ActionGreen)
-            }
+            SaluSecondaryButton(
+                text = "Done",
+                onClick = onFinished
+            )
         } else {
             ActionCard {
                 ActionLine("Reserving as", profileName?.takeIf { it.isNotBlank() } ?: "—")
@@ -546,18 +593,18 @@ fun ReservationReviewDialog(
                 ActionLine("Handover", handover)
                 ActionLine("Expires", expires)
 
-                HorizontalDivider()
+                HorizontalDivider(color = SaluColors.Line)
 
                 if (priced) {
                     ActionLine("Price per unit", formatPeso(unitPrice))
-                    ActionLine("Total", formatPeso(reservationTotal(unitPrice, quantity)))
+                    ActionLine("Total", formatPeso(reservationTotal(unitPrice, quantity)), emphasis = true)
                     Text(
                         "Paid at pickup. The app takes no payments.",
-                        fontSize = 12.sp,
-                        color = ActionDark
+                        style = SaluText.Meta,
+                        color = SaluColors.InkMuted
                     )
                 } else {
-                    ActionLine("Price", "Free")
+                    ActionLine("Price", "Free", emphasis = true)
                 }
             }
 
@@ -578,22 +625,24 @@ fun ReservationReviewDialog(
                 },
                 enabled = !saving,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
+                shape = SaluRadius.Control,
                 minLines = 2,
-                maxLines = 5
+                maxLines = 5,
+                colors = saluFieldColors()
             )
 
             if (failure != null) {
-                Text(
-                    failure,
-                    color = MaterialTheme.colorScheme.error,
-                    fontSize = 13.sp
+                InlineNotice(
+                    text = failure,
+                    icon = Icons.Outlined.ErrorOutline,
+                    tone = NoticeTone.Error
                 )
             }
 
             ActionButton(
                 text = if (saving) "Reserving…" else "Confirm reservation",
                 enabled = !saving,
+                loading = saving,
                 onClick = { onConfirm(note) }
             )
         }
@@ -625,7 +674,7 @@ internal fun DarkSystemBarIcons() {
     }
 }
 
-/** Full-screen page with a Back button and a title, shared by the pages above and ReviewsAndReports.kt. */
+/** Full-screen page with a Back arrow and a title, shared by the pages above and ReviewsAndReports.kt. */
 @Composable
 internal fun ActionPage(
     heading: String,
@@ -639,7 +688,7 @@ internal fun ActionPage(
         DarkSystemBarIcons()
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = ActionCream
+            color = SaluColors.Background
         ) {
             Column(
                 modifier = Modifier
@@ -647,43 +696,14 @@ internal fun ActionPage(
                     .safeDrawingPadding()
                     .imePadding()
             ) {
-                Surface(
-                    color = Color.White,
-                    shadowElevation = 2.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = onBack) {
-                            Text("Back", color = ActionGreen)
-                        }
-
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                heading,
-                                fontSize = 19.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = ActionDark
-                            )
-
-                            Text(
-                                "Salu-Salo",
-                                fontSize = 11.sp,
-                                color = ActionGreen
-                            )
-                        }
-                    }
-                }
+                SaluTopBar(title = heading, onBack = onBack)
 
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
-                        .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                     content = content
                 )
             }
@@ -695,12 +715,7 @@ internal fun ActionPage(
 internal fun ActionCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = Color.White,
-        shadowElevation = 1.dp
-    ) {
+    SaluCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -710,40 +725,38 @@ internal fun ActionCard(
 }
 
 @Composable
-private fun ActionLine(label: String, value: String) {
-    Column {
+private fun ActionLine(label: String, value: String, emphasis: Boolean = false) {
+    Row(verticalAlignment = Alignment.Top) {
         Text(
             label,
-            fontSize = 11.sp,
-            color = ActionGreen
+            style = SaluText.Supporting,
+            color = SaluColors.InkMuted,
+            modifier = Modifier.weight(0.42f)
         )
 
         Text(
             value,
-            fontSize = 14.sp,
-            color = ActionDark,
-            fontWeight = FontWeight.Medium
+            style = if (emphasis) SaluText.Price else SaluText.Body.copy(fontWeight = FontWeight.Medium),
+            color = SaluColors.Ink,
+            modifier = Modifier.weight(0.58f)
         )
     }
 }
 
+/** The page's main action: the shared yellow button. */
 @Composable
 internal fun ActionButton(
     text: String,
     enabled: Boolean = true,
+    loading: Boolean = false,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     onClick: () -> Unit
 ) {
-    Button(
+    SaluPrimaryButton(
+        text = text,
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = ActionGreen
-        )
-    ) {
-        Text(text)
-    }
+        loading = loading,
+        icon = icon
+    )
 }

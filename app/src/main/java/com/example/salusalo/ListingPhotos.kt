@@ -34,9 +34,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 
-private val PhotoTile = Color(0xFFF2F6E6)
-private val PhotoTileText = Color(0xFF666873)
+private val PhotoTile = SaluColors.Cream
+private val PhotoTileText = SaluColors.InkMuted
 
 /**
  * A listing photo from its 1-hour signed URL, with the same fallbacks
@@ -57,11 +60,16 @@ internal fun ListingPhoto(
 ) {
     var failed by remember(imageUrl) { mutableStateOf(false) }
     if (imageUrl != null && !failed) {
+        // Cream while it loads, then a short fade-in instead of a sudden pop.
+        val context = LocalPlatformContext.current
+        val request = remember(imageUrl, context) {
+            ImageRequest.Builder(context).data(imageUrl).crossfade(true).build()
+        }
         AsyncImage(
-            model = imageUrl,
+            model = request,
             contentDescription = contentDescription,
             contentScale = contentScale,
-            modifier = modifier,
+            modifier = modifier.background(PhotoTile),
             onError = { failed = true }
         )
     } else {
@@ -132,7 +140,7 @@ internal fun FullScreenPhotos(
                     .size(42.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = Color.White,
-                    contentColor = Color.Black
+                    contentColor = SaluColors.Ink
                 )
             ) {
                 Icon(Icons.Outlined.Close, contentDescription = "Close photos")

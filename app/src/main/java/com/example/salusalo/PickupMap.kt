@@ -12,18 +12,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.LocationOff
 import androidx.compose.material.icons.outlined.MyLocation
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -40,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -400,9 +394,14 @@ internal fun PickupPinPicker(
         else -> "Tap the map to place the pin, or use your location."
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Pickup pin", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        Text(PIN_NOTE, fontSize = 11.sp, lineHeight = 15.sp)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Required on Post; on Edit a pin can be added or moved.
+        Text(
+            if (editing) "Pickup pin" else "Pickup pin *",
+            style = SaluText.Meta,
+            color = SaluColors.InkMuted
+        )
+        InlineNotice(text = PIN_NOTE, icon = Icons.Outlined.Info)
 
         PickupMap(
             pin = pin,
@@ -412,7 +411,7 @@ internal fun PickupPinPicker(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(220.dp)
-                .clip(RoundedCornerShape(12.dp)),
+                .clip(SaluRadius.Control),
             camera = camera,
             onTap = { tapped ->
                 onPinChange(tapped.rounded())
@@ -421,9 +420,12 @@ internal fun PickupPinPicker(
             }
         )
 
-        Text(status, fontSize = 11.sp, lineHeight = 15.sp, color = accent)
+        Text(status, style = SaluText.Meta, color = accent)
 
-        OutlinedButton(
+        SaluSecondaryButton(
+            text = if (finder.finding) "Finding your location…" else "Use my location",
+            icon = Icons.Outlined.MyLocation,
+            contentColor = accent,
             enabled = !finder.finding,
             onClick = {
                 locationNote = ""
@@ -451,16 +453,11 @@ internal fun PickupPinPicker(
                             locationNote = "Your location could not be found. Try again, or tap the map to place the pin."
                     }
                 }
-            },
-            shape = RoundedCornerShape(10.dp)
-        ) {
-            Icon(Icons.Outlined.MyLocation, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(if (finder.finding) "Finding your location…" else "Use my location", color = accent)
-        }
+            }
+        )
 
         if (locationNote.isNotBlank()) {
-            Text(locationNote, fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.error)
+            InlineNotice(text = locationNote, icon = Icons.Outlined.LocationOff, tone = NoticeTone.Warning)
         }
     }
 }

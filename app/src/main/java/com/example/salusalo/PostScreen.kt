@@ -7,14 +7,36 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.FactCheck
+import androidx.compose.material.icons.outlined.AddAPhoto
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.RiceBowl
+import androidx.compose.material.icons.outlined.Sell
+import androidx.compose.material.icons.outlined.VolunteerActivism
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
@@ -25,20 +47,26 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.window.Dialog
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostDraft
 import com.example.salusalo.model.FoodPostEdit
+import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.GeoPin
 import com.example.salusalo.model.pickupPin
 import com.example.salusalo.model.parseTimestamp
@@ -54,21 +82,31 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-private val PostGreen = Color(0xFF3F792B)
-private val PostCream = Color(0xFFFAF8F1)
-private val PostPale = Color(0xFFEDF3E1)
-private val PostDark = Color(0xFF213420)
-
 /** Keeps the pickup pin across rotation: [latitude, longitude], or nothing. */
 private val PinSaver = listSaver<GeoPin?, Double>(
     save = { pin -> if (pin == null) emptyList() else listOf(pin.latitude, pin.longitude) },
     restore = { values -> if (values.size == 2) GeoPin(values[0], values[1]) else null }
 )
 
+private val FoodCategories = listOf(
+    "Bread & pastries",
+    "Vegetables",
+    "Fruit",
+    "Cooked meals",
+    "Packaged food",
+    "Other"
+)
+
+private val FoodUnits = listOf("pcs", "packs", "meals", "boxes", "kg")
+
 @Composable
-fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
+fun PostScreen(
+    onBack: () -> Unit,
+    foodViewModel: FoodViewModel,
+    // After a listing is published: start again with an empty form. Null hides the button.
+    onPostAnother: (() -> Unit)? = null
+) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val myPosts by foodViewModel.myPosts.collectAsStateWithLifecycle()
     val createdPost by foodViewModel.createdPost.collectAsStateWithLifecycle()
     val createError by foodViewModel.createError.collectAsStateWithLifecycle()
@@ -212,186 +250,180 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
             foodViewModel.clearCreateError()
         }
     }
+    val postScroll = rememberScrollState()
+    // A new error scrolls up to the button area so it is seen.
+    LaunchedEffect(error) {
+        if (error.isNotBlank()) postScroll.animateScrollTo(postScroll.maxValue)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(PostCream)
+            .background(SaluColors.Background)
     ) {
-        Row(
+        // Post is a main tab: the bottom bar and Back lead away from it.
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp)
         ) {
-            TextButton(
-                enabled = !saving,
-                onClick = onBack
-            ) {
-                Text("Back", color = PostGreen)
-            }
-
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "Create Listing",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PostDark
-                )
-                Text(
-                    "Post surplus food to help others",
-                    fontSize = 12.sp
-                )
-            }
+            Text(
+                "Create listing",
+                style = SaluText.ScreenTitle,
+                color = SaluColors.Ink,
+                modifier = Modifier.semantics { heading() }
+            )
+            Text(
+                "Post surplus food to help others",
+                style = SaluText.Supporting,
+                color = SaluColors.InkMuted
+            )
         }
 
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(postScroll)
                 .imePadding()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (savedId.isNotBlank()) {
-                PostPanel {
-                    Text(
-                        "Listing published",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PostGreen
-                    )
-                    Text(name, fontWeight = FontWeight.Bold)
-                    Text("$quantity $unit • ${if (donation) "Free" else "₱$price per unit"}")
-                    Text("Pickup: $location")
-                    Text("Photos: ${photos.size}")
-                    Text("Reference: ${savedId.take(8)}")
-                    Text(
-                        "Your listing is now published to the community feed.",
-                        fontSize = 12.sp
-                    )
-                    PostButton("Back to home", onClick = onBack)
+                SaluCard(Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        IconBubble(
+                            Icons.Outlined.CheckCircle,
+                            tint = SaluColors.GreenInk,
+                            background = SaluColors.GreenSoft,
+                            size = 52.dp,
+                            iconSize = 28.dp
+                        )
+                        Text(
+                            "Listing published",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = SaluColors.GreenInk,
+                            modifier = Modifier.semantics { heading() }
+                        )
+                        Text(name, style = SaluText.FoodTitle, color = SaluColors.Ink)
+                        Text(
+                            "$quantity $unit • ${if (donation) "Free" else "₱$price per unit"}",
+                            style = SaluText.Body,
+                            color = SaluColors.Ink
+                        )
+                        Text("Pickup: $location", style = SaluText.Body, color = SaluColors.Ink)
+                        Text("Photos: ${photos.size}", style = SaluText.Supporting, color = SaluColors.InkMuted)
+                        Text("Reference: ${savedId.take(8)}", style = SaluText.Supporting, color = SaluColors.InkMuted)
+                        Text(
+                            "Your listing is now published to the community feed.",
+                            style = SaluText.Supporting,
+                            color = SaluColors.InkMuted
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        SaluPrimaryButton(text = "Back to home", onClick = onBack)
+                        if (onPostAnother != null) {
+                            SaluSecondaryButton(text = "Post another listing", onClick = onPostAnother)
+                        }
+                    }
                 }
             } else {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ListingTypeSwitch(donation = donation, onChange = { donation = it })
+
+                Text(
+                    "Fields marked * are required.",
+                    style = SaluText.Meta,
+                    color = SaluColors.InkMuted
+                )
+
+                FormSection(
+                    title = "Food",
+                    subtitle = "What you're sharing, and how much",
+                    icon = Icons.Outlined.RiceBowl
                 ) {
-                    FilterChip(
-                        selected = donation,
-                        onClick = { donation = true },
-                        label = { Text("I want to donate") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    FilterChip(
-                        selected = !donation,
-                        onClick = { donation = false },
-                        label = { Text("I want to sell") },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                PostPanel {
-                    Text(
-                        "Food photos • Required",
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Add up to four clear photos of the food.",
-                        fontSize = 12.sp
-                    )
-
-                    Row(
-                        modifier = Modifier.horizontalScroll(
-                            rememberScrollState()
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        photos.forEach { uri ->
-                            Column {
-                                PostPhoto(uri)
-                                TextButton(
-                                    onClick = {
-                                        photos = ArrayList(photos.filter { it != uri })
-                                    }
-                                ) {
-                                    Text("Remove", fontSize = 11.sp)
-                                }
-                            }
-                        }
-                    }
-
-                    OutlinedButton(
-                        enabled = photos.size < 4,
-                        onClick = {
-                            photoPicker.launch(arrayOf("image/*"))
-                        }
-                    ) {
-                        Text("＋ Add photos")
-                    }
-                }
-
-                PostPanel {
-                    PostField("Food name", name, { name = it })
-                    PostChoice(
-                        "Category",
-                        category,
-                        listOf(
-                            "Bread & pastries",
-                            "Vegetables",
-                            "Fruit",
-                            "Cooked meals",
-                            "Packaged food",
-                            "Other"
-                        ),
-                        { category = it }
+                    PhotoPicker(
+                        photos = photos,
+                        onAdd = { photoPicker.launch(arrayOf("image/*")) },
+                        onRemove = { uri -> photos = ArrayList(photos.filter { it != uri }) }
                     )
 
                     PostField(
-                        label = if (donation) "Price — free donation" else "Price per unit (₱)",
-                        value = if (donation) "0.00" else price,
-                        onChange = { price = it },
-                        keyboard = KeyboardType.Decimal,
-                        enabled = !donation
+                        label = "Food name",
+                        value = name,
+                        onChange = { name = it },
+                        example = "e.g., Assorted bread loaves",
+                        required = true
                     )
 
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    PostChoice(
+                        label = "Category",
+                        selected = category,
+                        options = FoodCategories,
+                        onSelect = { category = it },
+                        required = true
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         PostField(
-                            "Quantity",
-                            quantity,
-                            { quantity = it },
+                            label = "Quantity",
+                            value = quantity,
+                            onChange = { quantity = it },
                             modifier = Modifier.weight(1f),
-                            keyboard = KeyboardType.Number
+                            example = "e.g., 10",
+                            keyboard = KeyboardType.Number,
+                            required = true
                         )
-                        Box(Modifier.weight(1f)) {
-                            PostChoice(
-                                "Unit",
-                                unit,
-                                listOf("pcs", "packs", "meals", "boxes", "kg"),
-                                { unit = it }
+                        if (!donation) {
+                            PostField(
+                                label = "Price per unit",
+                                value = price,
+                                onChange = { price = it },
+                                modifier = Modifier.weight(1f),
+                                example = "25.00",
+                                keyboard = KeyboardType.Decimal,
+                                prefix = "₱",
+                                required = true
                             )
                         }
                     }
 
-                    PostField(
-                        "Description (optional)",
-                        description,
-                        { description = it }
+                    PostChoice(
+                        label = "Unit",
+                        selected = unit,
+                        options = FoodUnits,
+                        onSelect = { unit = it },
+                        required = true
                     )
 
-                    PostDateButton("Expiration", expiry) {
-                        chooseDateTime(expiry) { expiry = it }
+                    if (donation) {
+                        InlineNotice(
+                            text = "Free donation: recipients pay nothing.",
+                            icon = Icons.Outlined.VolunteerActivism,
+                            tone = NoticeTone.Success
+                        )
                     }
 
                     PostField(
-                        "Pickup location / exact meeting point",
-                        location,
-                        { location = it }
+                        label = "Description (optional)",
+                        value = description,
+                        onChange = { description = it },
+                        example = "e.g., 10 individually packed bread rolls available today"
                     )
+                }
 
-                    Text(
-                        "Enter an address or landmark recipients can recognize.",
-                        fontSize = 11.sp
+                FormSection(
+                    title = "Pickup",
+                    subtitle = "Where and when people collect it",
+                    icon = Icons.Outlined.LocationOn
+                ) {
+                    PostField(
+                        label = "Pickup location / exact meeting point",
+                        value = location,
+                        onChange = { location = it },
+                        example = "e.g., Main entrance of the barangay hall, Del Rosario, Balilihan",
+                        hint = "Enter an address or landmark recipients can recognize.",
+                        required = true
                     )
 
                     PickupPinPicker(
@@ -399,64 +431,91 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                         onPinChange = { pickupPin = it },
                         savedPin = null,
                         editing = false,
-                        accent = PostGreen
+                        accent = SaluColors.GreenInk
                     )
 
-                    PostDateButton("Pickup starts", pickupStart, onNow = { pickupStart = currentMinute() }) {
+                    PostDateButton("Pickup starts", pickupStart, required = true, onNow = { pickupStart = currentMinute() }) {
                         chooseDateTime(pickupStart) { pickupStart = it }
                     }
-                    PostDateButton("Pickup ends", pickupEnd) {
+                    PostDateButton("Pickup ends", pickupEnd, required = true) {
                         chooseDateTime(pickupEnd) { pickupEnd = it }
                     }
 
                     PostChoice(
-                        "Handover",
-                        distribution,
-                        ListingHandover.entries.map { it.label },
-                        { distribution = it }
+                        label = "Handover",
+                        selected = distribution,
+                        options = ListingHandover.entries.map { it.label },
+                        onSelect = { distribution = it }
                     )
                 }
 
-                PostPanel {
+                FormSection(
+                    title = "Food information",
+                    subtitle = "Help people eat it safely",
+                    icon = Icons.Outlined.WarningAmber
+                ) {
                     PostField(
-                        "Allergens",
-                        allergens,
-                        { allergens = it }
+                        label = "Allergens",
+                        value = allergens,
+                        onChange = { allergens = it },
+                        example = "e.g., Contains wheat, milk, and eggs",
+                        hint = ALLERGENS_HINT,
+                        required = true
                     )
                     PostField(
-                        "Storage notes (optional)",
-                        storage,
-                        { storage = it }
+                        label = "Storage notes (optional)",
+                        value = storage,
+                        onChange = { storage = it },
+                        example = "e.g., Keep refrigerated until pickup"
                     )
-                    Text(ALLERGENS_HINT, fontSize = 11.sp)
+                    PostDateButton("Expiration", expiry, required = true) {
+                        chooseDateTime(expiry) { expiry = it }
+                    }
                 }
 
-                PostPanel(pale = true) {
-                    Text(
-                        "Check your listing",
-                        fontWeight = FontWeight.Bold,
-                        color = PostGreen
-                    )
-                    Text(
-                        "See the price, pickup window and missing details before you post.",
-                        fontSize = 12.sp
-                    )
-                    TextButton(onClick = { checking = true }) {
-                        Text("Check listing", color = PostGreen)
+                SaluCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = SaluColors.YellowSoft.copy(alpha = 0.6f),
+                    border = false
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconBubble(
+                                Icons.AutoMirrored.Outlined.FactCheck,
+                                background = Color.White,
+                                size = 40.dp,
+                                iconSize = 22.dp
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "Check your listing",
+                                    style = SaluText.FoodTitle,
+                                    color = SaluColors.Ink
+                                )
+                                Text(
+                                    "See the price, pickup window and missing details before you post.",
+                                    style = SaluText.Supporting,
+                                    color = SaluColors.InkMuted
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        SaluSecondaryButton(text = "Check listing", onClick = { checking = true })
                     }
                 }
 
                 if (error.isNotBlank()) {
-                    Text(
-                        error,
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = 13.sp
+                    InlineNotice(
+                        text = error,
+                        icon = Icons.Outlined.ErrorOutline,
+                        tone = NoticeTone.Error
                     )
                 }
 
-                PostButton(
-                    text = if (saving || backendSaving) "Posting…" else "Post Listing",
-                    enabled = !saving && !backendSaving,
+                SaluPrimaryButton(
+                    text = if (saving || backendSaving) "Posting…" else "Post listing",
+                    loading = saving || backendSaving,
                     onClick = {
                         error = validate()
                         val pin = pickupPin
@@ -490,39 +549,62 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
 
                 Text(
                     "Review the food details and pickup arrangements before posting.",
-                    fontSize = 11.sp
+                    style = SaluText.Meta,
+                    color = SaluColors.InkMuted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
-            TextButton(onClick = { showLocal = !showLocal }) {
-                Text("My posts (${myPosts.size})", color = PostGreen)
+            // This account's own posts, folded away under the form.
+            SaluCard(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { showLocal = !showLocal }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .heightIn(min = 32.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Outlined.Inventory2, contentDescription = null, tint = SaluColors.AmberInk)
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "My posts (${myPosts.size})",
+                        style = SaluText.FoodTitle,
+                        color = SaluColors.Ink,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        if (showLocal) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        contentDescription = if (showLocal) "Hide my posts" else "Show my posts",
+                        tint = SaluColors.InkMuted
+                    )
+                }
             }
 
-            if (showLocal) {
-                if (myPosts.isEmpty()) {
-                    Text("You have no food posts yet.")
-                }
-
-                myPosts.forEach { post ->
-                    PostPanel {
-                        Text(post.name, fontWeight = FontWeight.Bold, color = PostDark)
-                        Text("${post.quantity} ${post.unit} • ${post.category}")
-                        Text(post.pickupLocation, fontSize = 12.sp)
+            AnimatedVisibility(visible = showLocal) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (myPosts.isEmpty()) {
                         Text(
-                            "Expires: ${epochMillis(post.expirationDate).takeIf { it != 0L }?.let(::postTime) ?: "—"}",
-                            fontSize = 12.sp
+                            "You have no food posts yet.",
+                            style = SaluText.Body,
+                            color = SaluColors.InkMuted
                         )
-                        Text("Status: ${if (post.isExpired()) "Expired" else post.status.name}", fontSize = 12.sp, color = PostGreen)
-                        TextButton(onClick = {
-                            info = post.description ?: "No description provided."
-                        }) { Text("View details") }
-                        if (!post.isExpired()) {
-                            TextButton(onClick = { editing = post }) { Text("Edit", color = PostGreen) }
-                        }
-                        TextButton(onClick = { pendingDelete = post }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    }
+
+                    myPosts.forEach { post ->
+                        MyPostCard(
+                            post = post,
+                            onDetails = { info = post.description ?: "No description provided." },
+                            onEdit = { editing = post },
+                            onDelete = { pendingDelete = post }
+                        )
                     }
                 }
             }
+
+            Spacer(Modifier.height(8.dp))
         }
     }
 
@@ -533,9 +615,9 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
 
         ActionPage(heading = "Check your listing", onBack = { checking = false }) {
             Text(
-                "Based on the details you've entered so far. Nothing is posted until you tap Post Listing.",
-                fontSize = 13.sp,
-                color = PostDark
+                "Based on the details you've entered so far. Nothing is posted until you tap Post listing.",
+                style = SaluText.Body,
+                color = SaluColors.InkMuted
             )
 
             CheckSection(
@@ -612,8 +694,8 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
 
             Text(
                 "These are form checks and calculations, not AI predictions or a food-safety assessment.",
-                fontSize = 11.sp,
-                color = PostDark
+                style = SaluText.Meta,
+                color = SaluColors.InkMuted
             )
         }
     }
@@ -627,7 +709,7 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
                 TextButton(enabled = !backendSaving, onClick = {
                     foodViewModel.deletePost(post)
                     pendingDelete = null
-                }) { Text("Delete") }
+                }) { Text("Delete", color = SaluColors.PinkInk) }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
         )
@@ -660,6 +742,61 @@ fun PostScreen(onBack: () -> Unit, foodViewModel: FoodViewModel) {
             }
         )
     }
+}
+
+/** One of this account's posts under "My posts": status, details and its actions. */
+@Composable
+private fun MyPostCard(
+    post: FoodPost,
+    onDetails: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val expired = post.isExpired()
+    SaluCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 6.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    post.name,
+                    style = SaluText.FoodTitle,
+                    color = SaluColors.Ink,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                )
+                StatusBadge(listingStatus(post, expired), Modifier.padding(end = 8.dp))
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "${post.quantity} ${post.unit} • ${post.category}",
+                style = SaluText.Supporting,
+                color = SaluColors.InkMuted
+            )
+            Text(post.pickupLocation, style = SaluText.Meta, color = SaluColors.InkMuted)
+            Text(
+                "Expires: ${epochMillis(post.expirationDate).takeIf { it != 0L }?.let(::postTime) ?: "—"}",
+                style = SaluText.Meta,
+                color = SaluColors.InkMuted
+            )
+            Row {
+                TextButton(onClick = onDetails) { Text("View details", color = SaluColors.GreenInk) }
+                if (!expired) {
+                    TextButton(onClick = onEdit) { Text("Edit", color = SaluColors.GreenInk) }
+                }
+                TextButton(onClick = onDelete) { Text("Delete", color = SaluColors.PinkInk) }
+            }
+        }
+    }
+}
+
+/** A listing's status as a badge; expiry is worked out from the date, as the server never sets it. */
+internal fun listingStatus(post: FoodPost, expired: Boolean = post.isExpired()): SaluStatus = when {
+    expired -> SaluStatus.Expired
+    post.status == FoodPostStatus.RESERVED -> SaluStatus.Reserved
+    post.status == FoodPostStatus.CLAIMED -> SaluStatus.Claimed
+    post.status == FoodPostStatus.REMOVED -> SaluStatus.Removed
+    post.status == FoodPostStatus.EXPIRED -> SaluStatus.Expired
+    else -> SaluStatus.Available
 }
 
 /**
@@ -775,90 +912,78 @@ fun EditListingDialog(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(PostCream)
+                .background(SaluColors.Background)
                 .safeDrawingPadding()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(enabled = !waiting, onClick = { onClose(null) }) {
-                    Text("Cancel", color = PostGreen)
-                }
-                Text(
-                    "Edit Listing",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PostDark
-                )
-            }
+            SaluTopBar(
+                title = "Edit listing",
+                subtitle = post.name,
+                onBack = { if (!waiting) onClose(null) },
+                backDescription = "Cancel editing"
+            )
 
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    "Quantity, unit and photos can't be changed.",
-                    fontSize = 12.sp
+                InlineNotice(
+                    text = "Quantity, unit and photos can't be changed.",
+                    icon = Icons.Outlined.Info
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = donation,
-                        onClick = { donation = true },
-                        label = { Text("I want to donate") },
-                        modifier = Modifier.weight(1f)
+                ListingTypeSwitch(donation = donation, onChange = { donation = it })
+
+                FormSection(title = "Food", icon = Icons.Outlined.RiceBowl) {
+                    PostField(
+                        label = "Food name",
+                        value = name,
+                        onChange = { name = it },
+                        example = "e.g., Assorted bread loaves",
+                        required = true
                     )
-                    FilterChip(
-                        selected = !donation,
-                        onClick = { donation = false },
-                        label = { Text("I want to sell") },
-                        modifier = Modifier.weight(1f)
+                    PostChoice(
+                        label = "Category",
+                        selected = category,
+                        options = FoodCategories,
+                        onSelect = { category = it },
+                        required = true
+                    )
+                    if (!donation) {
+                        PostField(
+                            label = "Price per unit",
+                            value = price,
+                            onChange = { price = it },
+                            example = "25.00",
+                            keyboard = KeyboardType.Decimal,
+                            prefix = "₱",
+                            required = true
+                        )
+                    }
+                    PostField(
+                        label = "Description (optional)",
+                        value = description,
+                        onChange = { description = it },
+                        example = "e.g., 10 individually packed bread rolls available today"
                     )
                 }
 
-                PostPanel {
-                    PostField("Food name", name, { name = it })
-                    PostChoice(
-                        "Category",
-                        category,
-                        listOf(
-                            "Bread & pastries",
-                            "Vegetables",
-                            "Fruit",
-                            "Cooked meals",
-                            "Packaged food",
-                            "Other"
-                        ),
-                        { category = it }
-                    )
+                FormSection(title = "Pickup", icon = Icons.Outlined.LocationOn) {
                     PostField(
-                        label = if (donation) "Price — free donation" else "Price per unit (₱)",
-                        value = if (donation) "0.00" else price,
-                        onChange = { price = it },
-                        keyboard = KeyboardType.Decimal,
-                        enabled = !donation
-                    )
-                    PostField("Description (optional)", description, { description = it })
-                    PostDateButton("Expiration", expiry) {
-                        chooseDateTime(expiry) { expiry = it }
-                    }
-                    PostField(
-                        "Pickup location / exact meeting point",
-                        location,
-                        { location = it }
+                        label = "Pickup location / exact meeting point",
+                        value = location,
+                        onChange = { location = it },
+                        example = "e.g., Main entrance of the barangay hall, Del Rosario, Balilihan",
+                        required = true
                     )
                     PickupPinPicker(
                         pin = pickupPin,
                         onPinChange = { pickupPin = it },
                         savedPin = post.pickupPin,
                         editing = true,
-                        accent = PostGreen
+                        accent = SaluColors.GreenInk
                     )
                     PostDateButton("Pickup starts", pickupStart, onNow = { pickupStart = currentMinute() }) {
                         chooseDateTime(pickupStart) { pickupStart = it }
@@ -868,34 +993,49 @@ fun EditListingDialog(
                     }
                     if (pickupStart != 0L || pickupEnd != 0L) {
                         TextButton(onClick = { pickupStart = 0L; pickupEnd = 0L }) {
-                            Text("Clear pickup times", color = PostGreen)
+                            Text("Clear pickup times", color = SaluColors.GreenInk)
                         }
                     }
                     PostChoice(
-                        "Handover",
-                        handover,
-                        ListingHandover.entries.map { it.label },
-                        { handover = it }
+                        label = "Handover",
+                        selected = handover,
+                        options = ListingHandover.entries.map { it.label },
+                        onSelect = { handover = it }
                     )
                 }
 
-                PostPanel {
-                    PostField("Allergens", allergens, { allergens = it })
-                    PostField("Storage notes (optional)", storage, { storage = it })
-                    Text(ALLERGENS_HINT, fontSize = 11.sp)
+                FormSection(title = "Food information", icon = Icons.Outlined.WarningAmber) {
+                    PostField(
+                        label = "Allergens",
+                        value = allergens,
+                        onChange = { allergens = it },
+                        example = "e.g., Contains wheat, milk, and eggs",
+                        hint = ALLERGENS_HINT,
+                        required = true
+                    )
+                    PostField(
+                        label = "Storage notes (optional)",
+                        value = storage,
+                        onChange = { storage = it },
+                        example = "e.g., Keep refrigerated until pickup"
+                    )
+                    PostDateButton("Expiration", expiry, required = true) {
+                        chooseDateTime(expiry) { expiry = it }
+                    }
                 }
 
                 if (error.isNotBlank()) {
-                    Text(
-                        error,
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = 13.sp
+                    InlineNotice(
+                        text = error,
+                        icon = Icons.Outlined.ErrorOutline,
+                        tone = NoticeTone.Error
                     )
                 }
 
-                PostButton(
+                SaluPrimaryButton(
                     text = if (waiting) "Saving…" else "Save changes",
-                    enabled = !waiting && !backendSaving,
+                    enabled = !backendSaving,
+                    loading = waiting,
                     onClick = {
                         error = validate()
                         if (error.isBlank()) {
@@ -949,10 +1089,186 @@ private fun postTime(value: Long): String {
     ).format(Date(value))
 }
 
+/** Donate or sell, as a two-part choice. */
+@Composable
+private fun ListingTypeSwitch(donation: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(SaluRadius.Control)
+            .background(SaluColors.Cream)
+            .padding(4.dp)
+            .selectableGroup()
+    ) {
+        ListingTypeOption(
+            icon = Icons.Outlined.VolunteerActivism,
+            title = "I want to donate",
+            subtitle = "Free for others",
+            selected = donation,
+            onClick = { onChange(true) },
+            modifier = Modifier.weight(1f)
+        )
+        ListingTypeOption(
+            icon = Icons.Outlined.Sell,
+            title = "I want to sell",
+            subtitle = "Paid at pickup",
+            selected = !donation,
+            onClick = { onChange(false) },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun ListingTypeOption(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape11)
+            .background(if (selected) Color.White else Color.Transparent)
+            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (selected) SaluColors.GreenInk else SaluColors.InkMuted,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(
+                title,
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp),
+                color = if (selected) SaluColors.Ink else SaluColors.InkMuted
+            )
+            Text(subtitle, style = SaluText.Meta, color = SaluColors.InkMuted)
+        }
+    }
+}
+
+private val RoundedCornerShape11 = androidx.compose.foundation.shape.RoundedCornerShape(11.dp)
+
+/** A titled group of form fields on one card. */
+@Composable
+private fun FormSection(
+    title: String,
+    icon: ImageVector,
+    subtitle: String? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    SaluCard(Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconBubble(icon, size = 36.dp, iconSize = 20.dp)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        title,
+                        style = SaluText.SectionTitle,
+                        color = SaluColors.Ink,
+                        modifier = Modifier.semantics { heading() }
+                    )
+                    if (subtitle != null) {
+                        Text(subtitle, style = SaluText.Supporting, color = SaluColors.InkMuted)
+                    }
+                }
+            }
+            content()
+        }
+    }
+}
+
+/** Up to four photos: the first is the cover; each can be removed. */
+@Composable
+private fun PhotoPicker(
+    photos: List<String>,
+    onAdd: () -> Unit,
+    onRemove: (String) -> Unit
+) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Food photos *",
+                style = SaluText.Meta,
+                color = SaluColors.InkMuted,
+                modifier = Modifier.weight(1f)
+            )
+            Text("${photos.size} of 4", style = SaluText.Meta, color = SaluColors.InkMuted)
+        }
+        Text(
+            "Add up to four clear photos of the food. The first one is the cover.",
+            style = SaluText.Supporting,
+            color = SaluColors.InkMuted
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            photos.forEachIndexed { index, uri ->
+                Box {
+                    PostPhoto(uri, cover = index == 0)
+                    // White circle so the X reads on any photo; the button itself is 48 dp.
+                    IconButton(
+                        onClick = { onRemove(uri) },
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Box(
+                            Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .border(1.dp, SaluColors.Line, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Outlined.Close,
+                                contentDescription = "Remove photo ${index + 1}",
+                                tint = SaluColors.Ink,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (photos.size < 4) {
+                Column(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(SaluRadius.Photo)
+                        .background(SaluColors.Cream)
+                        .border(1.dp, SaluColors.Outline.copy(alpha = 0.45f), SaluRadius.Photo)
+                        .clickable(onClickLabel = "Add photos", role = Role.Button, onClick = onAdd),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Outlined.AddAPhoto, contentDescription = null, tint = SaluColors.Ink)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Add photo", style = SaluText.Meta, color = SaluColors.Ink)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun PostDateButton(
     label: String,
     value: Long,
+    required: Boolean = false,
     onNow: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
@@ -972,41 +1288,53 @@ private fun PostDateButton(
         set(Calendar.SECOND, 0)
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis
+    val shown = if (value == 0L) "e.g., ${postTime(exampleTime)}" else postTime(value)
 
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                label,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
+                if (required) "$label *" else label,
+                style = SaluText.Meta,
+                color = SaluColors.InkMuted,
                 modifier = Modifier.weight(1f)
             )
             if (onNow != null) {
                 TextButton(onClick = onNow) {
-                    Text("Start now", color = PostGreen, fontSize = 13.sp)
+                    Text("Start now", style = MaterialTheme.typography.labelLarge, color = SaluColors.GreenInk)
                 }
             }
         }
 
         OutlinedButton(
             onClick = onClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text(
-                if (value == 0L) {
-                    "e.g., ${postTime(exampleTime)}"
-                } else {
-                    postTime(value)
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .semantics {
+                    contentDescription = if (value == 0L) "$label: not chosen. Choose date and time" else "$label: $shown. Change date and time"
                 },
-                fontSize = 12.sp
+            shape = SaluRadius.Control,
+            border = BorderStroke(1.dp, SaluColors.Outline.copy(alpha = 0.6f)),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = Color.White,
+                contentColor = SaluColors.Ink
+            ),
+            contentPadding = PaddingValues(horizontal = 16.dp)
+        ) {
+            Icon(
+                Icons.Outlined.CalendarMonth,
+                contentDescription = null,
+                tint = SaluColors.InkMuted,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                shown,
+                style = SaluText.Body,
+                color = if (value == 0L) SaluColors.InkMuted else SaluColors.Ink,
+                modifier = Modifier.weight(1f)
             )
         }
-
-        Text(
-            "Tap to choose your actual date and time.",
-            fontSize = 10.sp
-        )
     }
 }
 
@@ -1014,27 +1342,8 @@ private fun PostDateButton(
 @Composable
 private fun CheckSection(title: String, lines: List<String>) {
     ActionCard {
-        Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = PostGreen)
-        lines.forEach { Text(it, fontSize = 14.sp, color = PostDark) }
-    }
-}
-
-@Composable
-private fun PostPanel(
-    pale: Boolean = false,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = if (pale) PostPale else Color.White,
-        shape = RoundedCornerShape(18.dp),
-        shadowElevation = if (pale) 0.dp else 1.dp
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            content = content
-        )
+        Text(title, style = SaluText.Meta.copy(fontWeight = FontWeight.Bold), color = SaluColors.GreenInk)
+        lines.forEach { Text(it, style = SaluText.Body, color = SaluColors.Ink) }
     }
 }
 
@@ -1044,151 +1353,64 @@ private fun PostField(
     value: String,
     onChange: (String) -> Unit,
     modifier: Modifier = Modifier,
+    example: String? = null,
+    hint: String? = null,
+    required: Boolean = false,
     keyboard: KeyboardType = KeyboardType.Text,
-    enabled: Boolean = true
+    prefix: String? = null
 ) {
-    val example = when {
-        label == "Food name" ->
-            "e.g., Assorted bread loaves"
-
-        label.contains("free donation") ->
-            "e.g., 0.00 — free donation"
-
-        label.startsWith("Price") ->
-            "e.g., 25.00 per selected unit"
-
-        label == "Quantity" ->
-            "e.g., 10"
-
-        label.startsWith("Description") ->
-            "e.g., 10 individually packed bread rolls available today"
-
-        label.startsWith("Pickup location") ->
-            "e.g., Main entrance of the barangay hall, Del Rosarrio, Balilihan"
-
-        label.startsWith("Allergens") ->
-            "e.g., Contains wheat, milk, and eggs"
-
-        label.startsWith("Storage") ->
-            "e.g., Keep refrigerated until pickup"
-
-        else ->
-            "e.g., Enter the requested details"
-    }
-
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        label = {
-            Text(label, fontSize = 12.sp)
-        },
-        placeholder = {
-            Text(example, fontSize = 12.sp)
-        },
-        supportingText = {
-            if (value.isNotBlank()) {
-                Text(example, fontSize = 10.sp)
-            }
-        },
+        label = { Text(if (required) "$label *" else label) },
+        placeholder = example?.let { { Text(it, style = SaluText.Body) } },
+        supportingText = hint?.let { { Text(it) } },
+        prefix = prefix?.let { { Text(it) } },
         modifier = modifier.fillMaxWidth(),
-        enabled = enabled,
         keyboardOptions = KeyboardOptions(
             keyboardType = keyboard
         ),
-        shape = RoundedCornerShape(12.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = PostGreen,
-            focusedLabelColor = PostGreen
-        )
+        singleLine = keyboard == KeyboardType.Number || keyboard == KeyboardType.Decimal,
+        textStyle = SaluText.Body.copy(fontSize = 15.sp),
+        shape = SaluRadius.Control,
+        colors = saluFieldColors()
     )
 }
 
+/** A choice from a few options, shown as chips so every option is visible. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PostChoice(
     label: String,
     selected: String,
     options: List<String>,
-    onSelect: (String) -> Unit
+    onSelect: (String) -> Unit,
+    required: Boolean = false
 ) {
-    var expanded by remember {
-        mutableStateOf(false)
-    }
-
-    val example = when (label) {
-        "Category" -> "e.g., Bread & pastries"
-        "Unit" -> "e.g., packs"
-        "Handover" -> "e.g., Collect from provider"
-        else -> "Select an option"
-    }
-
     Column {
-        Text(label, fontSize = 12.sp)
-
-        Box {
-            OutlinedButton(
-                onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = if (selected.isBlank()) {
-                        "$example ▾"
-                    } else {
-                        "$selected ▾"
-                    },
-                    fontSize = 12.sp
+        Text(
+            if (required) "$label *" else label,
+            style = SaluText.Meta,
+            color = SaluColors.InkMuted
+        )
+        Spacer(Modifier.height(4.dp))
+        FlowRow(
+            modifier = Modifier.selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            options.forEach { option ->
+                SaluFilterChip(
+                    label = option,
+                    selected = selected == option,
+                    onClick = { onSelect(option) }
                 )
             }
-
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                options.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option) },
-                        onClick = {
-                            onSelect(option)
-                            expanded = false
-                        }
-                    )
-                }
-            }
-        }
-
-        if (selected.isNotBlank()) {
-            Text(
-                example,
-                fontSize = 10.sp,
-                modifier = Modifier.padding(start = 4.dp)
-            )
         }
     }
 }
 
 @Composable
-private fun PostButton(
-    text: String,
-    enabled: Boolean = true,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 50.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = PostGreen
-        )
-    ) {
-        Text(text)
-    }
-}
-
-@Composable
-fun PostPhoto(uri: String) {
+fun PostPhoto(uri: String, cover: Boolean = false) {
     val context = LocalContext.current
 
     val bitmap by produceState<ImageBitmap?>(null, uri) {
@@ -1228,20 +1450,34 @@ fun PostPhoto(uri: String) {
     Box(
         modifier = Modifier
             .size(100.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(PostPale),
+            .clip(SaluRadius.Photo)
+            .background(SaluColors.Cream),
         contentAlignment = Alignment.Center
     ) {
         val image = bitmap
         if (image != null) {
             Image(
                 bitmap = image,
-                contentDescription = "Selected food photo",
+                contentDescription = if (cover) "Selected food photo, cover" else "Selected food photo",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Text("Photo preview", fontSize = 10.sp)
+            Text("Photo preview", style = SaluText.Meta, color = SaluColors.InkMuted)
+        }
+
+        if (cover) {
+            Text(
+                "Cover",
+                style = SaluText.Status,
+                color = SaluColors.Ink,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp)
+                    .clip(SaluRadius.Small)
+                    .background(SaluColors.Yellow)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            )
         }
     }
 }

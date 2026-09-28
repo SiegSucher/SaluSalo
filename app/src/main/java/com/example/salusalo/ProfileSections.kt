@@ -5,11 +5,16 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Redeem
+import androidx.compose.material.icons.outlined.SearchOff
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.VolunteerActivism
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,7 +43,9 @@ import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.supabaseErrorText
 import com.example.salusalo.model.UserProfile
 import kotlinx.coroutines.launch
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -48,10 +55,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 
-private val SectionGreen = Color(0xFF347523)
-private val SectionCream = Color(0xFFFCFBF6)
-private val SectionPale = Color(0xFFEEF4E4)
-private val SectionDark = Color(0xFF213027)
+private val SectionGreen = SaluColors.GreenInk
+private val SectionCream = SaluColors.Background
+private val SectionPale = SaluColors.YellowSoft
+private val SectionDark = SaluColors.Ink
 
 @Composable
 fun ProfileSections(
@@ -193,38 +200,7 @@ fun ProfileSections(
                     .safeDrawingPadding()
                     .imePadding()
             ) {
-                Surface(
-                    color = Color.White,
-                    shadowElevation = 2.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                    ) {
-                        IconButton(onClick = { back() }) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = SectionGreen)
-                        }
-
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(top = 8.dp)
-                        ) {
-                            Text(
-                                title,
-                                fontSize = 21.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = SectionDark
-                            )
-                            Text(
-                                "Salu-Salo",
-                                fontSize = 11.sp,
-                                color = SectionGreen
-                            )
-                        }
-                    }
-                }
+                SaluTopBar(title = title, onBack = { back() })
 
                 // Each destination starts at the top of its content.
                 key(route) {
@@ -232,8 +208,8 @@ fun ProfileSections(
                         modifier = Modifier
                             .weight(1f)
                             .verticalScroll(rememberScrollState())
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         when (page) {
                             "claims", "donations" -> {
@@ -263,19 +239,22 @@ fun ProfileSections(
                                 }
 
                                 when {
-                                    recordsFailed -> Text(
-                                        "Your records could not be loaded. Check your internet connection and try again.",
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.error
+                                    recordsFailed -> InlineNotice(
+                                        text = "Your records could not be loaded. Check your internet connection and try again.",
+                                        icon = Icons.Outlined.ErrorOutline,
+                                        tone = NoticeTone.Error
                                     )
-                                    !recordsLoaded -> Text("Loading your records…", fontSize = 13.sp)
-                                    records.isEmpty() -> Text(
-                                        if (claims) {
-                                            "No successful claims yet. They appear here after a donor marks your reservation as claimed."
+                                    !recordsLoaded -> SkeletonGroup(description = "Loading your records") {
+                                        repeat(3) { ListRowSkeleton() }
+                                    }
+                                    records.isEmpty() -> EmptyState(
+                                        icon = if (claims) Icons.Outlined.Redeem else Icons.Outlined.VolunteerActivism,
+                                        title = if (claims) "No successful claims yet" else "No successful donations yet",
+                                        message = if (claims) {
+                                            "They appear here after a donor marks your reservation as claimed."
                                         } else {
-                                            "No successful donations yet. They appear here after you mark a reservation on your listing as claimed."
-                                        },
-                                        fontSize = 13.sp
+                                            "They appear here after you mark a reservation on your listing as claimed."
+                                        }
                                     )
                                 }
 
@@ -293,18 +272,18 @@ fun ProfileSections(
                                 val donation = successfulDonations.firstOrNull { it.reservation.id == itemName }
                                 val entry = donation ?: successfulClaims.firstOrNull { it.reservation.id == itemName }
                                 if (entry == null) {
-                                    Text("This record is no longer available.", fontSize = 13.sp)
+                                    EmptyState(
+                                        icon = Icons.Outlined.SearchOff,
+                                        title = "This record is no longer available.",
+                                        message = "Go back to see your other records."
+                                    )
                                 } else {
                                     val post = entry.foodPost
-                                    SavedListingPhoto(post)
+                                    SavedListingPhoto(post, large = true)
 
                                     SectionCard {
-                                        Text(
-                                            "Claimed",
-                                            color = SectionGreen,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(post.name, fontWeight = FontWeight.SemiBold)
+                                        StatusBadge(SaluStatus.Claimed)
+                                        Text(post.name, style = SaluText.FoodTitle, color = SaluColors.Ink)
                                         Text(successRecordLines(entry, showRecipient = donation != null))
                                         Text("Pickup location: ${post.pickupLocation}", fontSize = 12.sp)
                                     }
@@ -339,17 +318,18 @@ fun ProfileSections(
 
                                 when {
                                     rate == null && responseRateFailed -> {
-                                        Text(
-                                            "Your response rate could not be loaded. " +
+                                        InlineNotice(
+                                            text = "Your response rate could not be loaded. " +
                                                     "Check your internet connection and try again.",
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.error
+                                            icon = Icons.Outlined.ErrorOutline,
+                                            tone = NoticeTone.Error
                                         )
                                         SectionButton("Try again") { onReloadResponseRate() }
                                     }
 
-                                    rate == null ->
-                                        Text("Loading your response rate…", fontSize = 13.sp)
+                                    rate == null -> SkeletonGroup(description = "Loading your response rate") {
+                                        SkeletonBlock(Modifier.fillMaxWidth().height(96.dp), SaluRadius.Card)
+                                    }
 
                                     rate.received == 0 ->
                                         SectionCard {
@@ -472,28 +452,32 @@ fun ProfileSections(
                             "saved" -> {
                                 Text(
                                     "Listings you bookmarked, newest first.",
-                                    fontSize = 12.sp
+                                    style = SaluText.Supporting,
+                                    color = SaluColors.InkMuted
                                 )
 
                                 when {
                                     savedRows.isEmpty() && savedLoading ->
-                                        Text("Loading your saved listings…", fontSize = 13.sp)
+                                        SkeletonGroup(description = "Loading your saved listings") {
+                                            repeat(3) { ListRowSkeleton(thumbnail = 72.dp) }
+                                        }
 
                                     savedRows.isEmpty() && savedLoadFailed ->
-                                        Text(
-                                            "Your saved listings could not be loaded. " +
+                                        InlineNotice(
+                                            text = "Your saved listings could not be loaded. " +
                                                     "Check your internet connection and try again.",
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.error
+                                            icon = Icons.Outlined.ErrorOutline,
+                                            tone = NoticeTone.Error
                                         )
 
                                     savedRows.isEmpty() ->
-                                        SectionCard {
-                                            Text(
-                                                "You have no saved listings yet. Tap the " +
-                                                        "bookmark on a listing to save it here."
-                                            )
-                                        }
+                                        EmptyState(
+                                            icon = Icons.Outlined.BookmarkBorder,
+                                            title = "You have no saved listings yet",
+                                            message = "Tap the bookmark on a listing to save it here.",
+                                            tint = SaluColors.PinkInk,
+                                            iconBackground = SaluColors.PinkSoft
+                                        )
                                 }
 
                                 savedRows.forEach { row ->
@@ -503,43 +487,63 @@ fun ProfileSections(
                                             post.status == FoodPostStatus.AVAILABLE &&
                                             !post.isExpired()
                                     SectionCard {
-                                        if (post != null) {
-                                            SavedListingPhoto(post)
-                                            Text(post.name, fontWeight = FontWeight.Bold)
-                                            Text(
-                                                post.donorName?.takeIf { it.isNotBlank() }
-                                                    ?: "Donor name unavailable",
-                                                fontSize = 12.sp
-                                            )
-                                            Text(
-                                                "${post.quantity} ${post.unit} • " +
-                                                        if (post.price > 0) formatPeso(post.price) else "Free",
-                                                fontSize = 12.sp
-                                            )
-                                        } else {
-                                            // A listing this account can no longer see: its
-                                            // name and cover from get_my_saved_listing_names().
-                                            SavedFallbackPhoto(row.fallbackImageUrl, row.fallbackName)
-                                            Text(
-                                                row.fallbackName ?: "Saved listing",
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                        if (available) {
-                                            SectionButton("View listing") {
-                                                onOpenListing(post!!)
+                                        Row(verticalAlignment = Alignment.Top) {
+                                            if (post != null) {
+                                                SavedListingPhoto(post)
+                                            } else {
+                                                // A listing this account can no longer see: its
+                                                // name and cover from get_my_saved_listing_names().
+                                                SavedFallbackPhoto(row.fallbackImageUrl, row.fallbackName)
                                             }
-                                        } else {
-                                            Text(
-                                                "No longer available",
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.error
-                                            )
+                                            Spacer(Modifier.width(12.dp))
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                                            ) {
+                                                Text(
+                                                    post?.name ?: row.fallbackName ?: "Saved listing",
+                                                    style = SaluText.FoodTitle,
+                                                    color = SaluColors.Ink
+                                                )
+                                                if (post != null) {
+                                                    Text(
+                                                        post.donorName?.takeIf { it.isNotBlank() }
+                                                            ?: "Donor name unavailable",
+                                                        style = SaluText.Supporting,
+                                                        color = SaluColors.InkMuted
+                                                    )
+                                                    Text(
+                                                        "${post.quantity} ${post.unit} • " +
+                                                                if (post.price > 0) formatPeso(post.price) else "Free",
+                                                        style = SaluText.Meta,
+                                                        color = SaluColors.Ink
+                                                    )
+                                                }
+                                                if (!available) {
+                                                    Text(
+                                                        "No longer available",
+                                                        style = SaluText.Status,
+                                                        color = SaluColors.PinkInk
+                                                    )
+                                                }
+                                            }
                                         }
-                                        TextButton(
-                                            onClick = { savedListingViewModel.remove(row.foodPostId) }
-                                        ) {
-                                            Text("Remove")
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (available) {
+                                                SaluPrimaryButton(
+                                                    text = "View listing",
+                                                    onClick = { onOpenListing(post!!) },
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                            } else {
+                                                Spacer(Modifier.weight(1f))
+                                            }
+                                            TextButton(
+                                                onClick = { savedListingViewModel.remove(row.foodPostId) }
+                                            ) {
+                                                Text("Remove", color = SaluColors.PinkInk)
+                                            }
                                         }
                                     }
                                 }
@@ -548,7 +552,7 @@ fun ProfileSections(
                             "notifications" -> {
                                 SectionCard {
                                     if (serverPreferences == null) {
-                                        Text("Alert preferences have not loaded yet.", fontSize = 13.sp)
+                                        Text("Alert preferences have not loaded yet.", style = SaluText.Body, color = SaluColors.InkMuted)
                                         TextButton(onClick = { notificationViewModel.loadPreferences() }) { Text("Retry") }
                                     } else {
                                         SectionToggle(
@@ -595,7 +599,8 @@ fun ProfileSections(
                                         ) { feedback = "Preferences saved to your account." }
                                     }
                                 }
-                                OutlinedButton(
+                                SaluSecondaryButton(
+                                    text = "Open device notification settings",
                                     onClick = {
                                         val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                                             Uri.parse("package:${context.packageName}"))
@@ -608,8 +613,8 @@ fun ProfileSections(
                                             try { context.startActivity(fallback) }
                                             catch (_: Exception) { feedback = "Open your phone Settings, then Apps, then Salu-Salo." }
                                         }
-                                    }, modifier = Modifier.fillMaxWidth()
-                                ) { Text("Open device notification settings") }
+                                    }
+                                )
                             }
 
                             "edit_profile" -> ProfileEditor(profile, onProfileUpdated)
@@ -644,7 +649,9 @@ fun ProfileSections(
                                             label = { Text("Current password") },
                                             singleLine = true,
                                             visualTransformation = PasswordVisualTransformation(),
-                                            modifier = Modifier.fillMaxWidth()
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = SaluRadius.Control,
+                                            colors = saluFieldColors()
                                         )
                                         OutlinedTextField(
                                             value = newPassword,
@@ -652,7 +659,9 @@ fun ProfileSections(
                                             label = { Text("New password") },
                                             singleLine = true,
                                             visualTransformation = PasswordVisualTransformation(),
-                                            modifier = Modifier.fillMaxWidth()
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = SaluRadius.Control,
+                                            colors = saluFieldColors()
                                         )
                                         OutlinedTextField(
                                             value = confirmPassword,
@@ -660,7 +669,9 @@ fun ProfileSections(
                                             label = { Text("Confirm new password") },
                                             singleLine = true,
                                             visualTransformation = PasswordVisualTransformation(),
-                                            modifier = Modifier.fillMaxWidth()
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = SaluRadius.Control,
+                                            colors = saluFieldColors()
                                         )
                                     }
 
@@ -800,20 +811,24 @@ fun ProfileSections(
                                 val reviews = receivedReviews
                                 when {
                                     reviews == null && reviewsFailed -> {
-                                        Text(
-                                            "Your reviews could not be loaded. " +
+                                        InlineNotice(
+                                            text = "Your reviews could not be loaded. " +
                                                     "Check your internet connection and try again.",
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.error
+                                            icon = Icons.Outlined.ErrorOutline,
+                                            tone = NoticeTone.Error
                                         )
                                         SectionButton("Try again") { onReloadReviews() }
                                     }
 
-                                    reviews == null ->
-                                        Text("Loading your reviews…", fontSize = 13.sp)
+                                    reviews == null -> SkeletonGroup(description = "Loading your reviews") {
+                                        repeat(3) { ListRowSkeleton(thumbnail = 36.dp, round = true) }
+                                    }
 
-                                    reviews.isEmpty() ->
-                                        SectionCard { Text(NO_RATING_LINE) }
+                                    reviews.isEmpty() -> EmptyState(
+                                        icon = Icons.Outlined.StarOutline,
+                                        title = "No reviews yet",
+                                        message = NO_RATING_LINE
+                                    )
 
                                     else -> {
                                         reviews.forEach { review ->
@@ -845,9 +860,7 @@ fun ProfileSections(
                         }
 
                         if (feedback.isNotBlank()) {
-                            SectionCard(pale = true) {
-                                Text(feedback)
-                            }
+                            InlineNotice(text = feedback, icon = Icons.Outlined.Info)
                         }
                     }
                 }
@@ -861,11 +874,10 @@ private fun SectionCard(
     pale: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Surface(
+    SaluCard(
         modifier = Modifier.fillMaxWidth(),
         color = if (pale) SectionPale else Color.White,
-        shape = RoundedCornerShape(18.dp),
-        shadowElevation = 1.dp
+        border = !pale
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -881,40 +893,31 @@ private fun SectionLink(
     subtitle: String,
     onClick: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        color = Color.White,
-        shape = RoundedCornerShape(16.dp),
-        shadowElevation = 1.dp
+    SaluCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
     ) {
-        Row(Modifier.padding(16.dp)) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(5.dp))
-                Text(subtitle, fontSize = 12.sp)
+                Text(title, style = SaluText.FoodTitle, color = SaluColors.Ink)
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, style = SaluText.Supporting, color = SaluColors.InkMuted)
             }
-            Text("›", fontSize = 25.sp, color = SectionGreen)
+            Icon(
+                Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = SaluColors.InkMuted
+            )
         }
     }
 }
 
 @Composable
 private fun SectionButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = SectionGreen
-        )
-    ) {
-        Text(text)
-    }
+    SaluPrimaryButton(text = text, onClick = onClick, enabled = enabled)
 }
 
 @Composable
@@ -923,12 +926,17 @@ private fun SectionToggle(
     checked: Boolean,
     onChange: (Boolean) -> Unit
 ) {
-    Row(Modifier.fillMaxWidth()) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(
             title,
-            modifier = Modifier
-                .weight(1f)
-                .padding(top = 12.dp)
+            modifier = Modifier.weight(1f),
+            style = SaluText.Body.copy(fontSize = 15.sp),
+            color = SaluColors.Ink
         )
         Switch(checked = checked, onCheckedChange = onChange)
     }
@@ -939,37 +947,40 @@ private fun SectionToggle(
 private fun SavedFallbackPhoto(imageUrl: String?, name: String?) {
     var imageFailed by remember(imageUrl) { mutableStateOf(false) }
     val modifier = Modifier
-        .fillMaxWidth()
-        .height(170.dp)
-    Surface(shape = RoundedCornerShape(16.dp)) {
-        if (imageUrl != null && !imageFailed) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = name,
-                contentScale = ContentScale.Crop,
-                modifier = modifier,
-                onError = { imageFailed = true }
-            )
-        } else {
-            Box(modifier.background(SectionPale))
-        }
+        .size(72.dp)
+        .clip(SaluRadius.Small)
+    if (imageUrl != null && !imageFailed) {
+        AsyncImage(
+            model = imageUrl,
+            contentDescription = name,
+            contentScale = ContentScale.Crop,
+            modifier = modifier,
+            onError = { imageFailed = true }
+        )
+    } else {
+        Box(modifier.background(SaluColors.Cream))
     }
 }
 
-/** A saved listing's cover, with the same fallbacks as the Home cards. */
+/** A listing's cover, with the same fallbacks as the Home cards: a thumbnail, or [large] across the page. */
 @Composable
-private fun SavedListingPhoto(post: FoodPost) {
-    Surface(shape = RoundedCornerShape(16.dp)) {
-        ListingPhoto(
-            imageUrl = post.displayImageUrl,
-            hasPhoto = post.hasPhoto,
-            contentDescription = post.name,
-            modifier = Modifier
+private fun SavedListingPhoto(post: FoodPost, large: Boolean = false) {
+    ListingPhoto(
+        imageUrl = post.displayImageUrl,
+        hasPhoto = post.hasPhoto,
+        contentDescription = post.name,
+        modifier = if (large) {
+            Modifier
                 .fillMaxWidth()
-                .height(170.dp),
-            textSize = 12.sp
-        )
-    }
+                .height(170.dp)
+                .clip(SaluRadius.Card)
+        } else {
+            Modifier
+                .size(72.dp)
+                .clip(SaluRadius.Small)
+        },
+        textSize = if (large) 12.sp else 10.sp
+    )
 }
 
 /**
