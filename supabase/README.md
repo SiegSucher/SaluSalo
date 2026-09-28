@@ -43,7 +43,8 @@ only role is a custom role with two permissions, and that account's JSON key as
 the Edge Function secret `FIREBASE_AUTH_ADMIN_KEY`. The key must never be put in
 the app, this repo, the docs, a chat or a log. There is no SQL.
 
-The app build that calls it (branch `claude/auto-role-claim`) can be installed
+The app build that calls it (branch `claude/auto-role-claim`, merged into
+`master` through PR #13 on 2026-09-28) can be installed
 before or after the setup: until the function works, a new account gets the
 error with **Try again**, and the backup script still works.
 
