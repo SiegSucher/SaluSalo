@@ -29,6 +29,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Verified
 import com.example.salusalo.data.ReviewRepository
 import com.example.salusalo.model.DONOR_REVIEWS_LIMIT
+import com.example.salusalo.model.GeoPin
+import com.example.salusalo.model.PIN_MAP_ZOOM
+import com.example.salusalo.model.distanceLabel
 import com.example.salusalo.model.ListingDonorProfile
 import com.example.salusalo.model.ReportTarget
 import com.example.salusalo.model.ReviewItem
@@ -45,7 +48,9 @@ private val ActionPale = Color(0xFFE7F1E5)
 private val ActionDark = Color(0xFF203E2C)
 
 /**
- * The Pickup location and Donor/Seller pages of a listing. Questions go to the
+ * The Pickup location and Donor/Seller pages of a listing. With a pickup pin,
+ * the Pickup location page shows it on a map with "Directions"; without one,
+ * a text search in a maps app. Questions go to the
  * real chat through [onMessage] (with a prefilled draft). The Donor/Seller page
  * also shows the donor's "Email verified" badge, rating and latest reviews
  * (names only, loaded fresh when it opens) and "Report <name>".
@@ -66,6 +71,10 @@ fun FoodActionsDialog(
     photo: Int,
     // The listing's pickup_location and its signed cover URL (null if none).
     pickupLocation: String,
+    // The listing's pickup pin (null for older listings) and the straight-line
+    // distance to it from the phone (null when unknown).
+    pickupPin: GeoPin?,
+    distanceMeters: Double?,
     imageUrl: String?,
     price: String,
     status: String,
@@ -136,30 +145,61 @@ fun FoodActionsDialog(
                     )
 
                     Text(address)
+
+                    if (pickupPin != null && distanceMeters != null) {
+                        Text(
+                            "About ${distanceLabel(distanceMeters)} from you in a straight line; " +
+                                    "the route may be longer.",
+                            fontSize = 12.sp,
+                            color = ActionGreen
+                        )
+                    }
                 }
 
-                ActionButton(
-                    text = "Search area in Maps",
-                    onClick = {
-                        // A text search for the address as entered;
-                        // listings have no map pin.
-                        val query = if (address.contains("Philippines", ignoreCase = true)) {
-                            address
-                        } else {
-                            "$address, Philippines"
-                        }
-                        val uri = Uri.parse("geo:0,0?q=" + Uri.encode(query))
+                if (pickupPin != null) {
+                    PickupMap(
+                        pin = pickupPin,
+                        start = pickupPin,
+                        startZoom = PIN_MAP_ZOOM,
+                        description = "Map of the pickup pin for $foodTitle",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(260.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                    )
 
-                        try {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, uri)
-                            )
-                        } catch (_: ActivityNotFoundException) {
-                            mapError =
-                                "No maps app is available on this device."
+                    ActionButton(
+                        text = "Directions",
+                        onClick = {
+                            if (!openDirections(context, pickupPin)) {
+                                mapError = "No maps app is available on this device."
+                            }
                         }
-                    }
-                )
+                    )
+                } else {
+                    ActionButton(
+                        text = "Search area in Maps",
+                        onClick = {
+                            // A text search for the address as entered; this
+                            // listing has no map pin.
+                            val query = if (address.contains("Philippines", ignoreCase = true)) {
+                                address
+                            } else {
+                                "$address, Philippines"
+                            }
+                            val uri = Uri.parse("geo:0,0?q=" + Uri.encode(query))
+
+                            try {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, uri)
+                                )
+                            } catch (_: ActivityNotFoundException) {
+                                mapError =
+                                    "No maps app is available on this device."
+                            }
+                        }
+                    )
+                }
 
                 if (mapError.isNotBlank()) {
                     Text(
@@ -175,8 +215,13 @@ fun FoodActionsDialog(
                     )
 
                     Text(
-                        "Ask the provider for the exact meeting " +
-                                "point and collection instructions.",
+                        if (pickupPin != null) {
+                            "The pin shows where the provider hands over the food. " +
+                                    "If you can't find it, ask them in the chat."
+                        } else {
+                            "Ask the provider for the exact meeting " +
+                                    "point and collection instructions."
+                        },
                         fontSize = 13.sp
                     )
 

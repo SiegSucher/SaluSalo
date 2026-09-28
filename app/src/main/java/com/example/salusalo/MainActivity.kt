@@ -6,6 +6,12 @@ import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.ListingHandover
 import com.example.salusalo.model.ReportTarget
 import com.example.salusalo.model.donorRatingLabel
+import com.example.salusalo.model.NEARBY_RADIUS_METERS
+import com.example.salusalo.model.distanceLabel
+import com.example.salusalo.model.distanceMeters
+import com.example.salusalo.model.pickupPin
+import com.example.salusalo.data.PhoneLocation
+import com.example.salusalo.data.PhoneLocationResult
 import com.example.salusalo.model.parseTimestamp
 import com.example.salusalo.viewmodel.SavedListingViewModel
 import androidx.compose.foundation.pager.HorizontalPager
@@ -1304,8 +1310,44 @@ private fun HomeScreen(
     val remotePosts by foodViewModel.availablePosts.collectAsStateWithLifecycle()
     val feedLoading by foodViewModel.loading.collectAsStateWithLifecycle()
     val feedError by foodViewModel.error.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // The phone's position, only for distances, Nearby and Nearest. It stays in
+    // memory on this screen: never saved, sent to Supabase or logged, and gone
+    // when Home closes. Refreshed when Home opens and when the app comes back
+    // (only if location access is already allowed), and whenever Nearby or
+    // Nearest is chosen (asking for access if needed).
+    var phonePosition by remember { mutableStateOf<PhoneLocationResult.Found?>(null) }
+    var locationProblem by remember { mutableStateOf<PhoneLocationResult?>(null) }
+    val locationFinder = rememberLocationFinder()
+    fun refreshPhonePosition(askIfNeeded: Boolean) {
+        locationFinder.find(PhoneLocation.DISTANCE_MAX_AGE_MILLIS, askIfNeeded = askIfNeeded) { result ->
+            when (result) {
+                is PhoneLocationResult.Found -> {
+                    phonePosition = result
+                    locationProblem = null
+                }
+                PhoneLocationResult.NoPermission, PhoneLocationResult.LocationOff -> {
+                    phonePosition = null
+                    locationProblem = result
+                }
+                // Keep a position found earlier; say so only when there is none.
+                PhoneLocationResult.NotFound -> if (phonePosition == null) locationProblem = result
+            }
+        }
+    }
+    val phonePin = phonePosition?.position
+    // Straight-line distance to a listing's pin; null without a pin or a phone position.
+    fun distanceTo(post: FoodPost): Double? {
+        val here = phonePin ?: return null
+        val pin = post.pickupPin ?: return null
+        return distanceMeters(here, pin)
+    }
 
     LaunchedEffect(currentProfile?.id) { foodViewModel.loadAvailablePosts() }
+    LaunchedEffect(currentProfile?.id) {
+        if (PhoneLocation.hasPermission(context)) refreshPhonePosition(askIfNeeded = false)
+    }
     // Alerts load once per session and then arrive live.
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { notificationViewModel.start(it) } }
     // The inbox loads once per session and then follows new messages live.
@@ -1317,6 +1359,8 @@ private fun HomeScreen(
         if (wasStopped) {
             wasStopped = false
             messageViewModel.loadConversations(quiet = true)
+            // The phone may have moved meanwhile; never asks for access here.
+            if (PhoneLocation.hasPermission(context)) refreshPhonePosition(askIfNeeded = false)
         }
         onStopOrDispose { wasStopped = true }
     }
@@ -1325,7 +1369,6 @@ private fun HomeScreen(
     // A new alert plays the phone's notification sound while the app is on
     // screen, unless it is a message in the chat that is open. The switch is
     // read when the alert arrives.
-    val context = LocalContext.current
     val alertSound = remember { AlertSoundPlayer(context) }
     var appResumed by remember { mutableStateOf(false) }
     LifecycleResumeEffect(alertSound) {
@@ -1386,7 +1429,7 @@ private fun HomeScreen(
     }
 
     // The feed arrives newest first (created_at).
-    val foods = remotePosts.map { it.toHomeFood() }
+    val foods = remotePosts.map { it.toHomeFood(distanceTo(it)) }
 
     val visibleFoods = foods.filter { food ->
         val matchesSearch =
@@ -1394,6 +1437,8 @@ private fun HomeScreen(
                     food.donorName.contains(search, ignoreCase = true)
 
         val matchesCategory = when (category) {
+            // Listings with a pin within 5 km; none until the phone's position is known.
+            "Nearby" -> food.distanceMeters?.let { it <= NEARBY_RADIUS_METERS } == true
             "Donation" -> food.price == "Free"
             "For Sale" -> food.price != "Free"
             "Expiring Soon" -> food.urgent
@@ -1402,11 +1447,30 @@ private fun HomeScreen(
 
         matchesSearch && matchesCategory
     }.let { results ->
-        if (sort == "Newest") {
-            results.sortedByDescending { parseTimestamp(it.createdAt) ?: Instant.EPOCH }
-        } else {
-            results.sortedBy { it.title }
+        val newestFirst = compareByDescending<HomeFood> { parseTimestamp(it.createdAt) ?: Instant.EPOCH }
+        when {
+            sort == "Name" -> results.sortedBy { it.title }
+            // Nearest first; listings without a pin last, newest first. Until the
+            // phone's position is known, the order stays Newest.
+            sort == "Nearest" && phonePin != null -> results.sortedWith(
+                compareBy<HomeFood> { it.distanceMeters == null }
+                    .thenBy { it.distanceMeters ?: 0.0 }
+                    .then(newestFirst)
+            )
+            else -> results.sortedWith(newestFirst)
         }
+    }
+    // One line under the chips while Nearby or Nearest is chosen.
+    val locationLine = if (category != "Nearby" && sort != "Nearest") null else when {
+        locationFinder.finding && phonePin == null -> "Finding your location…"
+        locationProblem == PhoneLocationResult.NoPermission ->
+            "Allow location to use Nearby and Nearest: Settings → Apps → Salu-Salo → Permissions → Location."
+        locationProblem == PhoneLocationResult.LocationOff ->
+            "Your phone's location is turned off. Turn it on to use Nearby and Nearest."
+        locationProblem == PhoneLocationResult.NotFound ->
+            "Your location could not be found. Tap Nearby or Nearest again to try again."
+        phonePosition?.approximate == true -> "Distances use your phone's approximate location."
+        else -> null
     }
 
     // Return from See all to the homepage with the phone's Back button.
@@ -1482,7 +1546,7 @@ private fun HomeScreen(
                     // Saved Listings and the Successful claims/donations records open
                     // a listing by its ID: the feed's copy if it has one, else the row's.
                     onOpenListing = { post ->
-                        selectedFood = (remotePosts.firstOrNull { it.id == post.id } ?: post).toHomeFood()
+                        selectedFood = (remotePosts.firstOrNull { it.id == post.id } ?: post).toHomeFood(null)
                     }
                 )
             } else key(page) {
@@ -1630,7 +1694,8 @@ private fun HomeScreen(
                         FilledIconButton(
                             onClick = {
                                 message =
-                                    "Donation: free food\n" +
+                                    "Nearby: listings with a map pin within 5 km of you\n" +
+                                            "Donation: free food\n" +
                                             "For Sale: paid food\n" +
                                             "Expiring Soon: urgent pickup or expiry\n\n" +
                                             "Tap a category below to filter the listings."
@@ -1659,13 +1724,17 @@ private fun HomeScreen(
                     ) {
                         listOf(
                             "All",
+                            "Nearby",
                             "Donation",
                             "For Sale",
                             "Expiring Soon"
                         ).forEach { label ->
                             FilterChip(
                                 selected = category == label,
-                                onClick = { category = label },
+                                onClick = {
+                                    category = label
+                                    if (label == "Nearby") refreshPhonePosition(askIfNeeded = true)
+                                },
                                 label = {
                                     Text(label, fontSize = 12.sp)
                                 },
@@ -1682,6 +1751,16 @@ private fun HomeScreen(
                                 )
                             )
                         }
+                    }
+
+                    locationLine?.let { line ->
+                        Text(
+                            line,
+                            modifier = Modifier.padding(top = 6.dp),
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            color = Gray
+                        )
                     }
 
                     // Hide the general recommendations while filtering,
@@ -1793,6 +1872,7 @@ private fun HomeScreen(
                         Column(Modifier.weight(1f)) {
                             Text(
                                 when (category) {
+                                    "Nearby" -> "Food within 5 km"
                                     "Donation" -> "Food for donation"
                                     "For Sale" -> "Food for sale"
                                     "Expiring Soon" -> "Expiring soon"
@@ -1826,12 +1906,13 @@ private fun HomeScreen(
                                 expanded = sortMenu,
                                 onDismissRequest = { sortMenu = false }
                             ) {
-                                listOf("Newest", "Name").forEach { option ->
+                                listOf("Newest", "Nearest", "Name").forEach { option ->
                                     DropdownMenuItem(
                                         text = { Text(option) },
                                         onClick = {
                                             sort = option
                                             sortMenu = false
+                                            if (option == "Nearest") refreshPhonePosition(askIfNeeded = true)
                                         }
                                     )
                                 }
@@ -1842,8 +1923,11 @@ private fun HomeScreen(
                     Spacer(Modifier.height(10.dp))
 
                     if (visibleFoods.isEmpty()) {
-                        Text(
-                            if (feedLoading) "Loading listings…" else if (feedError != null) "Could not load listings. Try again." else "No available food listings yet.",
+                        // Nearby without the phone's position: the line under the chips says why.
+                        if (category != "Nearby" || phonePin != null || feedLoading || feedError != null) Text(
+                            if (feedLoading) "Loading listings…" else if (feedError != null) "Could not load listings. Try again."
+                            else if (category == "Nearby") "No listings with a map pin within 5 km."
+                            else "No available food listings yet.",
                             modifier = Modifier.padding(vertical = 20.dp),
                             fontSize = 13.sp,
                             color = Gray
@@ -2057,7 +2141,8 @@ private fun HomeScreen(
             )
         ) {
             FoodDetailsScreen(
-                food = food,
+                // The distance follows the phone's latest position.
+                food = food.copy(distanceMeters = distanceTo(food.post)),
                 isOwnFood = currentProfile?.id != null && food.donorId == currentProfile.id,
                 saved = food.id in savedIds,
                 onToggleSave = { savedListingViewModel.toggle(food.id) },
@@ -2103,7 +2188,7 @@ private fun HomeScreen(
     }
 }
 
-private fun FoodPost.toHomeFood(): HomeFood {
+private fun FoodPost.toHomeFood(distanceMeters: Double?): HomeFood {
     val expiration = parseTimestamp(expirationDate)
     val urgent = expiration?.isBefore(Instant.now().plusSeconds(3 * 60 * 60)) == true
     return HomeFood(
@@ -2122,6 +2207,7 @@ private fun FoodPost.toHomeFood(): HomeFood {
         urgent = urgent,
         description = description?.takeIf { it.isNotBlank() },
         createdAt = createdAt,
+        distanceMeters = distanceMeters,
         post = this
     )
 }
@@ -2143,6 +2229,8 @@ private data class HomeFood(
     val urgent: Boolean,
     val description: String? = null,
     val createdAt: String? = null,
+    // Straight line from the phone to the pickup pin; null without either.
+    val distanceMeters: Double? = null,
     // The listing itself, for the details that the cards don't show.
     val post: FoodPost
 )
@@ -2337,7 +2425,11 @@ private fun AvailableFoodCard(
                 Spacer(Modifier.height(5.dp))
 
                 Text(
-                    "${food.status}  •  ${food.pickupLocation}",
+                    listOfNotNull(
+                        food.status,
+                        food.distanceMeters?.let { "${distanceLabel(it)} away" },
+                        food.pickupLocation
+                    ).joinToString("  •  "),
                     fontSize = 10.sp,
                     lineHeight = 14.sp,
                     color = if (food.urgent) {
@@ -2451,6 +2543,8 @@ private fun FoodDetailsScreen(
             donorReviewCount = food.post.donorReviewCount,
             photo = food.photo,
             pickupLocation = food.pickupLocation,
+            pickupPin = food.post.pickupPin,
+            distanceMeters = food.distanceMeters,
             imageUrl = food.imageUrl,
             price = food.price,
             status = food.status,
@@ -2831,7 +2925,9 @@ private fun FoodDetailsScreen(
                         FoodInfoRow(
                             icon = Icons.Outlined.LocationOn,
                             title = "Pickup Address",
-                            value = food.pickupLocation,
+                            value = food.pickupLocation + (food.distanceMeters?.let {
+                                "\nAbout ${distanceLabel(it)} away (straight line)"
+                            } ?: ""),
                             onClick = { foodAction = "location" }
                         )
 
