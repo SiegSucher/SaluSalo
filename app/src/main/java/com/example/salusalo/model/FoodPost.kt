@@ -49,6 +49,10 @@ data class FoodPost(
 val FoodPost.donorRatingLabel: String?
     get() = ratingLabel(donorRatingAverage, donorReviewCount)
 
+/** True when a cover photo is stored; [FoodPost.displayImageUrl] is null when it could not be signed. */
+val FoodPost.hasPhoto: Boolean
+    get() = !imageUrl.isNullOrBlank()
+
 @Serializable
 enum class FoodPostStatus {
     AVAILABLE, RESERVED, CLAIMED, EXPIRED,

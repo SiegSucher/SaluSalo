@@ -1,11 +1,11 @@
 package com.example.salusalo
 
 import android.os.Bundle
-import coil3.compose.AsyncImage
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.ListingHandover
 import com.example.salusalo.model.ReportTarget
 import com.example.salusalo.model.donorRatingLabel
+import com.example.salusalo.model.hasPhoto
 import com.example.salusalo.model.NEARBY_RADIUS_METERS
 import com.example.salusalo.model.distanceLabel
 import com.example.salusalo.model.distanceMeters
@@ -1855,8 +1855,8 @@ private fun HomeScreen(
                             preferredFoods.take(2).forEach { food ->
                                 RecommendationCard(
                                     title = food.title,
-                                    photo = food.photo,
                                     imageUrl = food.imageUrl,
+                                    hasPhoto = food.post.hasPhoto,
                                     price = food.price,
                                     pickupLocation = food.pickupLocation,
                                     status = food.status,
@@ -2196,7 +2196,6 @@ private fun FoodPost.toHomeFood(distanceMeters: Double?): HomeFood {
         pickupLocation = pickupLocation,
         donorName = donorName?.takeIf { it.isNotBlank() } ?: "Donor name unavailable",
         donorRating = donorRatingLabel,
-        photo = R.drawable.food_produce,
         imageUrl = displayImageUrl,
         urgent = urgent,
         description = description?.takeIf { it.isNotBlank() },
@@ -2218,7 +2217,6 @@ private data class HomeFood(
     val donorName: String,
     // "★ 4.7 (12)", or null when the donor has no reviews.
     val donorRating: String? = null,
-    val photo: Int,
     val imageUrl: String? = null,
     val urgent: Boolean,
     val description: String? = null,
@@ -2232,8 +2230,8 @@ private data class HomeFood(
 @Composable
 private fun RecommendationCard(
     title: String,
-    photo: Int,
     imageUrl: String?,
+    hasPhoto: Boolean,
     price: String,
     pickupLocation: String,
     status: String,
@@ -2250,37 +2248,14 @@ private fun RecommendationCard(
         shadowElevation = 2.dp
     ) {
         Column {
-            Box {
-                var imageFailed by remember(imageUrl) { mutableStateOf(false) }
-                if (imageUrl != null && !imageFailed) {
-                    AsyncImage(
-                        model = imageUrl,
-                        contentDescription = title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(94.dp),
-                        onError = { imageFailed = true }
-                    )
-                } else if (imageUrl == null) {
-                    Image(
-                        painter = painterResource(photo),
-                        contentDescription = title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(94.dp)
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(94.dp)
-                            .background(Color(0xFFF2F6E6)),
-                        contentAlignment = Alignment.Center
-                    ) { Text("Image unavailable", fontSize = 10.sp, color = Gray) }
-                }
-            }
+            ListingPhoto(
+                imageUrl = imageUrl,
+                hasPhoto = hasPhoto,
+                contentDescription = title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(94.dp)
+            )
 
             Column(Modifier.padding(8.dp)) {
                 Text(
@@ -2339,28 +2314,12 @@ private fun AvailableFoodCard(
             modifier = Modifier.heightIn(min = 116.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            var imageFailed by remember(food.id, food.imageUrl) { mutableStateOf(false) }
-            if (food.imageUrl != null && !imageFailed) {
-                AsyncImage(
-                    model = food.imageUrl,
-                    contentDescription = food.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp)),
-                    onError = { imageFailed = true }
-                )
-            } else if (food.imageUrl == null) {
-                Image(
-                    painter = painterResource(food.photo),
-                    contentDescription = food.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp))
-                )
-            } else {
-                Box(
-                    modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFFF2F6E6)),
-                    contentAlignment = Alignment.Center
-                ) { Text("Image unavailable", fontSize = 10.sp, color = Gray) }
-            }
+            ListingPhoto(
+                imageUrl = food.imageUrl,
+                hasPhoto = food.post.hasPhoto,
+                contentDescription = food.title,
+                modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp))
+            )
 
             Column(
                 modifier = Modifier
@@ -2535,7 +2494,7 @@ private fun FoodDetailsScreen(
             donorEmailVerified = food.post.donorEmailVerified,
             donorRatingAverage = food.post.donorRatingAverage,
             donorReviewCount = food.post.donorReviewCount,
-            photo = food.photo,
+            hasPhoto = food.post.hasPhoto,
             pickupLocation = food.pickupLocation,
             pickupPin = food.post.pickupPin,
             distanceMeters = food.distanceMeters,
@@ -2575,7 +2534,7 @@ private fun FoodDetailsScreen(
             foodPostId = food.id,
             foodTitle = food.title,
             donorName = post.donorName?.takeIf { it.isNotBlank() },
-            photo = food.photo,
+            hasPhoto = post.hasPhoto,
             imageUrl = food.imageUrl,
             profileName = profileName,
             quantity = quantity,
@@ -2634,49 +2593,23 @@ private fun FoodDetailsScreen(
                     modifier = Modifier.fillMaxSize()
                 ) { index ->
                     if (index == 0) {
-                        var imageFailed by remember(food.id, food.imageUrl) { mutableStateOf(false) }
-                        if (food.imageUrl != null && !imageFailed) {
-                            AsyncImage(
-                                model = food.imageUrl,
-                                contentDescription = food.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                                onError = { imageFailed = true }
-                            )
-                        } else if (food.imageUrl == null) {
-                            Image(
-                                painter = painterResource(food.photo),
-                                contentDescription = food.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize().background(Color(0xFFF2F6E6)),
-                                contentAlignment = Alignment.Center
-                            ) { Text("Image unavailable", fontSize = 12.sp, color = Gray) }
-                        }
+                        ListingPhoto(
+                            imageUrl = food.imageUrl,
+                            hasPhoto = food.post.hasPhoto,
+                            contentDescription = food.title,
+                            modifier = Modifier.fillMaxSize(),
+                            textSize = 12.sp
+                        )
                     } else {
                         val loaded = extraPhotos
-                        val url = loaded?.getOrNull(index - 1)
-                        var imageFailed by remember(food.id, url) { mutableStateOf(false) }
-                        if (url != null && !imageFailed) {
-                            AsyncImage(
-                                model = url,
-                                contentDescription = "${food.title}, photo ${index + 1}",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                                onError = { imageFailed = true }
-                            )
-                        } else {
-                            // Still signing (loaded == null), or the photo can't be shown.
-                            Box(
-                                modifier = Modifier.fillMaxSize().background(Color(0xFFF2F6E6)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (loaded != null) Text("Image unavailable", fontSize = 12.sp, color = Gray)
-                            }
-                        }
+                        // A plain tile while photos 2–4 are still being signed (loaded == null).
+                        ListingPhoto(
+                            imageUrl = loaded?.getOrNull(index - 1),
+                            hasPhoto = loaded != null,
+                            contentDescription = "${food.title}, photo ${index + 1}",
+                            modifier = Modifier.fillMaxSize(),
+                            textSize = 12.sp
+                        )
                     }
                 }
 

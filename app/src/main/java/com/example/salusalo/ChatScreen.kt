@@ -1,6 +1,5 @@
 package com.example.salusalo
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,15 +36,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,7 +49,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.example.salusalo.model.ChatMessage
 import com.example.salusalo.model.ConversationSummary
 import com.example.salusalo.model.ReportTarget
@@ -67,7 +62,6 @@ import java.util.Locale
 private val CGreen = Color(0xFF47782E)
 private val CDark = Color(0xFF263C29)
 private val CCream = Color(0xFFFCFBF6)
-private val CPale = Color(0xFFF3F6E8)
 private val CGray = Color(0xFF666873)
 private val CLine = Color(0xFFE3E4E7)
 private val COrange = Color(0xFFEF7900)
@@ -373,26 +367,12 @@ private fun ConversationRow(conversation: ConversationSummary, onClick: () -> Un
 /** The listing photo with the same fallbacks as the feed cards. */
 @Composable
 private fun ListingThumbnail(conversation: ConversationSummary, modifier: Modifier) {
-    val shape = RoundedCornerShape(10.dp)
-    var failed by remember(conversation.id, conversation.displayImageUrl) { mutableStateOf(false) }
-    if (conversation.displayImageUrl != null && !failed) {
-        AsyncImage(
-            model = conversation.displayImageUrl,
-            contentDescription = conversation.foodName,
-            contentScale = ContentScale.Crop,
-            modifier = modifier.clip(shape),
-            onError = { failed = true }
-        )
-    } else if (conversation.displayImageUrl == null) {
-        Image(
-            painter = painterResource(R.drawable.food_produce),
-            contentDescription = conversation.foodName,
-            contentScale = ContentScale.Crop,
-            modifier = modifier.clip(shape)
-        )
-    } else {
-        Box(modifier.clip(shape).background(CPale))
-    }
+    ListingPhoto(
+        imageUrl = conversation.displayImageUrl,
+        hasPhoto = !conversation.foodImagePath.isNullOrBlank(),
+        contentDescription = conversation.foodName,
+        modifier = modifier.clip(RoundedCornerShape(10.dp))
+    )
 }
 
 /** "3:05 PM" today, otherwise "Sep 24". */
