@@ -2066,7 +2066,7 @@ The steps, with the log lines and what to do on a 500 or 502, are in [`supabase/
   - Then: "Recommended for you" with up to 5 recommendations when the account has chosen something; otherwise, as before, "For your preferences" (food preferences set) or "Newest listings", now with up to 5 cards instead of 2 and no reasons.
   - The empty text "No matching food yet. You can still browse all listings below." shows only when the row isn't waiting, has no cards and the feed isn't loading.
   - The list is worked out again when the feed, the reservations, the reviews, the bookmarks, the food preferences, the profile, the phone's position or the hour changes.
-- **The card** (`RecommendationCard`): the reason replaces the status line ("Available" or "Expires soon"), in up to 2 lines ending in "…", orange when the listing expires soon and green otherwise. A card without a reason keeps its status. To fit 2 lines in the unchanged 142 × 180 dp card, the title and the price row have an explicit line height of 16 sp and the reason 14 sp: 94 photo + 8 + 16 title + 4 + 16 price row + 4 + 28 reason + 8 = 178 dp (computed from the layout, not measured on a phone).
+- **The card** (`RecommendationCard`): the reason replaces the status line ("Available" or "Expires soon"), in up to 2 lines ending in "…", orange when the listing expires soon and green otherwise. A card without a reason keeps its status. To fit 2 lines in the 142 × 180 dp card, the title and the price row have an explicit line height of 16 sp and the reason 14 sp: 94 photo + 8 + 16 title + 4 + 16 price row + 4 + 28 reason + 8 = 178 dp at the default font size (computed from the layout, not measured on a phone). Since sp grow with the phone's font size, the card is at least 180 dp tall (`heightIn(min = 180.dp)`) rather than exactly, and the reason always takes 2 lines (`minLines = 2`): with a larger font every card grows by the same amount, the photo stays 94 dp, and the reason is never cut short (added in review, after the kotlinc check).
 - **Texts:**
   - Home → (i) "About the filters" ends with: "Recommended for you: once you have reserved or saved food, the first row shows listings like it, leaving out your own, saved and reserved ones. Food that expires soon or is near you moves up. It is worked out on this phone, and nothing about it is sent."
   - Settings → Food preferences: the caption "Choose food for the ‘For your preferences’ row on Home." became "Choose food for Home's first row (‘Recommended for you’ or ‘For your preferences’)."
@@ -2113,7 +2113,7 @@ Each check is tagged [New] or [Regression].
 2. [New] Phone 2: create account C with a "+" alias email. On Home the first row's title may be blank for a moment, then reads "Newest listings", with Kangkong first; each card shows "Available" and no reason.
 3. [New] Reserve 1 Chicken adobo and close the receipt. The row reads "Recommended for you":
    - "Pork adobo" shows "Because you reserved Chicken adobo" and comes before Pandesal, Pechay and Kangkong.
-   - The reason wraps onto 2 lines: the second line shows in full (not cut at the card's bottom, and with no "…").
+   - The reason wraps onto 2 lines, and the second line shows in full: its letters are not cut off at the card's bottom edge. (A "…" at its end only means the name didn't fit in 2 lines.)
    - Chicken adobo is not in the row.
    - Pandesal, Pechay and Kangkong show "<distance> away" when Home has the phone's position within 5 km of the pin, otherwise "Available".
 4. [New] Save Pechay with the bookmark on its card under Available food (the row's cards have no bookmark). At once Pechay leaves the row, Kangkong shows "Because you saved Pechay", and Pork adobo stays ahead of it. Unsave Pechay: Kangkong's line goes and Pechay returns. Save it again.
@@ -2144,6 +2144,7 @@ Each check is tagged [New] or [Regression].
 - The extra requests when Home starts (§19.3).
 - The row's title is blank for a moment while the history loads.
 - On a recommended card the reason replaces "Expires soon"; the orange color stays, and the details page and the Available food card still say "Expires soon".
+- With a font size above the default, the cards grow taller than the "Help reduce food waste" tile beside them (the tile stays 180 dp).
 
 ### 19.7 Results
 

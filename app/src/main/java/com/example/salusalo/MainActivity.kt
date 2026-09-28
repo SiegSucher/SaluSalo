@@ -2377,12 +2377,14 @@ private fun RecommendationCard(
     urgent: Boolean,
     onClick: () -> Unit
 ) {
-    // The line heights are explicit so a two-line reason fits the fixed height:
-    // 94 photo + 8 + 16 title + 4 + 16 price row + 4 + 28 reason + 8 = 178 dp.
+    // The line heights are explicit so a two-line reason fits 180 dp at the default
+    // font size: 94 photo + 8 + 16 title + 4 + 16 price row + 4 + 28 reason + 8 = 178 dp.
+    // With a larger font every card grows by the same amount (the reason always
+    // takes 2 lines), so the reason is never cut short.
     Surface(
         modifier = Modifier
             .width(142.dp)
-            .height(180.dp)
+            .heightIn(min = 180.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(15.dp),
         color = Color.White,
@@ -2433,6 +2435,7 @@ private fun RecommendationCard(
                     color = if (urgent) Color(0xFFE85B13) else Green,
                     fontSize = 11.sp,
                     lineHeight = 14.sp,
+                    minLines = 2,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
