@@ -2,7 +2,7 @@
 
 Salu-Salo is an Android app for sharing surplus food within a community to reduce food waste. Donors post surplus food with a photo, quantity, pickup location and expiry date. Recipients browse the available listings and reserve some or all of a listing for pickup. The UI uses Philippine pesos (₱) and Philippine sample locations.
 
-**Status (2026-09-28):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Fixes to the demo parts of Phase 2 (real donor names, listing details, up to 4 photos, editing, saved listings; `docs/PROJECT_STATUS.md` §11) passed on two phones the same day, with the migration `20260929_phase2_listing_details.sql`. Fixes to the demo parts of Phase 3 (a Reserve review page and receipt, removing reserved listings, real Activity and Profile records; §12) passed on two phones on 2026-09-27 with the migration `20260930_phase3_demo_fixes.sql`, and were merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`). Fixes to the demo parts of Phase 4 (the Profile bell and Settings, a real notification sound, a real response rate, a live Messages inbox and a chat badge that counts unread messages; §13) passed a short test on two phones on 2026-09-27 with the migration `20261001_phase4_demo_fixes.sql`, and were merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`). Phase 5 part 1 (ratings and reviews, reports, and an "Email verified" badge; §14) passed on two phones on 2026-09-28 with the migration `20261002_phase5_reviews_reports.sql`, and was merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`). Phase 5 part 2 (Maps; §15) passed on two phones on 2026-09-28 with the migration `20261003_phase5_maps.sql`, and was merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`). A Profile redesign with a bio, a Settings hub and food preferences (Mika's PR #10; §16) passed a short test on two phones the same day, with the migration `20261004_profile_bio.sql`, and was merged into `master` through PR #10 on 2026-09-28 (merge commit `49ac319`). Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
+**Status (2026-09-28):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and were signed off after manual testing. Fixes to the demo parts of Phase 1 (Google sign-in, profile name and photo, password change) passed on two phones on 2026-09-26. Listing prices and the Purchases and Claims tabs passed on two phones the same day. Fixes to the demo parts of Phase 2 (real donor names, listing details, up to 4 photos, editing, saved listings; `docs/PROJECT_STATUS.md` §11) passed on two phones the same day, with the migration `20260929_phase2_listing_details.sql`. Fixes to the demo parts of Phase 3 (a Reserve review page and receipt, removing reserved listings, real Activity and Profile records; §12) passed on two phones on 2026-09-27 with the migration `20260930_phase3_demo_fixes.sql`, and were merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`). Fixes to the demo parts of Phase 4 (the Profile bell and Settings, a real notification sound, a real response rate, a live Messages inbox and a chat badge that counts unread messages; §13) passed a short test on two phones on 2026-09-27 with the migration `20261001_phase4_demo_fixes.sql`, and were merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`). Phase 5 part 1 (ratings and reviews, reports, and an "Email verified" badge; §14) passed on two phones on 2026-09-28 with the migration `20261002_phase5_reviews_reports.sql`, and was merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`). Phase 5 part 2 (Maps; §15) passed on two phones on 2026-09-28 with the migration `20261003_phase5_maps.sql`, and was merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`). A Profile redesign with a bio, a Settings hub and food preferences (Mika's PR #10; §16) passed a short test on two phones the same day, with the migration `20261004_profile_bio.sql`, and was merged into `master` through PR #10 on 2026-09-28 (merge commit `49ac319`). Fixes, clean-up and optimization after the second demo audit (§17) are in code on branch `claude/cleanup-after-audit`, with no database change; they are not built or tested yet. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status.
 
 ## Features
 
@@ -18,6 +18,8 @@ Working against the live backend:
 - **Reviews and reports:** after a claimed pickup, the recipient can rate the donor or seller (1–5 stars and an optional comment); ratings show next to donor names, on the Donor/Seller page and on Profile. Listings, donors and chat partners can be reported. An "Email verified" badge is set only from the Firebase token.
 
 Since PR #11 (Maps): a pickup pin on an OpenStreetMap map when posting or editing a listing (tap the map or "Use my location"), the distance to each pinned listing on Home and in its details, a Nearby filter (5 km) and a Nearest sort, and a map with Directions (Google Maps) on the pickup location page and for open reservations.
+
+On branch `claude/cleanup-after-audit` (not built or tested yet): "Start now" for the pickup start, allergens required when posting or editing, a "Check your listing" page, the profile photo on Home, full-screen listing photos, pull to refresh on Home, welcome pages only on the first start, text boxes that stay above the keyboard on full-screen pages, a neutral tile instead of a sample photo when a listing's photo can't be shown, and one signing request per list of photos.
 
 There are no push notifications yet. Most settings are saved only on the device; the profile name and photo and the notification preferences come from Supabase.
 
@@ -92,7 +94,7 @@ Both the app and the SQL are tied to the Firebase project `salusalo`: `app/googl
 
 ## Testing
 
-The only automated tests are the Android Studio templates `ExampleUnitTest` and `ExampleInstrumentedTest`.
+The automated tests are the Android Studio templates `ExampleUnitTest` and `ExampleInstrumentedTest`, and the JVM tests `GeoTest` (distances and pins), `PhotoSigningTest` (signing a list of photos) and `PickupStartTest` (the pickup-start rule).
 
 ```bash
 ./gradlew testDebugUnitTest           # JVM unit tests
@@ -113,11 +115,11 @@ app/src/main/java/com/example/salusalo/
 ├── AlertScreen.kt       Alerts
 ├── ChatScreen.kt        Chat and the Messages inbox
 ├── FoodActions.kt       Pickup location and Donor/Seller pages, Reserve review page and receipt
+├── ListingPhotos.kt     Listing photo with its fallback tiles, and the full-screen photo view
 ├── ReviewsAndReports.kt Rate and Report pages (Phase 5 part 1)
 ├── data/                Repositories and the Supabase client
 ├── model/               Serializable data classes for the Supabase tables
-├── viewmodel/           Food, Saved listing, Reservation, Message and Notification ViewModels
-└── ui/theme/            Template theme (not currently used)
+└── viewmodel/           Food, Saved listing, Reservation, Message and Notification ViewModels
 supabase/
 ├── migrations/          SQL migrations, applied by hand
 ├── tests/               Read-only checks, live safety checks and the reports query (SQL Editor)

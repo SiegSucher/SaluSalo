@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-09-28 (Phase 4 signed off, §8; Purchases, Claims and listing prices merged into `master` through PR #3, migrated, and passed on two phones except the "Reserved" dialog, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — merged through PR #3, migrated, and passed on two phones, §10; Phase 2 demo fixes — real donor names, listing details, up to 4 photos, editing, saved listings, expiry — built on branch `claude/phase2-demo-fixes` (PR #5), migrated, and passed on two phones with a regression round, §11; PR #5 merged into `master` as `aa3e823`; Phase 3 demo fixes — Reserve review page and receipt, removing reserved listings, real Activity and Profile records — built on branch `claude/phase3-demo-fixes` at `24fe9f2`, migrated, passed on two phones on 2026-09-27, and merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`), §12; Phase 4 demo fixes — Profile bell and Settings, notification preferences, a real notification sound, a real response rate, a live Messages inbox and chat badge — built on branch `claude/phase4-demo-fixes` at `3288d02`, migrated, passed a short 13-step test on two phones on 2026-09-27, and merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`), §13; Phase 5 part 1 — ratings and reviews, reports, an Email verified badge — built on branch `claude/phase5-reviews-reports-v6ahqn` at `3bd038c`, migrated, passed on two phones on 2026-09-28, and merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`), §14; Phase 5 part 2 — Maps: a pickup pin on an OpenStreetMap map, distances, Nearby and Nearest, Directions — built on branch `claude/phase5-maps` at `47ed894`, migrated, passed on two phones on 2026-09-28, and merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`), §15; Profile redesign and settings (Mika's PR #10) — Edit Profile with a bio, a Settings hub, food preferences — migrated, passed a 6-step test on two phones on 2026-09-28, and merged into `master` through PR #10 on 2026-09-28 (merge commit `49ac319`), §16). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
+_Last updated: 2026-09-28 (Phase 4 signed off, §8; Purchases, Claims and listing prices merged into `master` through PR #3, migrated, and passed on two phones except the "Reserved" dialog, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — merged through PR #3, migrated, and passed on two phones, §10; Phase 2 demo fixes — real donor names, listing details, up to 4 photos, editing, saved listings, expiry — built on branch `claude/phase2-demo-fixes` (PR #5), migrated, and passed on two phones with a regression round, §11; PR #5 merged into `master` as `aa3e823`; Phase 3 demo fixes — Reserve review page and receipt, removing reserved listings, real Activity and Profile records — built on branch `claude/phase3-demo-fixes` at `24fe9f2`, migrated, passed on two phones on 2026-09-27, and merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`), §12; Phase 4 demo fixes — Profile bell and Settings, notification preferences, a real notification sound, a real response rate, a live Messages inbox and chat badge — built on branch `claude/phase4-demo-fixes` at `3288d02`, migrated, passed a short 13-step test on two phones on 2026-09-27, and merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`), §13; Phase 5 part 1 — ratings and reviews, reports, an Email verified badge — built on branch `claude/phase5-reviews-reports-v6ahqn` at `3bd038c`, migrated, passed on two phones on 2026-09-28, and merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`), §14; Phase 5 part 2 — Maps: a pickup pin on an OpenStreetMap map, distances, Nearby and Nearest, Directions — built on branch `claude/phase5-maps` at `47ed894`, migrated, passed on two phones on 2026-09-28, and merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`), §15; Profile redesign and settings (Mika's PR #10) — Edit Profile with a bio, a Settings hub, food preferences — migrated, passed a 6-step test on two phones on 2026-09-28, and merged into `master` through PR #10 on 2026-09-28 (merge commit `49ac319`), §16; fixes, clean-up and optimization after the second demo audit — a photo tile instead of the stock photo, "Check your listing", Start now, required allergens, Mika's list, batch photo signing, first-start welcome pages, pull to refresh — in code on branch `claude/cleanup-after-audit`, not built, not tested, §17). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -27,6 +27,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Phase 3 demo fixes: reservations, Activity, Profile (fixes to finished Phase 3 features; not part of Phase 5) | Reserve review page and receipt, pickup questions and notes through the chat, deleting reserved listings by removing them, real Activity records, real Profile claims and donations, Phase 2 leftovers (§12) | **Passed.** Built with AGP on branch `claude/phase3-demo-fixes` at `24fe9f2`. Migration `20260930_phase3_demo_fixes.sql` applied to the live project on 2026-09-26; its read-only check passed 13 of 13 and the live safety check 14 of 14. The two-phone test (§12.4, 32 steps) passed on 2026-09-27 ([results log](#results-log), §12.6). Merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`). |
 | Phase 4 demo fixes: messages, alerts, Profile (fixes to finished Phase 4 features; not part of Phase 5) | The Profile bell opens Alerts and the gear opens Settings, the unused Food recommendations and Pickup reminders switches and Compact preview removed, a real notification sound, a real response rate, a live Messages inbox and a chat badge that counts unread messages (§13) | **Passed.** Written on branch `claude/phase4-demo-fixes` (from `master` at `c184d9b`) on 2026-09-27 and built with AGP at `3288d02`. Migration `20261001_phase4_demo_fixes.sql` applied to the live project on 2026-09-27; its read-only check passed 9 of 9. A short two-phone test (§13.4, 13 steps) passed the same day ([results log](#results-log), §13.6); the checks it left out are listed in §13.6. Merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`). |
 | Phase 5: Maps, Reviews, Reports | Split by the developer into part 1 (ratings and reviews, reports, and an "Email verified" badge moved here from Phase 6; §14) and part 2 (Maps) | **Part 1: passed, and merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`).** Written on branch `claude/phase5-reviews-reports-v6ahqn` (from `master` at `39b57b5`) on 2026-09-27 and built with AGP at `3bd038c`. Migration `20261002_phase5_reviews_reports.sql` applied to the live project on 2026-09-27; its read-only check passed 18 of 18 and the live safety check 27 of 27. The two-phone test (§14.4, 15 steps) passed on 2026-09-28 ([results log](#results-log), §14.6). **Part 2 (Maps): passed, and merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`).** Written on branch `claude/phase5-maps` (from `master` at `711cc5e`) on 2026-09-28 and built with AGP at `47ed894`. Migration `20261003_phase5_maps.sql` applied to the live project on 2026-09-28; its read-only check passed 11 of 11 and the live safety check 22 of 22. The two-phone test (§15.4, 12 steps) passed on 2026-09-28 ([results log](#results-log), §15.6). |
+| Fixes after the second demo audit (not part of the six phases) | A neutral photo tile, "Check your listing", "My posts" times, filter help, Read more, Learn more, welcome texts; Mika's Start now, required allergens, profile circle, full-screen photos, summary columns and keyboard fix; dead code, unused images and icons; one signing request per list, reservations by ID, WebP; welcome pages only on the first start and pull to refresh (§17) | **In code; not built, not tested.** Written on branch `claude/cleanup-after-audit` (from `master` at `49ac319`) on 2026-09-28. No SQL. Only a kotlinc type check and JVM unit tests were run (§17.3); the two-phone test is §17.4. |
 | Phase 6: Admin and Final Release | ID verification and the admin screen (the Email verified badge moved to Phase 5 part 1) | **Not started.** |
 
 - The roadmap has six phases (confirmed by the developer on 2026-09-25); earlier versions of this document went only up to Phase 4. Phases 1–3 are described in §1–§3 and Phase 4 in §8.
@@ -584,11 +585,11 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 | Food post model | `app/src/main/java/com/example/salusalo/model/FoodPost.kt` | `FoodPost` (with `@Transient displayImageUrl` and, since §11, `@Transient donorName`), `NewFoodPost`, `FoodPostDraft`, `FoodPostEdit`, `ListingHandover`, `FoodPostStatus`, `isExpired()` |
 | Saved listings (§11) | `model/SavedListing.kt`, `data/SavedListingRepository.kt`, `viewmodel/SavedListingViewModel.kt` | Bookmarks in `saved_listings`; loaded once when Home starts, reloaded when Saved Listings opens |
 | Reservation model | `app/src/main/java/com/example/salusalo/model/Reservation.kt` | `Reservation`, `ReservationStatus`, `ReservationDisplay`, `DonorReservationRow` |
-| Food repository | `app/src/main/java/com/example/salusalo/data/FoodRepository.kt` | Feed (newest first, with donor names since §11), own posts, create with up to 4 photos, `updateMyFoodPost()`, delete, `withSignedImageUrl()`, `signedExtraPhotoUrls()` |
+| Food repository | `app/src/main/java/com/example/salusalo/data/FoodRepository.kt` | Feed (newest first, with donor names since §11), own posts, create with up to 4 photos, `updateMyFoodPost()`, delete, `withSignedImageUrl()`, `signedExtraPhotoUrls()`; since §17 `withSignedImageUrls()` and `signedUrls()` (one signing request per list, per-photo fallback) |
 | Reservation repository | `app/src/main/java/com/example/salusalo/data/ReservationRepository.kt` | RPC calls, `getMyReservations()`, `getReservationsForMyFoodPosts()` |
 | Reservation ViewModel | `app/src/main/java/com/example/salusalo/viewmodel/ReservationViewModel.kt` | `myReservations`, `donorReservations`, `message`, `reserve` / `cancel` / `claim` / `refresh` |
 | Food ViewModel | `app/src/main/java/com/example/salusalo/viewmodel/FoodViewModel.kt` | `availablePosts`, `myPosts`, `createPost`, `updatePost`, `deletePost`; since §11 writes wait for the running request instead of being dropped |
-| Auth / profile | `app/src/main/java/com/example/salusalo/data/UserRepository.kt` | Find-or-create profile; `ProfileException`; since §10 `updateMyName`, `uploadProfilePhoto`, `profilePhotoUrl`, `changePassword`, `supabaseErrorText` |
+| Auth / profile | `app/src/main/java/com/example/salusalo/data/UserRepository.kt` | Find-or-create profile; `ProfileException`; since §10 `uploadProfilePhoto`, `profilePhotoUrl`, `changePassword`, `supabaseErrorText`; since §16 `updateMyProfile` (`updateMyName` was removed in §17) |
 | Auth / profile | `app/src/main/java/com/example/salusalo/data/GoogleSignIn.kt`, `data/ProfilePhoto.kt` | Google ID token through Credential Manager; profile photo shrinking (§10) |
 | Auth / profile | `app/src/main/java/com/example/salusalo/model/UserProfile.kt` | `UserProfile`, `UserRole`, `NewUserProfile` |
 | Auth / profile | `app/src/main/java/com/example/salusalo/data/SupabaseClientProvider.kt` | Supabase client using the Firebase ID token |
@@ -599,7 +600,7 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 | Alerts (Phase 4) | `AlertScreen.kt`, `data/NotificationRepository.kt`, `model/AppNotification.kt`, `viewmodel/NotificationViewModel.kt` | Real alerts, unread counts, preferences; since §13 `newAlerts` (alerts that arrive live) |
 | Alert sound (§13) | `AlertSound.kt` | `AlertSoundPlayer` (the phone's default notification sound) and the phone-level `notification_sound` setting in `salusalo_session` |
 | Demo screens | `app/src/main/java/com/example/salusalo/FoodActions.kt` | Preview-only pickup and checkout dialogs; its demo chat is now only a fallback |
-| Theme | `app/src/main/java/com/example/salusalo/ui/theme/` | `SaluSaloTheme` is **unused**; `MainActivity` builds its own `MaterialTheme` |
+| Listing photos (§17) | `app/src/main/java/com/example/salusalo/ListingPhotos.kt` | `ListingPhoto` (a signed photo with the plain and "Image unavailable" tiles) and `FullScreenPhotos`. The unused template theme `ui/theme/` was removed in §17; `MainActivity` builds its own `MaterialTheme` |
 | Reviews and reports (§14) | `ReviewsAndReports.kt`, `model/Review.kt`, `data/ReviewRepository.kt`, `data/ReportRepository.kt` | The Rate page, the Report page and review rows; ratings and reviews through names-only functions; `submit_report` (passed on two phones on 2026-09-28) |
 | Database / Storage SQL | `supabase/migrations/` (11 files), `supabase/README.md`, `supabase/tests/` | Applied manually in the Supabase SQL Editor; `supabase/tests/` holds read-only checks, live safety checks and, since §14, `phase5_reports_query.sql` |
 | Build / config | `app/build.gradle.kts`, `gradle/libs.versions.toml`, `app/google-services.json`, `local.properties` (git-ignored) | Supabase URL and publishable key are read from `local.properties` into `BuildConfig` |
@@ -644,7 +645,7 @@ Started on 2026-09-25 at the developer's request; scope and status are in §8. R
 6. Run the negative tests on the live project. **Passed on 2026-09-25** (21 of 21, `supabase/tests/phase4_live_safety_check.sql`). Not yet done: the password-reset email (part of the step 10 regression in §4).
 7. Sign off Phase 4. **Signed off by the developer on 2026-09-25.** The password-reset email was not tested; Phase 4 did not change its code.
 
-Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow. Phase 5 part 1 (reviews, reports, Email verified) passed on two phones on 2026-09-28 and was merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`) (§14). Phase 5 part 2 (Maps) passed on two phones on 2026-09-28 and was merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`) (§15). Mika's Profile redesign and settings (PR #10) passed a short test on two phones on 2026-09-28 and was merged into `master` through PR #10 on 2026-09-28 (merge commit `49ac319`) (§16). Phase 6 has not started.
+Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow. Phase 5 part 1 (reviews, reports, Email verified) passed on two phones on 2026-09-28 and was merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`) (§14). Phase 5 part 2 (Maps) passed on two phones on 2026-09-28 and was merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`) (§15). Mika's Profile redesign and settings (PR #10) passed a short test on two phones on 2026-09-28 and was merged into `master` through PR #10 on 2026-09-28 (merge commit `49ac319`) (§16). Phase 6 has not started. The fixes, clean-up and optimization after the second demo audit (§17) are in code on branch `claude/cleanup-after-audit`; they are not built or tested yet.
 
 ---
 
@@ -1773,3 +1774,136 @@ Each check is tagged [New] or [Regression]. Where a phone must show new data, th
 - Food preferences and the pickup area are saved on the phone, per account; they don't follow the account to another phone.
 - The pickup-area filter matches the typed text in pickup locations, not a distance; Nearby does that.
 - Only the owner sees the bio; other people's pages don't show it.
+
+---
+
+## 17. Fixes, clean-up and optimization after the second demo audit
+
+**Status (2026-09-28): in code on branch `claude/cleanup-after-audit` (from `master` at `49ac319`, the PR #10 merge); not built, not tested.** No SQL, no database change and no new library. Only local checks were run (§17.3): no AGP build, no lint and nothing on a phone. The two-phone test is §17.4.
+
+Commits: `2404989` (the PR #10 merge in the docs), `9281f61` (photo tile, unused images), `5a1b90d` (signing and reservations), `2f4d424` (Post), `2a05a22` (Home and details), `8dbac5e` (keyboard), `e10894d` (welcome pages), `0bfca3f` (clean-up and icons), `5034262` (WebP), then this document.
+
+### 17.1 The audit
+
+| # | Item | Outcome |
+|---|---|---|
+| 1 | Stock photo `food_produce.png` shown for listings | Replaced by a neutral tile (`ListingPhoto`): plain for no photo, "Image unavailable" when a stored photo can't be shown. The `photo: Int` fields and parameters are gone. |
+| 2 | "Recommendation insights" claimed matching that doesn't exist | Now "Check your listing", a full page of form checks (§17.2). |
+| 3 | "My posts" showed the expiry in UTC | Shown in the phone's time zone. |
+| 4 | Filter button looked like a filter; Expiring Soon line vague | An info icon, "About the filters"; "Expiring Soon: listings that expire within 3 hours". |
+| 5 | Details "Read more" added a generic paragraph | The description shows 4 lines; Read more only when it is longer; the paragraph is removed. |
+| 6 | Home "Learn more" showed one sentence | Opens "How Salu-Salo works". |
+| 7 | Welcome pages 2–3: placeholder descriptions and TODOs | Real descriptions; TODOs removed. |
+| 8 | Mika: a quick way to start pickup now | "Start now" on Post and Edit, with 10 minutes of slack on Post. |
+| 9 | Mika: allergens required | Required on Post and Edit. |
+| 10 | Mika: Home leaf icon | The profile photo or initial; opens Profile. |
+| 11 | Mika: full-screen photos | Tap a details photo to see all photos full screen (no pinch zoom). |
+| 12 | Mika: summary boxes misaligned | Four equal columns with aligned captions. |
+| 13 | Mika: chat box behind the keyboard | Fixed, and the same fix on the other full-screen pages with text boxes (§17.2). |
+| 14 | Unused images | The five `food_*.png` files (13.8 MB) deleted. |
+| 15 | Dead code | Removed (§17.2). |
+| 16 | Deprecated icons | `Icons.AutoMirrored.Outlined.*` in the 7 places. |
+| 17 | One signing request per photo | One request per list, with a per-photo fallback. |
+| 18 | Reservations loaded every visible listing | Only the reserved listings, by ID. |
+| 19 | Large PNG illustrations | WebP: 892 KB → 78 KB and 535 KB → 49 KB. |
+| 20 | Welcome pages on every start | Only until this phone has seen them. |
+| 21 | No way to reload Home | Pull to refresh. |
+
+### 17.2 What changed
+
+- **Photos** (new `ListingPhotos.kt`): `ListingPhoto(imageUrl, hasPhoto, …)` is used by the Home cards, the details pager, the Pickup location and Donor pages, the Review reservation page, the chat header, Saved Listings and Activity records. No stored photo: a plain pale tile. A stored photo that can't be signed or loaded: "Image unavailable" (an icon with that description on tiles narrower than 60 dp). Activity records now carry `hasPhoto`, so they show "Image unavailable" too. Saved Listings' card for a listing you can no longer see still shows a plain tile.
+- **Signing** (`data/FoodRepository.kt`): `List<FoodPost>.withSignedImageUrls(bucket)` and `BucketApi.signedUrls(paths)` sign a whole list in one `createSignedUrls` request (1-hour URLs), matched by path. supabase-kt 3.5.0 can't read the answer when any path can't be signed (Storage returns `"signedURL": null`), so then each photo is signed on its own as before. The exception is never shown or logged, because it can contain signed URLs. Used by the feed, My Listings, photos 2–4, both reservation lists, Saved Listings (visible covers in one batch, covers of listings you can no longer see in another) and the Messages inbox. Single items (create, edit, one conversation, the profile photo) keep one request each.
+- **Reservations** (`data/ReservationRepository.kt`): both lists load only their listings, with `id=in.(…)` in chunks of 100; RLS decides exactly as before.
+- **Post** (`PostScreen.kt`, `model/FoodPost.kt`):
+  - "Check your listing" panel ("See the price, pickup window and missing details before you post.", button "Check listing") opens a full page "Check your listing": "Based on the details you've entered so far. Nothing is posted until you tap Post Listing.", then Price, Quantity, Pickup window, Expiration, Location and Details to review, and "These are form checks and calculations, not AI predictions or a food-safety assessment." The category section and the matching claims are gone.
+  - "Start now" beside "Pickup starts" (Post and Edit) sets the current minute. Post accepts a start up to 10 minutes in the past through one pure rule, `isPickupStartAllowed()`, which the check page also uses. Errors: "Choose when pickup starts, or tap Start now." and "The pickup start is in the past. Tap Start now, or choose a later time."
+  - Allergens: label "Allergens", error `Enter the allergens, or write "None".` on Post and Edit (so an older listing without allergens must get them to be saved), hint `List allergens such as wheat, milk, eggs or nuts, or write "None" if there are none.` Storage notes stay optional; the details page still shows "Not provided — ask the donor" when allergens are blank.
+  - "My posts": "Expires: Sep 29, 2026 • 6:00 PM" in the phone's time zone, or "Expires: —".
+- **Home and details** (`MainActivity.kt`):
+  - The info icon ("About the filters") opens a dialog titled "About the filters": "Nearby: listings with a map pin within 5 km of you", "Donation: free food", "For Sale: paid food", "Expiring Soon: listings that expire within 3 hours", then "Tap a category below to filter the listings."
+  - "Learn more" opens "How Salu-Salo works" (the Settings help text).
+  - The header circle shows the profile photo (its signed URL keyed on the stored path, so a new photo shows as soon as it is saved on Profile), else the name's initial, else a person icon; tapping it opens Profile ("Your profile" for TalkBack).
+  - Pull down on Home or "All food listings" reloads the feed and, only if location access is already allowed, the phone's position. It never asks for access. The spinner also shows while Home first loads.
+  - Details: the description shows 4 lines, with "Read more" / "Read less" only when it is longer; the four summary columns are equal, as tall as the tallest, with the value at the top (up to 2 lines) and the caption at the bottom; tapping a photo opens a black full-screen view (whole photos, swipe, "1 / 2", "Close photos"), which returns to the photo you were viewing.
+- **Keyboard** (`FoodActions.kt`: `EdgeToEdgeDialog`, `DarkSystemBarIcons()`): full-screen dialogs used the default `decorFitsSystemWindows`, so their window never got the keyboard's size and `imePadding()` did nothing. The four full-screen pages with text boxes now draw edge to edge, with dark status-bar and navigation-bar icons, the header clear of the status bar and the bottom clear of the navigation bar:
+  - the chat (`ChatScreen.kt`), which also keeps the newest message in view while the keyboard opens;
+  - `ActionPage` (the Reserve note on Review reservation, Report, Rate);
+  - Edit Listing (`EditListingDialog`);
+  - the Profile pages dialog (`ProfileSections.kt`: Edit Profile, Change Password, the pickup area).
+- **Welcome** (`MainActivity.kt`): the app opens on the welcome pages only until this phone has seen them (`welcome_seen` in `salusalo_session`), set by Get Started, the new "Already have an account? Sign in" link under the button, or any account reaching Home; a saved "Keep me signed in" choice (an older build was used) counts as seen. Otherwise it opens on Sign In, where Back closes the app; Back on Create Account and Forgot password goes to Sign In. The three images are described as "People sharing a box of vegetables and bread".
+- **Removed:** the five `food_*.png` images; `clearLocalAccountData()`; the Activity statuses Pending, Confirmed and Saved locally; `ProfileToggle` and `ProfileStat`; `ui/theme/` (`Color.kt`, `Theme.kt`, `Type.kt`) and `res/values/colors.xml` (`themes.xml` keeps `Theme.SaluSalo`); `UserProfile.phoneNumber`; `UserRepository.updateMyName()` (the SQL function stays for older builds); `FoodViewModel.clearError()`; an unused local on Review reservation; Home's "Salu-Salo" message dialog and the unreachable bottom-bar branch.
+- **Icons:** ArrowBack, Logout, FormatListBulleted, HelpOutline and MenuBook use `Icons.AutoMirrored.Outlined`.
+- **Illustrations:** `welcome_reference` and `signin_reference` are lossy WebP at quality 90 (both PNGs were fully opaque); a side-by-side check at 1:1 and 3× zoom showed no visible difference.
+
+### 17.3 Local checks (not a build or a phone)
+
+- **Kotlin:** the kotlinc 2.2.10 type check of every app source (as in §15.3): 0 errors, and no deprecation warnings left. Compose was checked against Compose Multiplatform 1.7.3 desktop jars (material3 1.3), not the project's Compose BOM 2026.02.01 (material3 1.4.0): Google's Maven repository is not reachable from the session. New stand-ins for Android-only APIs: `DialogProperties(usePlatformDefaultWidth, decorFitsSystemWindows)`, `DialogWindowProvider`, `LocalView`, `WindowCompat.getInsetsController` and `WindowInsetsControllerCompat` (`core-ktx` is already a dependency).
+- **JVM tests** (JUnit 4.13.2 run directly, not through Gradle): 26 of 26 passed: `PhotoSigningTest` 8 (one request per list, matching by path, a refused path losing only its own picture, the per-photo fallback, cancellation, nothing to sign, each listing's own URL, and a decode test showing that supabase-kt 3.5.0 can't read a batch answer with a null URL), the new `PickupStartTest` 6 (the 10-minute rule), `GeoTest` 11, `ExampleUnitTest` 1.
+- **Other:** a search that no removed name is still referenced; a secret scan of the diff.
+- **Not done:** the AGP build, lint, `testDebugUnitTest` through Gradle, and anything on a phone.
+
+### 17.4 Manual test (A → B → A; phone 1 = A, phone 2 = B)
+
+**Preconditions:**
+- This branch built with AGP (`assembleDebug testDebugUnitTest`) and installed on both phones. There is no migration.
+- A has an older listing, available and unexpired, whose details page shows "Not provided — ask the donor" under Allergens (for example `OLD` from §15.4); below it is called `OLD`.
+- A has a second photo ready to set as the profile photo.
+
+Each check is tagged [New] or [Regression]. Home reloads by pulling the list down.
+
+**A (phone 1)**
+
+1. [New] Home, signed in as A.
+   - The circle at the top left shows A's profile photo (or A's initial). Tap it → Profile. Change the photo with the camera button, then tap Home in the bottom bar: the circle shows the new photo.
+   - The info icon next to the search box → "About the filters" with the five lines of §17.2 → OK.
+   - "Learn more" → "How Salu-Salo works" with "Share food", "Find and reserve" and "Coordinate and collect" → Back.
+2. [New, Regression] Post. Fill in `AUDIT`: "I want to donate", **2 photos**, a description of about 400 characters (8 lines or more), quantity 3, unit pcs, a pickup location, the pin, expiring tomorrow at 6:00 PM, pickup ends later today, **Pickup starts and Allergens left empty**.
+   - The panel reads "Check your listing" and "See the price, pickup window and missing details before you post." "Check listing" → the page "Check your listing": "Based on the details you've entered so far. Nothing is posted until you tap Post Listing.", Price "Free donation. Recipients will not pay for the food.", Quantity "Available: 3 pcs.", Pickup window "Select both pickup start and end times.", Details to review "• 2 photo(s) selected." and `• Allergens are missing. Write "None" if there are none.` → Back.
+   - "Post Listing" → "Choose when pickup starts, or tap Start now."
+   - Set Pickup starts to today, more than 10 minutes ago → "Post Listing" → "The pickup start is in the past. Tap Start now, or choose a later time." "Check listing" shows the same sentence under Pickup window → Back.
+   - "Start now" → the button shows the current time. "Post Listing" → `Enter the allergens, or write "None".` The hint under the fields reads `List allergens such as wheat, milk, eggs or nuts, or write "None" if there are none.`
+   - [Regression] Allergens `Wheat` → "Post Listing" → "Listing published".
+   - "My posts" → `AUDIT`: "Expires: <tomorrow's date> • 6:00 PM" (the phone's time, not UTC). Post's Back button.
+3. [New, Regression] Activity → My Listings: `AUDIT` and `OLD` show their photos. `OLD` → "Edit listing": the field is labelled "Allergens" and is empty, and "Start now" is beside "Pickup starts".
+   - "Save changes" → `Enter the allergens, or write "None".`
+   - Tap the Allergens field: the keyboard opens, the field scrolls into view above it, and the "Edit Listing" header stays below the status bar. Type `None` → "Save changes" → "Listing updated."
+
+**B (phone 2)**
+
+4. [New] Settings → Apps → Salu-Salo → Storage → Clear storage (this signs B out), then open Salu-Salo.
+   - The first welcome page, with "Already have an account? Sign in" under "Next". Tap it → Sign In. Press Back: the app closes.
+   - Open it again: Sign In at once, with no welcome pages. [Regression] Sign in as B.
+5. [New, Regression] Home: the circle shows B's photo or initial. Pull the list down: a spinner, then `AUDIT` appears with its photo.
+   - Open `AUDIT`: the description shows 4 lines ending in "…" and "Read more" → the whole text and "Read less", with no extra paragraph.
+   - The four summary columns (quantity, Free, expiry, status) have equal widths, and "Available", "Donation", "Expires" and "Status" sit on one line.
+   - Tap the photo: black full screen, the photo whole, "1 / 2". Swipe → "2 / 2". "Close photos" → the details page shows the second photo.
+   - [Regression] Bookmark `AUDIT`.
+6. [New, Regression] Reserve 1 → "Review reservation" → tap the message box: it stays above the keyboard. Type `Audit test` → "Confirm reservation" → the "Reserved" receipt with "Your message was sent to <A>." → Done.
+   - The chat icon → Messages: the `AUDIT` thread shows the listing's photo. Open it and tap the message box: the box and `Audit test` stay above the keyboard, and the header stays below the status bar. Send `Hello`.
+7. [New, Regression] Activity → My Reservations → the `AUDIT` record shows its photo. Profile → Saved Listings → `AUDIT` shows its photo.
+
+**A (phone 1)**
+
+8. [Regression, New] Alerts: "New reservation" ("<B> reserved 1 pcs of AUDIT.") and "New message from <B>". Activity → My Donations → the `AUDIT` record shows its photo → "Mark claimed" → "Reservation marked as claimed."
+9. [Regression, New] Home → system Back: A is signed out and Sign In shows (no welcome pages). Back again: the app closes. Open it and sign in as A: Home.
+
+**Left out of the short test (not tested unless run separately):**
+- "Image unavailable" (needs a photo missing from Storage or one that can't be signed), the per-photo fallback that follows, and a plain tile for a listing without a photo (new listings always have one).
+- A start between 1 and 10 minutes in the past; "Start now" on Edit; the Price, Expiration and short-window lines of the check page.
+- A description of 4 lines or fewer (no Read more); rotating the phone in the full-screen view; TalkBack ("Your profile", "About the filters", "Close photos", "Image unavailable").
+- The keyboard on Report, Rate, Edit Profile, Change Password and the pickup area; three-button navigation; the dark bar icons on each page.
+- Pull to refresh with location allowed (distances refresh); "All food listings".
+- Welcome pages on a phone that used an older build (`keep_signed_in` saved) and after restoring a backup; Back on Create Account and Forgot password.
+- More than 100 reservations (a second chunk); right-to-left languages (the mirrored icons).
+- The regressions not in the steps: email sign-up, Google sign-in, Cancel, removing a listing, editing other fields, reviews and reports, notification settings and sound, the password change, the maps pages and the password-reset email.
+
+### 17.5 Known limits
+
+- Allergens are required only in this build. The server and older builds still accept blank allergens, and the details page shows "Not provided — ask the donor" for them.
+- The 10-minute slack for the pickup start is checked on the phone only; the server doesn't check the start at all.
+- A list whose photos include one that can't be signed costs one request per photo, as before this change (supabase-kt 3.5.0 can't read the batch answer). If a later supabase-kt reads it, the fallback can go.
+- The welcome "seen" flag is per phone. It survives sign-out and is restored with the app's Android backup; clearing the app's storage shows the welcome pages again.
+- Pull to refresh reloads only the feed and the phone's position, not alerts, messages or saved listings.
+- The full-screen photo view has no pinch zoom.
+- Phones that ran older builds keep the unused `salusalo_profile` and `salusalo_local_posts` files; nothing reads them.
+- The keyboard fix depends on edge-to-edge dialogs, which were only type-checked here.
