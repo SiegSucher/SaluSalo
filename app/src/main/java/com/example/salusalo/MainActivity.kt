@@ -168,6 +168,16 @@ private fun setKeepSignedIn(context: Context, keep: Boolean) {
     sessionPreferences(context).edit().putBoolean("keep_signed_in", keep).apply()
 }
 
+// The welcome pages show only until this phone has seen them: Get Started,
+// "Sign in" on them, or any account reaching Home. A saved "Keep me signed in"
+// choice means someone signed in on an older build, so they count as seen too.
+private fun welcomeSeen(context: Context): Boolean =
+    sessionPreferences(context).run { getBoolean("welcome_seen", false) || contains("keep_signed_in") }
+
+private fun markWelcomeSeen(context: Context) {
+    sessionPreferences(context).edit().putBoolean("welcome_seen", true).apply()
+}
+
 // Remove local, account-specific data before another user can sign in on this device.
 private fun clearLocalAccountData(context: Context) {
     context.getSharedPreferences("salusalo_profile", 0).edit().clear().apply()
@@ -176,11 +186,11 @@ private fun clearLocalAccountData(context: Context) {
 
 @Composable
 private fun SaluSaloApp() {
-    var screen by rememberSaveable { mutableStateOf("welcome") }
+    val context = LocalContext.current
+    var screen by rememberSaveable { mutableStateOf(if (welcomeSeen(context)) "signin" else "welcome") }
     var message by rememberSaveable { mutableStateOf("") }
     var isAuthenticating by remember { mutableStateOf(false) }
     val firebaseAuth = remember { FirebaseAuth.getInstance() }
-    val context = LocalContext.current
     val profileRepository = remember { UserRepository() }
     val appScope = rememberCoroutineScope()
     var currentProfile by remember { mutableStateOf<UserProfile?>(null) }
@@ -208,6 +218,7 @@ private fun SaluSaloApp() {
                 profileRepository.loadOrCreateCurrentProfile(displayNameOverride)
             }.onSuccess { profile ->
                 currentProfile = profile
+                markWelcomeSeen(context)
                 screen = "home"
                 // Copy Firebase's email_verified into the profile in the background.
                 // It never blocks or signs anyone out; on any failure (offline, a
@@ -266,15 +277,10 @@ private fun SaluSaloApp() {
         }
     }
 
-    BackHandler(enabled = screen != "welcome") {
-        if (screen == "home") {
-            logOut()
-        } else {
-            screen = when (screen) {
-                "signup", "forgot" -> "signin"
-                else -> "welcome"
-            }
-        }
+    // Back on Home signs out; on Create Account and Forgot password it goes to
+    // Sign In. On Sign In and the welcome pages it closes the app.
+    BackHandler(enabled = screen == "home" || screen == "signup" || screen == "forgot") {
+        if (screen == "home") logOut() else screen = "signin"
     }
 
     Surface(
@@ -314,8 +320,14 @@ private fun SaluSaloApp() {
             ) { currentScreen ->
                 when (currentScreen) {
                     "welcome" -> WelcomeScreen(
-                        onStart = { screen = "signup" },
-                        onSignIn = { screen = "signin" }
+                        onStart = {
+                            markWelcomeSeen(context)
+                            screen = "signup"
+                        },
+                        onSignIn = {
+                            markWelcomeSeen(context)
+                            screen = "signin"
+                        }
                     )
 
                     "home" -> HomeScreen(
@@ -466,7 +478,7 @@ private val welcomePages = listOf(
     // WELCOME SCREEN 1
     WelcomePage(
         image = R.drawable.welcome_reference,
-        imageDescription = "People sharing a box of food",
+        imageDescription = "People sharing a box of vegetables and bread",
         title = "Rescue surplus food,\nreduce waste",
         body = "Donate, sell, reserve, buy, or claim food " +
                 "before it expires. Together, we can build " +
@@ -479,10 +491,10 @@ private val welcomePages = listOf(
         rightIcon = Icons.Outlined.Groups
     ),
 
-    // WELCOME SCREEN 2  (TODO: replace image and text)
+    // WELCOME SCREEN 2
     WelcomePage(
         image = R.drawable.welcome_reference,
-        imageDescription = "Welcome screen 2 image",
+        imageDescription = "People sharing a box of vegetables and bread",
         title = "Share what you have,\nhelp who needs it",
         body = "Post extra food in seconds and let neighbors " +
                 "donate, buy, or claim it before it goes to waste.",
@@ -494,10 +506,10 @@ private val welcomePages = listOf(
         rightIcon = Icons.Outlined.LocalOffer
     ),
 
-    // WELCOME SCREEN 3  (TODO: replace image and text)
+    // WELCOME SCREEN 3
     WelcomePage(
         image = R.drawable.welcome_reference,
-        imageDescription = "Welcome screen 3 image",
+        imageDescription = "People sharing a box of vegetables and bread",
         title = "Reserve, pick up,\nand enjoy",
         body = "Hold food for pickup, message the provider, " +
                 "and collect it at the agreed place.",
@@ -641,7 +653,12 @@ private fun WelcomeScreen(
                     }
                 )
 
-                Spacer(Modifier.height(10.dp))
+                TextButton(
+                    onClick = onSignIn,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text("Already have an account? Sign in", color = Green, fontSize = 13.sp)
+                }
             }
         }
     }
