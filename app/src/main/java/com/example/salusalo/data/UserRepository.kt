@@ -8,11 +8,14 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import io.github.jan.supabase.exceptions.RestException
+import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -24,6 +27,27 @@ class UserRepository(
     private val supabase = SupabaseClientProvider.client
     private val firebaseAuth = FirebaseAuth.getInstance()
     private val profileImages = supabase.storage.from("profile-images")
+
+    /**
+     * Makes sure the signed-in account's Firebase ID token carries the claim
+     * role: "authenticated" that Supabase requires. Called before the first
+     * Supabase request of a session. The cached token is checked first, then a
+     * refreshed one (the claim may have been set meanwhile, for example by the
+     * developer's backup script). Only when both lack it is the set-firebase-role
+     * Edge Function called; it adds the claim to the caller's own account, which
+     * it takes from the verified token. Then the token is refreshed once more.
+     * One setup runs at a time for the whole app. Throws
+     * [ProfileException.RoleSetupFailed] when the role can't be set up.
+     */
+    suspend fun ensureSupabaseRole() {
+        roleSetupLock.withLock {
+            val user = firebaseAuth.currentUser ?: throw ProfileException.NotSignedIn
+            ensureRole(
+                readClaims = { refresh -> user.getIdToken(refresh).await().claims },
+                setRole = { supabase.functions.invoke(SET_ROLE_FUNCTION) }
+            )
+        }
+    }
 
     /**
      * Gets the current Firebase user, then finds or creates that user's one
@@ -204,6 +228,40 @@ class UserRepository(
             .firstOrNull()
 }
 
+/** The Edge Function that adds the Supabase role claim to the caller's own Firebase account. */
+private const val SET_ROLE_FUNCTION = "set-firebase-role"
+
+/** One role setup at a time: sign-in and the check when the signed-in user changes can overlap. */
+private val roleSetupLock = Mutex()
+
+/** True when Firebase ID token claims carry the role Supabase requires. */
+internal fun hasSupabaseRole(claims: Map<String, Any?>): Boolean = claims["role"] == "authenticated"
+
+/**
+ * The steps of [UserRepository.ensureSupabaseRole] without Firebase or Supabase,
+ * so they can be unit tested. [readClaims] reads the ID token's claims (true =
+ * refresh the token first) and [setRole] calls the Edge Function, only when both
+ * the cached and a refreshed token lack the role. Every failure except
+ * cancellation becomes [ProfileException.RoleSetupFailed]; the original
+ * exception is never shown or logged (its text can include the Supabase URL).
+ */
+internal suspend fun ensureRole(
+    readClaims: suspend (refresh: Boolean) -> Map<String, Any?>,
+    setRole: suspend () -> Unit
+) {
+    try {
+        if (hasSupabaseRole(readClaims(false))) return
+        if (hasSupabaseRole(readClaims(true))) return
+        setRole()
+        if (hasSupabaseRole(readClaims(true))) return
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        throw ProfileException.RoleSetupFailed
+    }
+    throw ProfileException.RoleSetupFailed
+}
+
 private const val TOO_MANY_ATTEMPTS = "Too many attempts. Please wait a few minutes and try again."
 private const val PASSWORD_NOT_CHANGED =
     "Your password could not be changed. Check your internet connection and try again."
@@ -234,6 +292,7 @@ sealed class ProfileException(message: String) : Exception(message) {
     data object NotSignedIn : ProfileException("No Firebase user is signed in.")
     data object MissingEmail : ProfileException("The Firebase account has no email address.")
     data object NotFound : ProfileException("No profile exists for this account.")
+    data object RoleSetupFailed : ProfileException("The account's Supabase role could not be set up.")
 }
 
 fun profileErrorMessage(error: Throwable): String = when (error) {
@@ -243,6 +302,9 @@ fun profileErrorMessage(error: Throwable): String = when (error) {
         "Your account needs an email address before a profile can be created."
     ProfileException.NotFound ->
         "Your account profile could not be found."
+    ProfileException.RoleSetupFailed ->
+        "Your account is signed in, but Salu-Salo couldn't finish setting it up. " +
+                "Check your internet connection, then tap Try again."
     else ->
         "We could not load your profile. Check your internet connection and try again."
 }

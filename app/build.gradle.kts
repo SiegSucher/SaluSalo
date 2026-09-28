@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.supabase.postgrest)
     implementation(libs.supabase.storage)
     implementation(libs.supabase.realtime)
+    implementation(libs.supabase.functions)
     // OkHttp supports the WebSockets that Supabase Realtime needs; the Android engine does not.
     implementation(libs.ktor.client.okhttp)
     implementation(libs.coil.compose)
