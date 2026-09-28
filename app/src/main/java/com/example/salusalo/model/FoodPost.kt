@@ -49,6 +49,10 @@ data class FoodPost(
 val FoodPost.donorRatingLabel: String?
     get() = ratingLabel(donorRatingAverage, donorReviewCount)
 
+/** True when a cover photo is stored; [FoodPost.displayImageUrl] is null when it could not be signed. */
+val FoodPost.hasPhoto: Boolean
+    get() = !imageUrl.isNullOrBlank()
+
 @Serializable
 enum class FoodPostStatus {
     AVAILABLE, RESERVED, CLAIMED, EXPIRED,
@@ -149,6 +153,17 @@ data class FoodPostEdit(
     val storageNotes: String,
     val pickupPin: GeoPin?
 )
+
+/** How far in the past a new listing's pickup start may be, so a "Start now" time still passes a few minutes later. */
+const val PICKUP_START_SLACK_MILLIS = 10 * 60_000L
+
+/**
+ * True when a new listing's pickup start is at most [PICKUP_START_SLACK_MILLIS]
+ * in the past. Post's check and "Check your listing" both use it, so they agree.
+ * The server doesn't check the start; Edit accepts a start in the past.
+ */
+fun isPickupStartAllowed(startMillis: Long, nowMillis: Long): Boolean =
+    startMillis >= nowMillis - PICKUP_START_SLACK_MILLIS
 
 /** True when the listing's expiry has passed, whatever its stored status. */
 fun FoodPost.isExpired(now: java.time.Instant = java.time.Instant.now()): Boolean =

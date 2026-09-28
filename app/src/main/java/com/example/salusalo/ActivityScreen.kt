@@ -1,6 +1,7 @@
 package com.example.salusalo
 
 import com.example.salusalo.model.isExpired
+import com.example.salusalo.model.hasPhoto
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -14,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,7 +23,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.GeoPin
@@ -41,7 +42,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,6 +69,8 @@ private data class ActivityRecord(
     val timeLabel: String,
     val timeValue: String,
     val uri: String? = null,
+    // The listing has a stored photo; with no uri it could not be signed ("Image unavailable").
+    val hasPhoto: Boolean = false,
     val details: String = "",
     val ownedPost: FoodPost? = null,
     val reservationId: String? = null,
@@ -173,6 +175,7 @@ fun ActivityScreen(
                 timeLabel = if (expired) "Expired on" else "Expires",
                 timeValue = formatActivityTimestamp(post.expirationDate),
                 uri = post.displayImageUrl,
+                hasPhoto = post.hasPhoto,
                 details = buildString {
                     append("Category: ${post.category}")
                     post.description?.takeIf { it.isNotBlank() }?.let {
@@ -212,6 +215,7 @@ fun ActivityScreen(
                 post.pickupLocation
             },
             uri = post.displayImageUrl,
+            hasPhoto = post.hasPhoto,
             pickupPin = post.pickupPin,
             details = when {
                 claimed && priced ->
@@ -249,6 +253,7 @@ fun ActivityScreen(
             status = reservation.status.name.lowercase().replaceFirstChar { it.uppercase() },
             timeLabel = "Pickup", timeValue = post.pickupLocation,
             uri = post.displayImageUrl,
+            hasPhoto = post.hasPhoto,
             details = "Recipient: ${entry.recipientName ?: "Unknown"}\nReservation for your listing." +
                 (if (priced) "\nPrice: ${formatPeso(reservation.unitPrice)} per unit\nCollect $total at pickup." else "") +
                 if (post.status == FoodPostStatus.REMOVED) "\nListing: Removed by you\nYou removed this listing." else "",
@@ -429,7 +434,7 @@ fun ActivityScreen(
 
             item {
                 val tabs = listOf(
-                    "My Listings" to Icons.Outlined.FormatListBulleted,
+                    "My Listings" to Icons.AutoMirrored.Outlined.FormatListBulleted,
                     "My Reservations" to Icons.Outlined.BookmarkBorder,
                     "My Donations" to Icons.Outlined.VolunteerActivism,
                     "Purchases" to Icons.Outlined.ShoppingBag,
@@ -858,7 +863,7 @@ private fun ReferenceActivityCard(
                     record.timeValue,
                     fontSize = 10.sp,
                     lineHeight = 13.sp,
-                    color = if (record.status == "Pending") ARed else AGray
+                    color = AGray
                 )
             }
 
@@ -875,14 +880,12 @@ private fun ReferenceActivityCard(
 @Composable
 private fun ActivityStatus(status: String) {
     val color = when (status) {
-        "Pending" -> AOrange
-        "Confirmed", "Saved locally" -> AGreen
         "Expired", "Cancelled" -> ARed
         else -> AGray
     }
 
     val icon = when (status) {
-        "Pending", "Expired" -> Icons.Outlined.Schedule
+        "Expired" -> Icons.Outlined.Schedule
         "Cancelled" -> Icons.Outlined.Cancel
         else -> Icons.Outlined.CheckCircle
     }
@@ -937,31 +940,13 @@ private fun RecordPhoto(
     record: ActivityRecord,
     modifier: Modifier
 ) {
-    Box(modifier.clip(RoundedCornerShape(10.dp))) {
-        val uri = record.uri
-
-        if (!uri.isNullOrBlank()) {
-            var failed by remember(uri) { mutableStateOf(false) }
-            if (!failed) {
-                AsyncImage(
-                    model = uri,
-                    contentDescription = record.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                    onError = { failed = true }
-                )
-            }
-            if (failed) {
-                Box(
-                    modifier = Modifier.fillMaxSize().background(APale),
-                    contentAlignment = Alignment.Center
-                ) { Text("Image unavailable", fontSize = 9.sp, color = AGray) }
-            }
-        } else {
-            // No photo: a plain tile.
-            Box(Modifier.fillMaxSize().background(APale))
-        }
-    }
+    ListingPhoto(
+        imageUrl = record.uri?.takeIf { it.isNotBlank() },
+        hasPhoto = record.hasPhoto,
+        contentDescription = record.title,
+        modifier = modifier.clip(RoundedCornerShape(10.dp)),
+        textSize = 9.sp
+    )
 }
 
 @Composable

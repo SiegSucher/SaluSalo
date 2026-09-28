@@ -3,7 +3,6 @@ package com.example.salusalo
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,15 +15,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil3.compose.AsyncImage
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Verified
 import com.example.salusalo.data.ReviewRepository
@@ -68,7 +67,8 @@ fun FoodActionsDialog(
     donorEmailVerified: Boolean,
     donorRatingAverage: Double?,
     donorReviewCount: Int,
-    photo: Int,
+    // True when the listing has a stored cover photo.
+    hasPhoto: Boolean,
     // The listing's pickup_location and its signed cover URL (null if none).
     pickupLocation: String,
     // The listing's pickup pin (null for older listings) and the straight-line
@@ -101,10 +101,10 @@ fun FoodActionsDialog(
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ListingCover(
+                    ListingPhoto(
                         imageUrl = imageUrl,
-                        photo = photo,
-                        description = foodTitle,
+                        hasPhoto = hasPhoto,
+                        contentDescription = foodTitle,
                         modifier = Modifier
                             .size(64.dp)
                             .clip(RoundedCornerShape(12.dp))
@@ -363,10 +363,10 @@ fun FoodActionsDialog(
                 )
 
                 ActionCard {
-                    ListingCover(
+                    ListingPhoto(
                         imageUrl = imageUrl,
-                        photo = photo,
-                        description = foodTitle,
+                        hasPhoto = hasPhoto,
+                        contentDescription = foodTitle,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(150.dp)
@@ -418,7 +418,8 @@ fun ReservationReviewDialog(
     foodTitle: String,
     // The donor's name, or null when it could not be loaded.
     donorName: String?,
-    photo: Int,
+    // True when the listing has a stored cover photo.
+    hasPhoto: Boolean,
     imageUrl: String?,
     // The signed-in profile's name, or null while unknown.
     profileName: String?,
@@ -441,8 +442,6 @@ fun ReservationReviewDialog(
 ) {
     val priced = unitPrice > 0
     val donorRole = if (priced) "seller" else "donor"
-    // Never put the "unavailable" placeholder into a sentence.
-    val donorLabel = donorName?.takeIf { it.isNotBlank() } ?: "the $donorRole"
     var note by rememberSaveable(foodPostId) { mutableStateOf("") }
 
     val reserved = (result as? ReserveResult.Reserved)
@@ -454,10 +453,10 @@ fun ReservationReviewDialog(
         onBack = if (reserved != null) onFinished else onBack
     ) {
         ActionCard {
-            ListingCover(
+            ListingPhoto(
                 imageUrl = imageUrl,
-                photo = photo,
-                description = foodTitle,
+                hasPhoto = hasPhoto,
+                contentDescription = foodTitle,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(160.dp)
@@ -601,6 +600,31 @@ fun ReservationReviewDialog(
     }
 }
 
+/**
+ * For full-screen dialog pages with text boxes. The dialog draws edge to edge,
+ * so the page receives the keyboard's size and imePadding() (or
+ * safeDrawingPadding()) keeps the focused text box above it. Each page pads
+ * its header for the status bar and its bottom for the navigation bar, and
+ * calls [DarkSystemBarIcons].
+ */
+internal val EdgeToEdgeDialog = DialogProperties(
+    usePlatformDefaultWidth = false,
+    decorFitsSystemWindows = false
+)
+
+/** Dark status-bar and navigation-bar icons over a light edge-to-edge dialog page. */
+@Composable
+internal fun DarkSystemBarIcons() {
+    val view = LocalView.current
+    LaunchedEffect(view) {
+        val window = (view.parent as? DialogWindowProvider)?.window ?: return@LaunchedEffect
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
+        }
+    }
+}
+
 /** Full-screen page with a Back button and a title, shared by the pages above and ReviewsAndReports.kt. */
 @Composable
 internal fun ActionPage(
@@ -610,10 +634,9 @@ internal fun ActionPage(
 ) {
     Dialog(
         onDismissRequest = onBack,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false
-        )
+        properties = EdgeToEdgeDialog
     ) {
+        DarkSystemBarIcons()
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = ActionCream
@@ -665,42 +688,6 @@ internal fun ActionPage(
                 )
             }
         }
-    }
-}
-
-/**
- * The listing's signed cover with the same fallbacks as AvailableFoodCard: the
- * sample drawable when the listing has no photo, "Image unavailable" when it
- * can't be loaded.
- */
-@Composable
-private fun ListingCover(
-    imageUrl: String?,
-    photo: Int,
-    description: String,
-    modifier: Modifier
-) {
-    var imageFailed by remember(imageUrl) { mutableStateOf(false) }
-    if (imageUrl != null && !imageFailed) {
-        AsyncImage(
-            model = imageUrl,
-            contentDescription = description,
-            contentScale = ContentScale.Crop,
-            modifier = modifier,
-            onError = { imageFailed = true }
-        )
-    } else if (imageUrl == null) {
-        Image(
-            painter = painterResource(photo),
-            contentDescription = description,
-            contentScale = ContentScale.Crop,
-            modifier = modifier
-        )
-    } else {
-        Box(
-            modifier = modifier.background(ActionPale),
-            contentAlignment = Alignment.Center
-        ) { Text("Image unavailable", fontSize = 12.sp) }
     }
 }
 

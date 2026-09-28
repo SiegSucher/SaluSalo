@@ -30,8 +30,12 @@ class MessageRepository {
     suspend fun openReservationConversation(reservationId: String): Conversation =
         postgrest.rpc("open_reservation_conversation", buildJsonObject { put("p_reservation_id", reservationId) }).decodeAs()
 
-    suspend fun getMyConversations(): List<ConversationSummary> =
-        postgrest.rpc("get_my_conversations").decodeList<ConversationSummary>().map { it.withSignedImage() }
+    /** The caller's threads, with every listing photo signed in one request. */
+    suspend fun getMyConversations(): List<ConversationSummary> {
+        val threads = postgrest.rpc("get_my_conversations").decodeList<ConversationSummary>()
+        val urls = bucket.signedUrls(threads.map { it.foodImagePath })
+        return threads.map { it.copy(displayImageUrl = it.foodImagePath?.let { path -> urls[path] }) }
+    }
 
     suspend fun getConversation(conversationId: String): ConversationSummary? =
         postgrest.rpc("get_my_conversations", buildJsonObject { put("p_conversation_id", conversationId) })

@@ -14,6 +14,7 @@ import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.storage.BucketApi
+import io.github.jan.supabase.storage.SignedUrl
 import io.github.jan.supabase.storage.storage
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -43,7 +44,7 @@ class FoodRepository(
             }
             order("created_at", Order.DESCENDING)
         }.decodeList<FoodPost>()
-        return withDonorProfiles(posts).map { post -> post.withSignedImageUrl(bucket) }
+        return withDonorProfiles(posts).withSignedImageUrls(bucket)
     }
 
     suspend fun getUserFoodPosts(): List<FoodPost> {
@@ -55,7 +56,7 @@ class FoodRepository(
                 filter("status", FilterOperator.NEQ, FoodPostStatus.REMOVED.name)
             }
         }.decodeList<FoodPost>()
-        return posts.map { post -> post.withSignedImageUrl(bucket) }
+        return posts.withSignedImageUrls(bucket)
     }
 
     /**
@@ -179,12 +180,13 @@ class FoodRepository(
     }
 
     /**
-     * 1-hour signed URLs for photos 2–4 (the cover is already signed). Each
-     * photo is signed on its own, so one that fails is null and the others
-     * still show.
+     * 1-hour signed URLs for photos 2–4 (the cover is already signed), in one
+     * request. A photo that can't be signed is null and the others still show.
      */
-    suspend fun signedExtraPhotoUrls(post: FoodPost): List<String?> =
-        post.extraImagePaths.map { path -> bucket.signedUrlOrNull(path) }
+    suspend fun signedExtraPhotoUrls(post: FoodPost): List<String?> {
+        val urls = bucket.signedUrls(post.extraImagePaths)
+        return post.extraImagePaths.map { path -> urls[path] }
+    }
 
     /**
      * Deletes or removes the caller's own listing through remove_my_food_post().
@@ -212,6 +214,66 @@ class FoodRepository(
  */
 internal suspend fun FoodPost.withSignedImageUrl(bucket: BucketApi): FoodPost =
     bucket.signedUrlOrNull(imageUrl)?.let { copy(displayImageUrl = it) } ?: this
+
+/**
+ * Adds each post's 1-hour signed cover URL, signing the whole list in one
+ * request (see [signedUrls]). A post whose cover can't be signed is left
+ * without an image; the list still loads.
+ */
+internal suspend fun List<FoodPost>.withSignedImageUrls(bucket: BucketApi): List<FoodPost> =
+    if (isEmpty()) this else withImageUrls(bucket.signedUrls(map { it.imageUrl }))
+
+/** Each post with its cover's URL from [urls] (keyed by path); a post whose path has none is unchanged. */
+internal fun List<FoodPost>.withImageUrls(urls: Map<String, String>): List<FoodPost> =
+    map { post -> post.imageUrl?.let { urls[it] }?.let { post.copy(displayImageUrl = it) } ?: post }
+
+/**
+ * 1-hour signed URLs for many private paths, keyed by path, in one request
+ * (Storage's batch signing). A path missing from the result could not be
+ * signed, so its photo shows "Image unavailable".
+ *
+ * supabase-kt 3.5.0 can't read the batch answer when any path fails: Storage
+ * answers `"signedURL": null` with an error for a missing or hidden object,
+ * and `SignedUrl.signedURL` is not nullable. Then each path is signed on its
+ * own, as before this batching. That exception can contain signed URLs, so
+ * it is never shown or logged.
+ */
+internal suspend fun BucketApi.signedUrls(paths: Collection<String?>): Map<String, String> =
+    signPhotoPaths(
+        paths,
+        batch = { createSignedUrls(1.hours, it) },
+        single = { signedUrlOrNull(it) }
+    )
+
+/**
+ * [BucketApi.signedUrls] without the network: [batch] signs many paths in one
+ * request, [single] one path (null if it can't be signed). Blank and repeated
+ * paths are skipped; results are matched by path, not by order.
+ */
+internal suspend fun signPhotoPaths(
+    paths: Collection<String?>,
+    batch: suspend (List<String>) -> List<SignedUrl>,
+    single: suspend (String) -> String?
+): Map<String, String> {
+    val wanted = paths.mapNotNull { path -> path?.takeIf { it.isNotBlank() } }.distinct()
+    if (wanted.isEmpty()) return emptyMap()
+    val signed = try {
+        batch(wanted)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        null
+    }
+    if (signed != null) {
+        val asked = wanted.toSet()
+        return signed
+            .filter { it.error == null && it.path in asked && it.signedURL.isNotBlank() }
+            .associate { it.path to it.signedURL }
+    }
+    return buildMap {
+        for (path in wanted) single(path)?.let { put(path, it) }
+    }
+}
 
 /** A 1-hour signed URL for a private object path, or null if there is none or signing fails. */
 internal suspend fun BucketApi.signedUrlOrNull(path: String?): String? {

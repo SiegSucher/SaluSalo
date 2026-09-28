@@ -1,11 +1,11 @@
 package com.example.salusalo
 
 import android.os.Bundle
-import coil3.compose.AsyncImage
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.ListingHandover
 import com.example.salusalo.model.ReportTarget
 import com.example.salusalo.model.donorRatingLabel
+import com.example.salusalo.model.hasPhoto
 import com.example.salusalo.model.NEARBY_RADIUS_METERS
 import com.example.salusalo.model.distanceLabel
 import com.example.salusalo.model.distanceMeters
@@ -66,6 +66,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -86,6 +87,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import coil3.compose.AsyncImage
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
@@ -116,7 +124,6 @@ class MainActivity : ComponentActivity() {
             val auth = FirebaseAuth.getInstance()
             if (!keepSignedIn(this) && auth.currentUser != null) {
                 auth.signOut()
-                clearLocalAccountData(this)
             }
         }
 
@@ -161,19 +168,23 @@ private fun setKeepSignedIn(context: Context, keep: Boolean) {
     sessionPreferences(context).edit().putBoolean("keep_signed_in", keep).apply()
 }
 
-// Remove local, account-specific data before another user can sign in on this device.
-private fun clearLocalAccountData(context: Context) {
-    context.getSharedPreferences("salusalo_profile", 0).edit().clear().apply()
-    context.getSharedPreferences("salusalo_local_posts", 0).edit().clear().apply()
+// The welcome pages show only until this phone has seen them: Get Started,
+// "Sign in" on them, or any account reaching Home. A saved "Keep me signed in"
+// choice means someone signed in on an older build, so they count as seen too.
+private fun welcomeSeen(context: Context): Boolean =
+    sessionPreferences(context).run { getBoolean("welcome_seen", false) || contains("keep_signed_in") }
+
+private fun markWelcomeSeen(context: Context) {
+    sessionPreferences(context).edit().putBoolean("welcome_seen", true).apply()
 }
 
 @Composable
 private fun SaluSaloApp() {
-    var screen by rememberSaveable { mutableStateOf("welcome") }
+    val context = LocalContext.current
+    var screen by rememberSaveable { mutableStateOf(if (welcomeSeen(context)) "signin" else "welcome") }
     var message by rememberSaveable { mutableStateOf("") }
     var isAuthenticating by remember { mutableStateOf(false) }
     val firebaseAuth = remember { FirebaseAuth.getInstance() }
-    val context = LocalContext.current
     val profileRepository = remember { UserRepository() }
     val appScope = rememberCoroutineScope()
     var currentProfile by remember { mutableStateOf<UserProfile?>(null) }
@@ -181,7 +192,6 @@ private fun SaluSaloApp() {
     fun logOut() {
         firebaseAuth.signOut()
         currentProfile = null
-        clearLocalAccountData(context)
         // Also forget the Google account chosen in Credential Manager (best effort).
         appScope.launch { clearGoogleCredentialState(context) }
         screen = "signin"
@@ -201,6 +211,7 @@ private fun SaluSaloApp() {
                 profileRepository.loadOrCreateCurrentProfile(displayNameOverride)
             }.onSuccess { profile ->
                 currentProfile = profile
+                markWelcomeSeen(context)
                 screen = "home"
                 // Copy Firebase's email_verified into the profile in the background.
                 // It never blocks or signs anyone out; on any failure (offline, a
@@ -259,15 +270,10 @@ private fun SaluSaloApp() {
         }
     }
 
-    BackHandler(enabled = screen != "welcome") {
-        if (screen == "home") {
-            logOut()
-        } else {
-            screen = when (screen) {
-                "signup", "forgot" -> "signin"
-                else -> "welcome"
-            }
-        }
+    // Back on Create Account and Forgot password goes to Sign In. On Home, Sign In
+    // and the welcome pages it closes the app; Home never signs out (Profile's Log out does).
+    BackHandler(enabled = screen == "signup" || screen == "forgot") {
+        screen = "signin"
     }
 
     Surface(
@@ -307,8 +313,14 @@ private fun SaluSaloApp() {
             ) { currentScreen ->
                 when (currentScreen) {
                     "welcome" -> WelcomeScreen(
-                        onStart = { screen = "signup" },
-                        onSignIn = { screen = "signin" }
+                        onStart = {
+                            markWelcomeSeen(context)
+                            screen = "signup"
+                        },
+                        onSignIn = {
+                            markWelcomeSeen(context)
+                            screen = "signin"
+                        }
                     )
 
                     "home" -> HomeScreen(
@@ -459,7 +471,7 @@ private val welcomePages = listOf(
     // WELCOME SCREEN 1
     WelcomePage(
         image = R.drawable.welcome_reference,
-        imageDescription = "People sharing a box of food",
+        imageDescription = "People sharing a box of vegetables and bread",
         title = "Rescue surplus food,\nreduce waste",
         body = "Donate, sell, reserve, buy, or claim food " +
                 "before it expires. Together, we can build " +
@@ -472,10 +484,10 @@ private val welcomePages = listOf(
         rightIcon = Icons.Outlined.Groups
     ),
 
-    // WELCOME SCREEN 2  (TODO: replace image and text)
+    // WELCOME SCREEN 2
     WelcomePage(
         image = R.drawable.welcome_reference,
-        imageDescription = "Welcome screen 2 image",
+        imageDescription = "People sharing a box of vegetables and bread",
         title = "Share what you have,\nhelp who needs it",
         body = "Post extra food in seconds and let neighbors " +
                 "donate, buy, or claim it before it goes to waste.",
@@ -487,10 +499,10 @@ private val welcomePages = listOf(
         rightIcon = Icons.Outlined.LocalOffer
     ),
 
-    // WELCOME SCREEN 3  (TODO: replace image and text)
+    // WELCOME SCREEN 3
     WelcomePage(
         image = R.drawable.welcome_reference,
-        imageDescription = "Welcome screen 3 image",
+        imageDescription = "People sharing a box of vegetables and bread",
         title = "Reserve, pick up,\nand enjoy",
         body = "Hold food for pickup, message the provider, " +
                 "and collect it at the agreed place.",
@@ -634,7 +646,12 @@ private fun WelcomeScreen(
                     }
                 )
 
-                Spacer(Modifier.height(10.dp))
+                TextButton(
+                    onClick = onSignIn,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text("Already have an account? Sign in", color = Green, fontSize = 13.sp)
+                }
             }
         }
     }
@@ -1275,6 +1292,7 @@ private fun GoogleMark() {
 /* HOMEPAGE */
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun HomeScreen(
     onLogout: () -> Unit,
     currentProfile: UserProfile?,
@@ -1283,7 +1301,8 @@ private fun HomeScreen(
     var search by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("All") }
     var page by rememberSaveable { mutableStateOf("home") }
-    var message by remember { mutableStateOf("") }
+    var filterHelp by remember { mutableStateOf(false) }
+    var howItWorks by remember { mutableStateOf(false) }
     var selectedFood by remember { mutableStateOf<HomeFood?>(null) }
     var sortMenu by remember { mutableStateOf(false) }
     var sort by rememberSaveable { mutableStateOf("Newest") }
@@ -1417,6 +1436,15 @@ private fun HomeScreen(
         else -> "Good evening"
     }
     val firstName = currentProfile?.name?.trim()?.substringBefore(" ").orEmpty()
+    // The header's profile circle. Keyed on the stored path, as on Profile:
+    // each upload has a new path, so a changed photo shows here at once.
+    val userRepository = remember { UserRepository() }
+    val profilePhotoPath = currentProfile?.profileImageUrl
+    val profilePhotoUrl by produceState<String?>(null, profilePhotoPath) {
+        value = userRepository.profilePhotoUrl(profilePhotoPath)
+    }
+    var profilePhotoFailed by remember(profilePhotoUrl) { mutableStateOf(false) }
+    val profileInitial = currentProfile?.name?.trim()?.take(1)?.uppercase().orEmpty()
     val greeting = if (firstName.isBlank()) "$timeGreeting 👋" else "$timeGreeting, $firstName 👋"
     DisposableEffect(currentProfile?.id) {
         onDispose {
@@ -1552,417 +1580,435 @@ private fun HomeScreen(
                     }
                 )
             } else key(page) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 12.dp,
-                            bottom = 100.dp
-                        )
+                // Pull down to reload the listings and, if location access is
+                // already allowed, the phone's position (never asks for access).
+                PullToRefreshBox(
+                    isRefreshing = feedLoading,
+                    onRefresh = {
+                        foodViewModel.loadAvailablePosts()
+                        if (PhoneLocation.hasPermission(context)) refreshPhonePosition(askIfNeeded = false)
+                    },
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    if (page == "home") {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(IconGreen),
-                                contentAlignment = Alignment.Center
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 12.dp,
+                                bottom = 100.dp
+                            )
+                    ) {
+                        if (page == "home") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    Icons.Outlined.Eco,
-                                    contentDescription = null,
-                                    tint = Green,
-                                    modifier = Modifier.size(30.dp)
-                                )
+                                // The profile photo, else the name's initial; opens Profile.
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(IconGreen)
+                                        .clickable(role = Role.Button) { page = "profile" }
+                                        .semantics { contentDescription = "Your profile" },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    val photo = profilePhotoUrl
+                                    if (photo != null && !profilePhotoFailed) {
+                                        AsyncImage(
+                                            model = photo,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize(),
+                                            onError = { profilePhotoFailed = true }
+                                        )
+                                    } else if (profileInitial.isNotEmpty()) {
+                                        Text(
+                                            profileInitial,
+                                            modifier = Modifier.clearAndSetSemantics { },
+                                            fontSize = 19.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Green
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Outlined.Person,
+                                            contentDescription = null,
+                                            tint = Green,
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(Modifier.width(10.dp))
+
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        greeting,
+                                        fontSize = 19.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = DarkGreen
+                                    )
+
+                                    Text(
+                                        "Make a difference today 🌿",
+                                        fontSize = 12.sp,
+                                        color = Gray
+                                    )
+                                }
+
+                                IconButton(onClick = { page = "messages" }) {
+                                    BadgedBox(
+                                        badge = {
+                                            if (unreadMessages > 0) {
+                                                Badge { Text(if (unreadMessages > 99) "99+" else "$unreadMessages") }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.ChatBubbleOutline,
+                                            contentDescription = "Open messages",
+                                            tint = DarkGreen
+                                        )
+                                    }
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        page = "alerts"
+                                    }
+                                ) {
+                                    BadgedBox(
+                                        badge = {
+                                            if (unreadAlerts > 0) {
+                                                Badge { Text(if (unreadAlerts > 99) "99+" else "$unreadAlerts") }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.Notifications,
+                                            contentDescription = "Open alerts",
+                                            tint = DarkGreen
+                                        )
+                                    }
+                                }
                             }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextButton(
+                                    onClick = {
+                                        page = "home"
+                                        search = ""
+                                        category = "All"
+                                    }
+                                ) {
+                                    Text("Back")
+                                }
 
-                            Spacer(Modifier.width(10.dp))
-
-                            Column(Modifier.weight(1f)) {
                                 Text(
-                                    greeting,
+                                    "All food listings",
                                     fontSize = 19.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = DarkGreen
-                                )
-
-                                Text(
-                                    "Make a difference today 🌿",
-                                    fontSize = 12.sp,
-                                    color = Gray
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
-
-                            IconButton(onClick = { page = "messages" }) {
-                                BadgedBox(
-                                    badge = {
-                                        if (unreadMessages > 0) {
-                                            Badge { Text(if (unreadMessages > 99) "99+" else "$unreadMessages") }
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.ChatBubbleOutline,
-                                        contentDescription = "Open messages",
-                                        tint = DarkGreen
-                                    )
-                                }
-                            }
-
-                            IconButton(
-                                onClick = {
-                                    page = "alerts"
-                                }
-                            ) {
-                                BadgedBox(
-                                    badge = {
-                                        if (unreadAlerts > 0) {
-                                            Badge { Text(if (unreadAlerts > 99) "99+" else "$unreadAlerts") }
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Notifications,
-                                        contentDescription = "Open alerts",
-                                        tint = DarkGreen
-                                    )
-                                }
-                            }
                         }
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            TextButton(
-                                onClick = {
-                                    page = "home"
-                                    search = ""
-                                    category = "All"
-                                }
-                            ) {
-                                Text("Back")
-                            }
 
-                            Text(
-                                "All food listings",
-                                fontSize = 19.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = search,
-                            onValueChange = { search = it },
-                            modifier = Modifier.weight(1f),
-                            placeholder = {
-                                Text(
-                                    "Search food or donors",
-                                    fontSize = 12.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Outlined.Search,
-                                    contentDescription = null
-                                )
-                            },
-                            singleLine = true,
-                            shape = RoundedCornerShape(13.dp),
-                            textStyle = LocalTextStyle.current.copy(
-                                fontSize = 13.sp
-                            ),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = Color.White,
-                                unfocusedContainerColor = Color.White,
-                                focusedBorderColor = Green,
-                                unfocusedBorderColor = Line
-                            )
-                        )
-
-                        FilledIconButton(
-                            onClick = {
-                                message =
-                                    "Nearby: listings with a map pin within 5 km of you\n" +
-                                            "Donation: free food\n" +
-                                            "For Sale: paid food\n" +
-                                            "Expiring Soon: urgent pickup or expiry\n\n" +
-                                            "Tap a category below to filter the listings."
-                            },
-                            modifier = Modifier.size(48.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = IconGreen,
-                                contentColor = DarkGreen
-                            )
-                        ) {
-                            Icon(
-                                Icons.Outlined.Tune,
-                                contentDescription = "Filter information"
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(10.dp))
-
-                    Row(
-                        modifier = Modifier.horizontalScroll(
-                            rememberScrollState()
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)
-                    ) {
-                        listOf(
-                            "All",
-                            "Nearby",
-                            "Donation",
-                            "For Sale",
-                            "Expiring Soon"
-                        ).forEach { label ->
-                            FilterChip(
-                                selected = category == label,
-                                onClick = {
-                                    category = label
-                                    if (label == "Nearby") refreshPhonePosition(askIfNeeded = true)
-                                },
-                                label = {
-                                    Text(label, fontSize = 12.sp)
-                                },
-                                shape = RoundedCornerShape(22.dp),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = Cream,
-                                    labelColor = Green,
-                                    selectedContainerColor = Green,
-                                    selectedLabelColor = Color.White
-                                ),
-                                border = BorderStroke(
-                                    1.dp,
-                                    Green.copy(alpha = 0.3f)
-                                )
-                            )
-                        }
-                    }
-
-                    locationLine?.let { line ->
-                        Text(
-                            line,
-                            modifier = Modifier.padding(top = 6.dp),
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp,
-                            color = Gray
-                        )
-                    }
-
-                    // Hide the general recommendations while filtering,
-                    // so the selected category's results are clear.
-                    if (
-                        page == "home" &&
-                        category == "All" &&
-                        search.isBlank()
-                    ) {
                         Spacer(Modifier.height(12.dp))
 
                         Row(
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                "✦",
-                                color = Color(0xFFFFA125),
-                                fontSize = 23.sp
-                            )
-
-                            Spacer(Modifier.width(6.dp))
-
-                            Text(
-                                if (discoveryPreferences.isActive) "For your preferences" else "Newest listings",
+                            OutlinedTextField(
+                                value = search,
+                                onValueChange = { search = it },
                                 modifier = Modifier.weight(1f),
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
+                                placeholder = {
+                                    Text(
+                                        "Search food or donors",
+                                        fontSize = 12.sp
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Outlined.Search,
+                                        contentDescription = null
+                                    )
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(13.dp),
+                                textStyle = LocalTextStyle.current.copy(
+                                    fontSize = 13.sp
+                                ),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedBorderColor = Green,
+                                    unfocusedBorderColor = Line
+                                )
                             )
 
-                            TextButton(
-                                onClick = {
-                                    page = "all"
-                                    category = "All"
-                                    search = ""
-                                    sort = "Newest"
-                                }
+                            IconButton(
+                                onClick = { filterHelp = true },
+                                modifier = Modifier.size(48.dp)
                             ) {
-                                Text("Browse all", fontSize = 12.sp)
+                                Icon(
+                                    Icons.Outlined.Info,
+                                    contentDescription = "About the filters",
+                                    tint = DarkGreen
+                                )
                             }
                         }
+
+                        Spacer(Modifier.height(10.dp))
 
                         Row(
                             modifier = Modifier.horizontalScroll(
                                 rememberScrollState()
                             ),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
                         ) {
-                            Surface(
-                                modifier = Modifier
-                                    .width(134.dp)
-                                    .height(180.dp),
-                                shape = RoundedCornerShape(15.dp),
-                                color = PaleGreen
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Eco,
-                                        contentDescription = null,
-                                        tint = Green,
-                                        modifier = Modifier.size(30.dp)
+                            listOf(
+                                "All",
+                                "Nearby",
+                                "Donation",
+                                "For Sale",
+                                "Expiring Soon"
+                            ).forEach { label ->
+                                FilterChip(
+                                    selected = category == label,
+                                    onClick = {
+                                        category = label
+                                        if (label == "Nearby") refreshPhonePosition(askIfNeeded = true)
+                                    },
+                                    label = {
+                                        Text(label, fontSize = 12.sp)
+                                    },
+                                    shape = RoundedCornerShape(22.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        containerColor = Cream,
+                                        labelColor = Green,
+                                        selectedContainerColor = Green,
+                                        selectedLabelColor = Color.White
+                                    ),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        Green.copy(alpha = 0.3f)
                                     )
-
-                                    Text(
-                                        "Help reduce food waste in your community.",
-                                        fontSize = 13.sp,
-                                        lineHeight = 17.sp
-                                    )
-
-                                    Button(
-                                        onClick = {
-                                            message = "Share surplus food and " +
-                                                    "discover available food in " +
-                                                    "your community."
-                                        },
-                                        shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(8.dp)
-                                    ) {
-                                        Text("Learn more", fontSize = 12.sp)
-                                    }
-                                }
-                            }
-
-                            if (preferredFoods.isEmpty() && !feedLoading) {
-                                Text("No matching food yet. You can still browse all listings below.",
-                                    modifier = Modifier.width(180.dp).padding(12.dp), color = Gray, fontSize = 13.sp)
-                            }
-                            preferredFoods.take(2).forEach { food ->
-                                RecommendationCard(
-                                    title = food.title,
-                                    photo = food.photo,
-                                    imageUrl = food.imageUrl,
-                                    price = food.price,
-                                    pickupLocation = food.pickupLocation,
-                                    status = food.status,
-                                    urgent = food.urgent,
-                                    onClick = { selectedFood = food }
                                 )
                             }
                         }
 
-                        Spacer(Modifier.height(18.dp))
-                        HorizontalDivider(color = Line)
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
+                        locationLine?.let { line ->
                             Text(
-                                when (category) {
-                                    "Nearby" -> "Food within 5 km"
-                                    "Donation" -> "Food for donation"
-                                    "For Sale" -> "Food for sale"
-                                    "Expiring Soon" -> "Expiring soon"
-                                    else -> "Available food"
-                                },
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            Text(
-                                "${visibleFoods.size} listings",
+                                line,
+                                modifier = Modifier.padding(top = 6.dp),
                                 fontSize = 11.sp,
+                                lineHeight = 15.sp,
                                 color = Gray
                             )
                         }
 
-                        Box {
-                            TextButton(
-                                onClick = { sortMenu = true },
-                                contentPadding = PaddingValues(0.dp)
+                        // Hide the general recommendations while filtering,
+                        // so the selected category's results are clear.
+                        if (
+                            page == "home" &&
+                            category == "All" &&
+                            search.isBlank()
+                        ) {
+                            Spacer(Modifier.height(12.dp))
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Sort: $sort", fontSize = 11.sp)
-                                Icon(
-                                    Icons.Outlined.ExpandMore,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(17.dp)
+                                Text(
+                                    "✦",
+                                    color = Color(0xFFFFA125),
+                                    fontSize = 23.sp
                                 )
+
+                                Spacer(Modifier.width(6.dp))
+
+                                Text(
+                                    if (discoveryPreferences.isActive) "For your preferences" else "Newest listings",
+                                    modifier = Modifier.weight(1f),
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                TextButton(
+                                    onClick = {
+                                        page = "all"
+                                        category = "All"
+                                        search = ""
+                                        sort = "Newest"
+                                    }
+                                ) {
+                                    Text("Browse all", fontSize = 12.sp)
+                                }
                             }
 
-                            DropdownMenu(
-                                expanded = sortMenu,
-                                onDismissRequest = { sortMenu = false }
+                            Row(
+                                modifier = Modifier.horizontalScroll(
+                                    rememberScrollState()
+                                ),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                listOf("Newest", "Nearest", "Name").forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option) },
-                                        onClick = {
-                                            sort = option
-                                            sortMenu = false
-                                            if (option == "Nearest") refreshPhonePosition(askIfNeeded = true)
+                                Surface(
+                                    modifier = Modifier
+                                        .width(134.dp)
+                                        .height(180.dp),
+                                    shape = RoundedCornerShape(15.dp),
+                                    color = PaleGreen
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.Eco,
+                                            contentDescription = null,
+                                            tint = Green,
+                                            modifier = Modifier.size(30.dp)
+                                        )
+
+                                        Text(
+                                            "Help reduce food waste in your community.",
+                                            fontSize = 13.sp,
+                                            lineHeight = 17.sp
+                                        )
+
+                                        Button(
+                                            onClick = { howItWorks = true },
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(8.dp)
+                                        ) {
+                                            Text("Learn more", fontSize = 12.sp)
                                         }
+                                    }
+                                }
+
+                                if (preferredFoods.isEmpty() && !feedLoading) {
+                                    Text("No matching food yet. You can still browse all listings below.",
+                                        modifier = Modifier.width(180.dp).padding(12.dp), color = Gray, fontSize = 13.sp)
+                                }
+                                preferredFoods.take(2).forEach { food ->
+                                    RecommendationCard(
+                                        title = food.title,
+                                        imageUrl = food.imageUrl,
+                                        hasPhoto = food.post.hasPhoto,
+                                        price = food.price,
+                                        pickupLocation = food.pickupLocation,
+                                        status = food.status,
+                                        urgent = food.urgent,
+                                        onClick = { selectedFood = food }
                                     )
                                 }
                             }
+
+                            Spacer(Modifier.height(18.dp))
+                            HorizontalDivider(color = Line)
                         }
-                    }
 
-                    Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(12.dp))
 
-                    if (visibleFoods.isEmpty()) {
-                        // Nearby without the phone's position: the line under the chips says why.
-                        if (category != "Nearby" || phonePin != null || feedLoading || feedError != null) Text(
-                            if (feedLoading) "Loading listings…" else if (feedError != null) "Could not load listings. Try again."
-                            else if (category == "Nearby") "No listings with a map pin within 5 km."
-                            else "No available food listings yet.",
-                            modifier = Modifier.padding(vertical = 20.dp),
-                            fontSize = 13.sp,
-                            color = Gray
-                        )
-
-                        TextButton(
-                            onClick = {
-                                search = ""
-                                category = "All"
-                            }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Clear filters")
-                        }
-                    }
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    when (category) {
+                                        "Nearby" -> "Food within 5 km"
+                                        "Donation" -> "Food for donation"
+                                        "For Sale" -> "Food for sale"
+                                        "Expiring Soon" -> "Expiring soon"
+                                        else -> "Available food"
+                                    },
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
 
-                    // All matching listings are shown; scroll to see more.
-                    visibleFoods.forEach { food ->
-                        key(food.id) {
-                            AvailableFoodCard(
-                                food = food,
-                                // Your own listings can't be bookmarked.
-                                canSave = food.donorId != currentProfile?.id,
-                                saved = food.id in savedIds,
-                                onToggleSave = { savedListingViewModel.toggle(food.id) },
-                                onClick = { selectedFood = food }
-                            )
+                                Text(
+                                    "${visibleFoods.size} listings",
+                                    fontSize = 11.sp,
+                                    color = Gray
+                                )
+                            }
+
+                            Box {
+                                TextButton(
+                                    onClick = { sortMenu = true },
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text("Sort: $sort", fontSize = 11.sp)
+                                    Icon(
+                                        Icons.Outlined.ExpandMore,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                }
+
+                                DropdownMenu(
+                                    expanded = sortMenu,
+                                    onDismissRequest = { sortMenu = false }
+                                ) {
+                                    listOf("Newest", "Nearest", "Name").forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option) },
+                                            onClick = {
+                                                sort = option
+                                                sortMenu = false
+                                                if (option == "Nearest") refreshPhonePosition(askIfNeeded = true)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         Spacer(Modifier.height(10.dp))
+
+                        if (visibleFoods.isEmpty()) {
+                            // Nearby without the phone's position: the line under the chips says why.
+                            if (category != "Nearby" || phonePin != null || feedLoading || feedError != null) Text(
+                                if (feedLoading) "Loading listings…" else if (feedError != null) "Could not load listings. Try again."
+                                else if (category == "Nearby") "No listings with a map pin within 5 km."
+                                else "No available food listings yet.",
+                                modifier = Modifier.padding(vertical = 20.dp),
+                                fontSize = 13.sp,
+                                color = Gray
+                            )
+
+                            TextButton(
+                                onClick = {
+                                    search = ""
+                                    category = "All"
+                                }
+                            ) {
+                                Text("Clear filters")
+                            }
+                        }
+
+                        // All matching listings are shown; scroll to see more.
+                        visibleFoods.forEach { food ->
+                            key(food.id) {
+                                AvailableFoodCard(
+                                    food = food,
+                                    // Your own listings can't be bookmarked.
+                                    canSave = food.donorId != currentProfile?.id,
+                                    saved = food.id in savedIds,
+                                    onToggleSave = { savedListingViewModel.toggle(food.id) },
+                                    onClick = { selectedFood = food }
+                                )
+                            }
+
+                            Spacer(Modifier.height(10.dp))
+                        }
                     }
                 }
             }
@@ -2046,11 +2092,6 @@ private fun HomeScreen(
                                     "Profile" -> {
                                         page = "profile"
                                     }
-
-                                    else -> {
-                                        message = "$label will open here. " +
-                                                "This screen will be added next."
-                                    }
                                 }
                             },
                         verticalArrangement = Arrangement.Center,
@@ -2113,18 +2154,31 @@ private fun HomeScreen(
         }
     }
 
-    if (message.isNotEmpty()) {
+    if (filterHelp) {
         AlertDialog(
-            onDismissRequest = { message = "" },
-            title = { Text("Salu-Salo") },
-            text = { Text(message) },
+            onDismissRequest = { filterHelp = false },
+            title = { Text("About the filters") },
+            text = {
+                Text(
+                    "Nearby: listings with a map pin within 5 km of you\n" +
+                            "Donation: free food\n" +
+                            "For Sale: paid food\n" +
+                            "Expiring Soon: listings that expire within 3 hours\n\n" +
+                            "Tap a category below to filter the listings."
+                )
+            },
             confirmButton = {
-                TextButton(onClick = { message = "" }) {
+                TextButton(onClick = { filterHelp = false }) {
                     Text("OK")
                 }
             }
         )
+    }
 
+    if (howItWorks) {
+        ActionPage(heading = "How Salu-Salo works", onBack = { howItWorks = false }) {
+            HowItWorksSettings(pickups = false)
+        }
     }
 
     selectedFood?.let { food ->
@@ -2196,7 +2250,6 @@ private fun FoodPost.toHomeFood(distanceMeters: Double?): HomeFood {
         pickupLocation = pickupLocation,
         donorName = donorName?.takeIf { it.isNotBlank() } ?: "Donor name unavailable",
         donorRating = donorRatingLabel,
-        photo = R.drawable.food_produce,
         imageUrl = displayImageUrl,
         urgent = urgent,
         description = description?.takeIf { it.isNotBlank() },
@@ -2218,7 +2271,6 @@ private data class HomeFood(
     val donorName: String,
     // "★ 4.7 (12)", or null when the donor has no reviews.
     val donorRating: String? = null,
-    val photo: Int,
     val imageUrl: String? = null,
     val urgent: Boolean,
     val description: String? = null,
@@ -2232,8 +2284,8 @@ private data class HomeFood(
 @Composable
 private fun RecommendationCard(
     title: String,
-    photo: Int,
     imageUrl: String?,
+    hasPhoto: Boolean,
     price: String,
     pickupLocation: String,
     status: String,
@@ -2250,37 +2302,14 @@ private fun RecommendationCard(
         shadowElevation = 2.dp
     ) {
         Column {
-            Box {
-                var imageFailed by remember(imageUrl) { mutableStateOf(false) }
-                if (imageUrl != null && !imageFailed) {
-                    AsyncImage(
-                        model = imageUrl,
-                        contentDescription = title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(94.dp),
-                        onError = { imageFailed = true }
-                    )
-                } else if (imageUrl == null) {
-                    Image(
-                        painter = painterResource(photo),
-                        contentDescription = title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(94.dp)
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(94.dp)
-                            .background(Color(0xFFF2F6E6)),
-                        contentAlignment = Alignment.Center
-                    ) { Text("Image unavailable", fontSize = 10.sp, color = Gray) }
-                }
-            }
+            ListingPhoto(
+                imageUrl = imageUrl,
+                hasPhoto = hasPhoto,
+                contentDescription = title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(94.dp)
+            )
 
             Column(Modifier.padding(8.dp)) {
                 Text(
@@ -2339,28 +2368,12 @@ private fun AvailableFoodCard(
             modifier = Modifier.heightIn(min = 116.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            var imageFailed by remember(food.id, food.imageUrl) { mutableStateOf(false) }
-            if (food.imageUrl != null && !imageFailed) {
-                AsyncImage(
-                    model = food.imageUrl,
-                    contentDescription = food.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp)),
-                    onError = { imageFailed = true }
-                )
-            } else if (food.imageUrl == null) {
-                Image(
-                    painter = painterResource(food.photo),
-                    contentDescription = food.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp))
-                )
-            } else {
-                Box(
-                    modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFFF2F6E6)),
-                    contentAlignment = Alignment.Center
-                ) { Text("Image unavailable", fontSize = 10.sp, color = Gray) }
-            }
+            ListingPhoto(
+                imageUrl = food.imageUrl,
+                hasPhoto = food.post.hasPhoto,
+                contentDescription = food.title,
+                modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp))
+            )
 
             Column(
                 modifier = Modifier
@@ -2498,6 +2511,11 @@ private fun FoodDetailsScreen(
     var expanded by rememberSaveable(food.id) {
         mutableStateOf(false)
     }
+    // True when the description is longer than its first 4 lines.
+    var descriptionOverflows by remember(food.id) { mutableStateOf(false) }
+    // The photo the full-screen view opened at; null while it's closed.
+    var viewerPage by rememberSaveable(food.id) { mutableStateOf<Int?>(null) }
+    val scope = rememberCoroutineScope()
     var notice by remember { mutableStateOf("") }
     var noticeTitle by remember { mutableStateOf("") }
     var foodAction by rememberSaveable(food.id) {
@@ -2535,7 +2553,7 @@ private fun FoodDetailsScreen(
             donorEmailVerified = food.post.donorEmailVerified,
             donorRatingAverage = food.post.donorRatingAverage,
             donorReviewCount = food.post.donorReviewCount,
-            photo = food.photo,
+            hasPhoto = food.post.hasPhoto,
             pickupLocation = food.pickupLocation,
             pickupPin = food.post.pickupPin,
             distanceMeters = food.distanceMeters,
@@ -2575,7 +2593,7 @@ private fun FoodDetailsScreen(
             foodPostId = food.id,
             foodTitle = food.title,
             donorName = post.donorName?.takeIf { it.isNotBlank() },
-            photo = food.photo,
+            hasPhoto = post.hasPhoto,
             imageUrl = food.imageUrl,
             profileName = profileName,
             quantity = quantity,
@@ -2610,6 +2628,25 @@ private fun FoodDetailsScreen(
     }
     val photoCount = 1 + post.extraImagePaths.size
     val pagerState = rememberPagerState(pageCount = { photoCount })
+    // Only a listing with a stored photo opens the full-screen view.
+    fun photoModifier(index: Int) = Modifier
+        .fillMaxSize()
+        .clickable(enabled = post.hasPhoto, onClickLabel = "View full screen") { viewerPage = index }
+
+    viewerPage?.let { start ->
+        val loaded = extraPhotos
+        FullScreenPhotos(
+            title = food.title,
+            imageUrls = listOf(food.imageUrl) + List(post.extraImagePaths.size) { loaded?.getOrNull(it) },
+            hasPhotos = listOf(post.hasPhoto) + List(post.extraImagePaths.size) { loaded != null },
+            startPage = start.coerceIn(0, photoCount - 1),
+            onClose = { page ->
+                viewerPage = null
+                // The header shows the photo that was being viewed.
+                scope.launch { pagerState.scrollToPage(page) }
+            }
+        )
+    }
 
     val orange = Color(0xFFE85B13)
 
@@ -2634,49 +2671,23 @@ private fun FoodDetailsScreen(
                     modifier = Modifier.fillMaxSize()
                 ) { index ->
                     if (index == 0) {
-                        var imageFailed by remember(food.id, food.imageUrl) { mutableStateOf(false) }
-                        if (food.imageUrl != null && !imageFailed) {
-                            AsyncImage(
-                                model = food.imageUrl,
-                                contentDescription = food.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                                onError = { imageFailed = true }
-                            )
-                        } else if (food.imageUrl == null) {
-                            Image(
-                                painter = painterResource(food.photo),
-                                contentDescription = food.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize().background(Color(0xFFF2F6E6)),
-                                contentAlignment = Alignment.Center
-                            ) { Text("Image unavailable", fontSize = 12.sp, color = Gray) }
-                        }
+                        ListingPhoto(
+                            imageUrl = food.imageUrl,
+                            hasPhoto = food.post.hasPhoto,
+                            contentDescription = food.title,
+                            modifier = photoModifier(index),
+                            textSize = 12.sp
+                        )
                     } else {
                         val loaded = extraPhotos
-                        val url = loaded?.getOrNull(index - 1)
-                        var imageFailed by remember(food.id, url) { mutableStateOf(false) }
-                        if (url != null && !imageFailed) {
-                            AsyncImage(
-                                model = url,
-                                contentDescription = "${food.title}, photo ${index + 1}",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                                onError = { imageFailed = true }
-                            )
-                        } else {
-                            // Still signing (loaded == null), or the photo can't be shown.
-                            Box(
-                                modifier = Modifier.fillMaxSize().background(Color(0xFFF2F6E6)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (loaded != null) Text("Image unavailable", fontSize = 12.sp, color = Gray)
-                            }
-                        }
+                        // A plain tile while photos 2–4 are still being signed (loaded == null).
+                        ListingPhoto(
+                            imageUrl = loaded?.getOrNull(index - 1),
+                            hasPhoto = loaded != null,
+                            contentDescription = "${food.title}, photo ${index + 1}",
+                            modifier = photoModifier(index),
+                            textSize = 12.sp
+                        )
                     }
                 }
 
@@ -2706,7 +2717,7 @@ private fun FoodDetailsScreen(
                     )
                 ) {
                     Icon(
-                        Icons.Outlined.ArrowBack,
+                        Icons.AutoMirrored.Outlined.ArrowBack,
                         contentDescription = "Back to food listings"
                     )
                 }
@@ -2809,8 +2820,12 @@ private fun FoodDetailsScreen(
 
                 Spacer(Modifier.height(20.dp))
 
-                // Four summary columns
-                Row(Modifier.fillMaxWidth()) {
+                // Four equal summary columns, as tall as the tallest, so the captions line up.
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min)
+                ) {
                     FoodSummaryItem(
                         value = food.quantity,
                         caption = "Available",
@@ -2832,7 +2847,7 @@ private fun FoodDetailsScreen(
                     FoodSummaryItem(
                         value = food.status,
                         caption = "Status",
-                        modifier = Modifier.weight(1.25f),
+                        modifier = Modifier.weight(1f),
                         valueColor = if (food.urgent) orange else Green
                     )
                 }
@@ -2843,23 +2858,14 @@ private fun FoodDetailsScreen(
                     description,
                     fontSize = 13.sp,
                     lineHeight = 20.sp,
-                    color = DarkGreen
+                    color = DarkGreen,
+                    maxLines = if (expanded) Int.MAX_VALUE else 4,
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { layout -> if (!expanded) descriptionOverflows = layout.hasVisualOverflow }
                 )
 
-                if (expanded) {
-                    Spacer(Modifier.height(8.dp))
-
-                    Text(
-                        "Coordinate your pickup with the provider. " +
-                                "Confirm the food contents, condition, and " +
-                                "collection instructions before requesting it.",
-                        fontSize = 13.sp,
-                        lineHeight = 20.sp,
-                        color = Gray
-                    )
-                }
-
-                TextButton(
+                // Only a description longer than 4 lines has Read more.
+                if (expanded || descriptionOverflows) TextButton(
                     onClick = { expanded = !expanded },
                     contentPadding = PaddingValues(0.dp)
                 ) {
@@ -3169,21 +3175,26 @@ private fun FoodSummaryItem(
     modifier: Modifier,
     valueColor: Color = DarkGreen
 ) {
+    // The value on top (up to 2 lines), the caption at the bottom.
     Column(
-        modifier = modifier.padding(end = 6.dp)
+        modifier = modifier
+            .fillMaxHeight()
+            .padding(end = 6.dp),
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
             value,
             fontSize = 12.sp,
             lineHeight = 16.sp,
             fontWeight = FontWeight.SemiBold,
-            color = valueColor
+            color = valueColor,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
-
-        Spacer(Modifier.height(5.dp))
 
         Text(
             caption,
+            modifier = Modifier.padding(top = 5.dp),
             fontSize = 10.sp,
             color = Gray
         )

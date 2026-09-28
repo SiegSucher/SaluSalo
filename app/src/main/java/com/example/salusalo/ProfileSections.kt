@@ -5,8 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.foundation.Image
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +25,7 @@ import com.example.salusalo.model.reservationTotal
 import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.formatPeso
 import com.example.salusalo.model.isExpired
+import com.example.salusalo.model.hasPhoto
 import androidx.compose.foundation.background
 import coil3.compose.AsyncImage
 import com.example.salusalo.data.PasswordChangeException
@@ -42,13 +42,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 
 private val SectionGreen = Color(0xFF347523)
 private val SectionCream = Color(0xFFFCFBF6)
@@ -182,10 +180,9 @@ fun ProfileSections(
 
     Dialog(
         onDismissRequest = { back() },
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false
-        )
+        properties = EdgeToEdgeDialog
     ) {
+        DarkSystemBarIcons()
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = SectionCream
@@ -206,7 +203,7 @@ fun ProfileSections(
                             .padding(8.dp)
                     ) {
                         IconButton(onClick = { back() }) {
-                            Icon(Icons.Outlined.ArrowBack, "Back", tint = SectionGreen)
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = SectionGreen)
                         }
 
                         Column(
@@ -962,33 +959,16 @@ private fun SavedFallbackPhoto(imageUrl: String?, name: String?) {
 /** A saved listing's cover, with the same fallbacks as the Home cards. */
 @Composable
 private fun SavedListingPhoto(post: FoodPost) {
-    val imageUrl = post.displayImageUrl
-    var imageFailed by remember(post.id, imageUrl) { mutableStateOf(false) }
-    val modifier = Modifier
-        .fillMaxWidth()
-        .height(170.dp)
     Surface(shape = RoundedCornerShape(16.dp)) {
-        if (imageUrl != null && !imageFailed) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = post.name,
-                contentScale = ContentScale.Crop,
-                modifier = modifier,
-                onError = { imageFailed = true }
-            )
-        } else if (post.imageUrl.isNullOrBlank()) {
-            Image(
-                painter = painterResource(R.drawable.food_produce),
-                contentDescription = post.name,
-                contentScale = ContentScale.Crop,
-                modifier = modifier
-            )
-        } else {
-            Box(
-                modifier = modifier.background(SectionPale),
-                contentAlignment = androidx.compose.ui.Alignment.Center
-            ) { Text("Image unavailable", fontSize = 12.sp) }
-        }
+        ListingPhoto(
+            imageUrl = post.displayImageUrl,
+            hasPhoto = post.hasPhoto,
+            contentDescription = post.name,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(170.dp),
+            textSize = 12.sp
+        )
     }
 }
 
