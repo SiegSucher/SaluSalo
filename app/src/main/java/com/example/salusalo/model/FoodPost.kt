@@ -32,6 +32,9 @@ data class FoodPost(
     @SerialName("storage_notes") val storageNotes: String? = null,
     /** Photos 2–4 as private food-images paths; [imageUrl] stays the cover. */
     @SerialName("extra_image_paths") val extraImagePaths: List<String> = emptyList(),
+    /** The pickup pin; both null for listings without one (see [pickupPin] in Geo.kt). */
+    @SerialName("pickup_latitude") val pickupLatitude: Double? = null,
+    @SerialName("pickup_longitude") val pickupLongitude: Double? = null,
     @Transient val displayImageUrl: String? = null,
     /** The donor's name from get_listing_donor_profiles(); null if it could not be loaded. */
     @Transient val donorName: String? = null,
@@ -75,6 +78,9 @@ data class NewFoodPost(
     val allergens: String?,
     @SerialName("storage_notes") val storageNotes: String?,
     @SerialName("extra_image_paths") val extraImagePaths: List<String>,
+    // The pickup pin: required for a new listing, so no defaults and never null.
+    @SerialName("pickup_latitude") val pickupLatitude: Double,
+    @SerialName("pickup_longitude") val pickupLongitude: Double,
     val status: FoodPostStatus = FoodPostStatus.AVAILABLE
 )
 
@@ -120,10 +126,15 @@ data class FoodPostDraft(
     val pickupEnd: String?,
     val handover: ListingHandover?,
     val allergens: String,
-    val storageNotes: String
+    val storageNotes: String,
+    val pickupPin: GeoPin
 )
 
-/** The fields update_my_food_post() may change. Quantity, unit and photos never change. */
+/**
+ * The fields update_my_food_post_with_pin() may change. Quantity, unit and
+ * photos never change. [pickupPin] null keeps the stored pin (or its absence):
+ * a pin can be added or moved, never removed.
+ */
 data class FoodPostEdit(
     val name: String,
     val description: String,
@@ -135,7 +146,8 @@ data class FoodPostEdit(
     val pickupEnd: String?,
     val handover: ListingHandover?,
     val allergens: String,
-    val storageNotes: String
+    val storageNotes: String,
+    val pickupPin: GeoPin?
 )
 
 /** True when the listing's expiry has passed, whatever its stored status. */
