@@ -169,6 +169,17 @@ fun isPickupStartAllowed(startMillis: Long, nowMillis: Long): Boolean =
 fun FoodPost.isExpired(now: java.time.Instant = java.time.Instant.now()): Boolean =
     parseTimestamp(expirationDate)?.let { !it.isAfter(now) } ?: false
 
+/** "Expires soon" means less than this long before the listing's expiry: 3 hours. */
+const val EXPIRES_SOON_SECONDS = 3 * 60 * 60L
+
+/**
+ * True when the listing expires less than [EXPIRES_SOON_SECONDS] after [now]
+ * (or has already expired). Home's "Expires soon", the Expiring Soon chip and
+ * the recommendations' expiry boost all use it. False when the expiry can't be read.
+ */
+fun FoodPost.expiresSoon(now: java.time.Instant): Boolean =
+    parseTimestamp(expirationDate)?.isBefore(now.plusSeconds(EXPIRES_SOON_SECONDS)) == true
+
 /** Formats pesos with two decimals, e.g. 45.1 -> "₱45.10". */
 fun formatPeso(amount: BigDecimal): String =
     "₱" + amount.setScale(2, RoundingMode.HALF_UP).toPlainString()

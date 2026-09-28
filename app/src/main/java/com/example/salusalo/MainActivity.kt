@@ -5,6 +5,7 @@ import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.ListingHandover
 import com.example.salusalo.model.ReportTarget
 import com.example.salusalo.model.donorRatingLabel
+import com.example.salusalo.model.expiresSoon
 import com.example.salusalo.model.hasPhoto
 import com.example.salusalo.model.NEARBY_RADIUS_METERS
 import com.example.salusalo.model.distanceLabel
@@ -2276,8 +2277,7 @@ private fun HomeScreen(
 }
 
 private fun FoodPost.toHomeFood(distanceMeters: Double?): HomeFood {
-    val expiration = parseTimestamp(expirationDate)
-    val urgent = expiration?.isBefore(Instant.now().plusSeconds(3 * 60 * 60)) == true
+    val urgent = expiresSoon(Instant.now())
     return HomeFood(
         id = id,
         donorId = donorId,
