@@ -129,6 +129,16 @@ Run `migrations/20261003_phase5_maps.sql` by hand in the SQL Editor after `20261
 
 After running it, run `tests/phase5_maps_check.sql` and `tests/phase5_maps_live_safety_check.sql` (below).
 
+## Profile bio (Mika's PR #10)
+
+Run `migrations/20261004_profile_bio.sql` by hand in the SQL Editor after `20261003_phase5_maps.sql`, **before** installing the build with the new Edit Profile page: its Save changes calls `update_my_profile_details`, so without the migration it fails. It is safe to run again. **Older builds are unaffected:** they ignore the new column and still rename through `update_my_profile_name`, which this file does not change.
+
+- **`users.bio text`**, nullable, with the check `users_bio_length_check` (at most 160 characters), which also covers a profile's first insert.
+- **`update_my_profile_details(p_name, p_bio)`**: SECURITY DEFINER with `search_path = public`, executable by `authenticated` only. It takes the caller from the token (`auth.jwt() ->> 'sub'`), changes only that user's name (1–120 characters) and bio (at most 160; blank is stored as NULL), and never changes `role`, `email` or `firebase_uid`.
+- **Who sees the bio:** only its owner, because `users` rows can be read only by their owner. No policy or grant changes; clients still have SELECT and INSERT only on `users`.
+
+After running it (in the same run is fine), run `tests/profile_bio_check.sql`: it only reads the catalog and returns 6 rows (PASS or FAIL): the column, the check, the function's settings and grants, that it takes the caller from the token and never sets `role`, `email` or `firebase_uid`, that clients still have no UPDATE on `users`, and that `update_my_profile_name` still exists.
+
 ## Safety checks (`tests/`)
 
 The files in `tests/` are not migrations and change nothing. `tests/phase4_live_safety_check.sql` checks that the live Phase 4 rules still refuse what they should. Paste it into the SQL Editor (role `postgres`) and run it. It pretends to be the two participants of the most recent chat and the newest other account, tries forbidden actions, and reports each check as PASS, FAIL or SKIP. It always ends with an error on purpose (`SAFETY CHECK FINISHED: …`); the error rolls back everything the check did. It needs at least one chat with messages, and a third account for the outsider checks.
