@@ -65,7 +65,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 
 - **Auth flows.** Sign-up (with display name), sign-in, password-reset email and sign-out through Firebase, in `SaluSaloApp()` (`MainActivity.kt` L113–325).
   - An existing session is restored on launch (`LaunchedEffect(firebaseAuth.currentUser?.uid)`, L156–160).
-  - System Back on the Home page signs the user out (L162–171).
+  - System Back on the Home page signed the user out (L162–171) until §17; since then it closes the app, and only Profile's Log out signs out.
 - **Profile creation.** After sign-up the ID token is force-refreshed so it includes the `role: authenticated` claim, which a Cloud Function adds outside this repo. `UserRepository.loadOrCreateCurrentProfile()` then finds or creates the `public.users` row.
   - New rows are always `RECIPIENT`: the DB default plus the RLS insert check.
 - **Supabase tokens.** `SupabaseClientProvider` sends the Firebase ID token to Supabase, and RLS checks it via `is_salusalo_firebase_jwt()`.
@@ -433,7 +433,7 @@ order by r.created_at desc;
   4. `20260924_phase3_donor_recipient_names.sql`
 - Supabase Third-Party Auth is configured for Firebase project `salusalo`, and both accounts receive the `role: authenticated` custom claim.
 - A current debug build is installed, with a valid `local.properties` (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`).
-- There are two accounts with different emails. Use two devices/emulators, or sign out between steps (Profile → Log out; system Back on the Home page also signs out).
+- There are two accounts with different emails. Use two devices/emulators, or sign out between steps (Profile → Log out).
 - There is no pull-to-refresh:
   - **Feed:** the Home feed reloads on sign-in, after a reservation, and when leaving Post with its on-screen **Back** button.
   - **Activity:** the Activity tab reloads each time it is opened.
@@ -1830,7 +1830,7 @@ Commits: `2404989` (the PR #10 merge in the docs), `9281f61` (photo tile, unused
   - `ActionPage` (the Reserve note on Review reservation, Report, Rate);
   - Edit Listing (`EditListingDialog`);
   - the Profile pages dialog (`ProfileSections.kt`: Edit Profile, Change Password, the pickup area).
-- **Welcome** (`MainActivity.kt`): the app opens on the welcome pages only until this phone has seen them (`welcome_seen` in `salusalo_session`), set by Get Started, the new "Already have an account? Sign in" link under the button, or any account reaching Home; a saved "Keep me signed in" choice (an older build was used) counts as seen. Otherwise it opens on Sign In, where Back closes the app; Back on Create Account and Forgot password goes to Sign In. The three images are described as "People sharing a box of vegetables and bread".
+- **Welcome** (`MainActivity.kt`): the app opens on the welcome pages only until this phone has seen them (`welcome_seen` in `salusalo_session`), set by Get Started, the new "Already have an account? Sign in" link under the button, or any account reaching Home; a saved "Keep me signed in" choice (an older build was used) counts as seen. Otherwise it opens on Sign In, where Back closes the app; Back on Create Account and Forgot password goes to Sign In. **Back on Home closes the app instead of signing out** (the developer's choice during the §17.4 test; it had signed out since the first Firebase commit, `c3c6749`); only Profile's Log out signs out. The three images are described as "People sharing a box of vegetables and bread".
 - **Removed:** the five `food_*.png` images; `clearLocalAccountData()`; the Activity statuses Pending, Confirmed and Saved locally; `ProfileToggle` and `ProfileStat`; `ui/theme/` (`Color.kt`, `Theme.kt`, `Type.kt`) and `res/values/colors.xml` (`themes.xml` keeps `Theme.SaluSalo`); `UserProfile.phoneNumber`; `UserRepository.updateMyName()` (the SQL function stays for older builds); `FoodViewModel.clearError()`; an unused local on Review reservation; Home's "Salu-Salo" message dialog and the unreachable bottom-bar branch.
 - **Icons:** ArrowBack, Logout, FormatListBulleted, HelpOutline and MenuBook use `Icons.AutoMirrored.Outlined`.
 - **Illustrations:** `welcome_reference` and `signin_reference` are lossy WebP at quality 90 (both PNGs were fully opaque); a side-by-side check at 1:1 and 3× zoom showed no visible difference.
@@ -1885,7 +1885,7 @@ Each check is tagged [New] or [Regression]. Home reloads by pulling the list dow
 **A (phone 1)**
 
 8. [Regression, New] Alerts: "New reservation" ("<B> reserved 1 pcs of AUDIT.") and "New message from <B>". Activity → My Donations → the `AUDIT` record shows its photo → "Mark claimed" → "Reservation marked as claimed."
-9. [Regression, New] Home → system Back: A is signed out and Sign In shows (no welcome pages). Back again: the app closes. Open it and sign in as A: Home.
+9. [New, Regression] Home → system Back: the app closes and A stays signed in. Open it again: Home, still signed in. Profile → Log out → Sign In (no welcome pages). Back: the app closes. Open it and sign in as A: Home.
 
 **Left out of the short test (not tested unless run separately):**
 - "Image unavailable" (needs a photo missing from Storage or one that can't be signed), the per-photo fallback that follows, and a plain tile for a listing without a photo (new listings always have one).

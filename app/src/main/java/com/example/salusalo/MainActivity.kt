@@ -270,10 +270,10 @@ private fun SaluSaloApp() {
         }
     }
 
-    // Back on Home signs out; on Create Account and Forgot password it goes to
-    // Sign In. On Sign In and the welcome pages it closes the app.
-    BackHandler(enabled = screen == "home" || screen == "signup" || screen == "forgot") {
-        if (screen == "home") logOut() else screen = "signin"
+    // Back on Create Account and Forgot password goes to Sign In. On Home, Sign In
+    // and the welcome pages it closes the app; Home never signs out (Profile's Log out does).
+    BackHandler(enabled = screen == "signup" || screen == "forgot") {
+        screen = "signin"
     }
 
     Surface(

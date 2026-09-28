@@ -61,7 +61,7 @@ Paths below are relative to `app/src/main/java/com/example/salusalo/`.
 - `SaluSaloApp()` in `MainActivity.kt` holds `screen` (`welcome | signin | signup | forgot | home`).
   - It starts at `welcome` only until this phone has seen the welcome pages (`welcome_seen` in `salusalo_session`, or a saved `keep_signed_in`; since §17), otherwise at `signin`.
   - It runs Firebase sign-in, sign-up and reset, then `UserRepository.loadOrCreateCurrentProfile()` before entering `home`.
-  - System Back on the Home page calls `logOut()`; on Create Account and Forgot password it goes to Sign In; on Sign In and the welcome pages it closes the app.
+  - System Back on Home closes the app without signing out (since §17; before, it called `logOut()`); only Profile's Log out signs out. On Create Account and Forgot password Back goes to Sign In; on Sign In and the welcome pages it closes the app.
 - `HomeScreen()` (also in `MainActivity.kt`) holds `page` (`home | all | messages | alerts | post | activity | profile`; the `recommended` page was removed in §11) plus the bottom bar.
   - Food details open as a full-screen `Dialog` (`FoodDetailsScreen`).
   - It creates the ViewModels with `viewModel(key = "food-$profileId")` / `"reservation-$profileId"` / `"messages-$profileId"` / `"notifications-$profileId"` / `"saved-$profileId"`, so each account gets its own instances. They live in the Activity's `ViewModelStore` and are reused if the same account signs in again; `clearSession()` empties their lists when `HomeScreen` is disposed.
