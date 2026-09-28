@@ -11,6 +11,7 @@ import com.example.salusalo.model.NEARBY_RADIUS_METERS
 import com.example.salusalo.model.distanceLabel
 import com.example.salusalo.model.distanceMeters
 import com.example.salusalo.model.pickupPin
+import com.example.salusalo.model.recommendListings
 import com.example.salusalo.data.PhoneLocation
 import com.example.salusalo.data.PhoneLocationResult
 import com.example.salusalo.model.parseTimestamp
@@ -1354,6 +1355,12 @@ private fun HomeScreen(
     val savedListingViewModel: SavedListingViewModel = viewModel(key = "saved-$sessionKey")
     val savedIds by savedListingViewModel.savedIds.collectAsStateWithLifecycle()
     val savedMessage by savedListingViewModel.message.collectAsStateWithLifecycle()
+    val savedLoaded by savedListingViewModel.loaded.collectAsStateWithLifecycle()
+    val savedLoadFailed by savedListingViewModel.loadFailed.collectAsStateWithLifecycle()
+    // This account's reservations and reviews, for "Recommended for you".
+    val myReservations by reservationViewModel.myReservations.collectAsStateWithLifecycle()
+    val myReviews by reservationViewModel.myReviews.collectAsStateWithLifecycle()
+    val historyLoaded by reservationViewModel.historyLoaded.collectAsStateWithLifecycle()
     val activeChat by messageViewModel.active.collectAsStateWithLifecycle()
     val chatOpening by messageViewModel.opening.collectAsStateWithLifecycle()
     val messageError by messageViewModel.message.collectAsStateWithLifecycle()
@@ -1425,6 +1432,8 @@ private fun HomeScreen(
     }
     // Bookmarks load once per session, so the icons show the right state at once.
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { savedListingViewModel.start(it) } }
+    // Reservations and reviews load when Home starts, for "Recommended for you".
+    LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { reservationViewModel.refresh() } }
     // A new alert plays the phone's notification sound while the app is on
     // screen, unless it is a message in the chat that is open. The switch is
     // read when the alert arrives.
@@ -1500,6 +1509,31 @@ private fun HomeScreen(
     val foods = remotePosts.map { it.toHomeFood(distanceTo(it)) }
     val discoveryPreferences = rememberDiscoveryPreferences(sessionKey)
     val preferredFoods = remotePosts.filter { discoveryPreferences.matches(it) }.map { it.toHomeFood(distanceTo(it)) }
+    // "Recommended for you": content-based filtering on this phone (model/Recommendations.kt),
+    // from this account's reservations, reviews and saves. Null until they have loaded, and
+    // when the account has neither reserved nor saved anything; nothing is stored or sent.
+    // The hour is a key so the expiry boost moves up while Home stays open.
+    val recommendations = remember(
+        remotePosts, myReservations, myReviews, savedIds, discoveryPreferences,
+        currentProfile?.id, phonePin, historyLoaded, savedLoaded, hour
+    ) {
+        if (historyLoaded == true && savedLoaded) {
+            recommendListings(
+                remotePosts, currentProfile?.id, myReservations, myReviews, savedIds,
+                Instant.now(), phonePin
+            ) { discoveryPreferences.matches(it) }
+        } else null
+    }
+    // The first row waits (no title, no cards) until both have loaded or failed.
+    // A failure counts as finished: the row then shows "For your preferences" or
+    // "Newest listings", as before, so it never waits for the rest of the session.
+    val firstRowWaiting = currentProfile != null &&
+        (historyLoaded == null || (!savedLoaded && !savedLoadFailed))
+    val firstRowFoods: List<Pair<HomeFood, String?>> = when {
+        firstRowWaiting -> emptyList()
+        recommendations != null -> recommendations.map { it.post.toHomeFood(distanceTo(it.post)) to it.reason }
+        else -> preferredFoods.take(5).map { it to null }
+    }
 
     val visibleFoods = foods.filter { food ->
         val matchesSearch =
@@ -1875,7 +1909,12 @@ private fun HomeScreen(
                                 Spacer(Modifier.width(6.dp))
 
                                 Text(
-                                    if (discoveryPreferences.isActive) "For your preferences" else "Newest listings",
+                                    when {
+                                        firstRowWaiting -> ""
+                                        recommendations != null -> "Recommended for you"
+                                        discoveryPreferences.isActive -> "For your preferences"
+                                        else -> "Newest listings"
+                                    },
                                     modifier = Modifier.weight(1f),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold
@@ -1933,11 +1972,11 @@ private fun HomeScreen(
                                     }
                                 }
 
-                                if (preferredFoods.isEmpty() && !feedLoading) {
+                                if (!firstRowWaiting && firstRowFoods.isEmpty() && !feedLoading) {
                                     Text("No matching food yet. You can still browse all listings below.",
                                         modifier = Modifier.width(180.dp).padding(12.dp), color = Gray, fontSize = 13.sp)
                                 }
-                                preferredFoods.take(2).forEach { food ->
+                                firstRowFoods.forEach { (food, reason) ->
                                     RecommendationCard(
                                         title = food.title,
                                         imageUrl = food.imageUrl,
@@ -1945,6 +1984,7 @@ private fun HomeScreen(
                                         price = food.price,
                                         pickupLocation = food.pickupLocation,
                                         status = food.status,
+                                        reason = reason,
                                         urgent = food.urgent,
                                         onClick = { selectedFood = food }
                                     )
@@ -2204,7 +2244,11 @@ private fun HomeScreen(
                             "Donation: free food\n" +
                             "For Sale: paid food\n" +
                             "Expiring Soon: listings that expire within 3 hours\n\n" +
-                            "Tap a category below to filter the listings."
+                            "Tap a category below to filter the listings.\n\n" +
+                            "Recommended for you: once you have reserved or saved food, the first row " +
+                            "shows listings like it, leaving out your own, saved and reserved ones. " +
+                            "Food that expires soon or is near you moves up. It is worked out on this " +
+                            "phone, and nothing about it is sent."
                 )
             },
             confirmButton = {
@@ -2328,9 +2372,13 @@ private fun RecommendationCard(
     price: String,
     pickupLocation: String,
     status: String,
+    /** Why "Recommended for you" chose this listing; shown in place of [status]. */
+    reason: String?,
     urgent: Boolean,
     onClick: () -> Unit
 ) {
+    // The line heights are explicit so a two-line reason fits the fixed height:
+    // 94 photo + 8 + 16 title + 4 + 16 price row + 4 + 28 reason + 8 = 178 dp.
     Surface(
         modifier = Modifier
             .width(142.dp)
@@ -2354,6 +2402,7 @@ private fun RecommendationCard(
                 Text(
                     title,
                     fontSize = 12.sp,
+                    lineHeight = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1
                 )
@@ -2364,13 +2413,15 @@ private fun RecommendationCard(
                     Text(
                         price,
                         color = if (urgent) Color(0xFFE85B13) else Green,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
                     )
 
                     Text(
                         "  •  $pickupLocation",
                         color = Gray,
                         fontSize = 11.sp,
+                        lineHeight = 16.sp,
                         maxLines = 1
                     )
                 }
@@ -2378,9 +2429,12 @@ private fun RecommendationCard(
                 Spacer(Modifier.height(4.dp))
 
                 Text(
-                    status,
+                    reason ?: status,
                     color = if (urgent) Color(0xFFE85B13) else Green,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

@@ -50,6 +50,13 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     /** True when the last load of either list failed. */
     private val _loadFailed = MutableStateFlow(false)
     val loadFailed = _loadFailed.asStateFlow()
+    /**
+     * For Home's "Recommended for you": null until the first load has finished,
+     * true once My Reservations and this account's reviews have loaded together,
+     * false when the first load failed. It stays true after a later failure.
+     */
+    private val _historyLoaded = MutableStateFlow<Boolean?>(null)
+    val historyLoaded = _historyLoaded.asStateFlow()
     /** Result of a cancel or claim, for the Activity "Reservation" dialog. */
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
@@ -159,6 +166,7 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
         _donorReservations.value = emptyList()
         _loaded.value = false
         _loadFailed.value = false
+        _historyLoaded.value = null
         _message.value = null
         _reserveResult.value = null
         _myReviews.value = emptyMap()
@@ -213,6 +221,11 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
         val failed = mine.isFailure || donor.isFailure
         _loadFailed.value = failed
         if (!failed) _loaded.value = true
+        if (mine.isSuccess && reviews.isSuccess) {
+            _historyLoaded.value = true
+        } else if (_historyLoaded.value == null) {
+            _historyLoaded.value = false
+        }
     }
 
     companion object {

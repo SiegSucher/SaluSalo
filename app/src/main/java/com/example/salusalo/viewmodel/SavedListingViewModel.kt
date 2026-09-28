@@ -22,6 +22,9 @@ class SavedListingViewModel(application: Application) : AndroidViewModel(applica
     val loading = _loading.asStateFlow()
     private val _loadFailed = MutableStateFlow(false)
     val loadFailed = _loadFailed.asStateFlow()
+    /** True once the bookmarks have loaded for this session (Home's "Recommended for you" waits for it). */
+    private val _loaded = MutableStateFlow(false)
+    val loaded = _loaded.asStateFlow()
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
 
@@ -45,6 +48,7 @@ class SavedListingViewModel(application: Application) : AndroidViewModel(applica
                 _saved.value = rows
                 _savedIds.value = rows.map { it.foodPostId }.toSet()
                 _loadFailed.value = false
+                _loaded.value = true
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -95,6 +99,7 @@ class SavedListingViewModel(application: Application) : AndroidViewModel(applica
         _savedIds.value = emptySet()
         _saved.value = emptyList()
         _loadFailed.value = false
+        _loaded.value = false
         _message.value = null
     }
 }

@@ -181,7 +181,7 @@ internal fun FoodPreferenceSettings(profileId: String?) {
     var selected by remember { mutableStateOf(stored.categories) }
     var type by rememberSaveable { mutableStateOf(stored.listingType) }
     var feedback by rememberSaveable { mutableStateOf("") }
-    SettingsCaption("Choose food for the ‘For your preferences’ row on Home.")
+    SettingsCaption("Choose food for Home's first row (‘Recommended for you’ or ‘For your preferences’).")
     SettingsCard {
         Text("Food categories", fontWeight = FontWeight.Bold)
         listOf("Bread & pastries", "Vegetables", "Fruit", "Cooked meals", "Packaged food", "Other").forEach { label ->
