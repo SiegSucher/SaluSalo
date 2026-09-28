@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-09-28 (Phase 4 signed off, §8; Purchases, Claims and listing prices merged into `master` through PR #3, migrated, and passed on two phones except the "Reserved" dialog, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — merged through PR #3, migrated, and passed on two phones, §10; Phase 2 demo fixes — real donor names, listing details, up to 4 photos, editing, saved listings, expiry — built on branch `claude/phase2-demo-fixes` (PR #5), migrated, and passed on two phones with a regression round, §11; PR #5 merged into `master` as `aa3e823`; Phase 3 demo fixes — Reserve review page and receipt, removing reserved listings, real Activity and Profile records — built on branch `claude/phase3-demo-fixes` at `24fe9f2`, migrated, passed on two phones on 2026-09-27, and merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`), §12; Phase 4 demo fixes — Profile bell and Settings, notification preferences, a real notification sound, a real response rate, a live Messages inbox and chat badge — built on branch `claude/phase4-demo-fixes` at `3288d02`, migrated, passed a short 13-step test on two phones on 2026-09-27, and merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`), §13; Phase 5 part 1 — ratings and reviews, reports, an Email verified badge — built on branch `claude/phase5-reviews-reports-v6ahqn` at `3bd038c`, migrated, passed on two phones on 2026-09-28, and merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`), §14; Phase 5 part 2 — Maps: a pickup pin on an OpenStreetMap map, distances, Nearby and Nearest, Directions — built on branch `claude/phase5-maps` at `47ed894`, migrated, passed on two phones on 2026-09-28, and merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`), §15; Profile redesign and settings (Mika's PR #10) — Edit Profile with a bio, a Settings hub, food preferences — migrated, passed a 6-step test on two phones on 2026-09-28, and merged into `master` through PR #10 on 2026-09-28 (merge commit `49ac319`), §16; fixes, clean-up and optimization after the second demo audit — a photo tile instead of the stock photo, "Check your listing", Start now, required allergens, Mika's list, batch photo signing, first-start welcome pages, pull to refresh — built on branch `claude/cleanup-after-audit` at `e0f2d59`, passed a 9-step test on two phones on 2026-09-28, and merged into `master` through PR #12 on 2026-09-28 (merge commit `12e931c`), §17; automatic Supabase role for new accounts — the `set-firebase-role` Edge Function and the app's role check — built on branch `claude/auto-role-claim` at `9126799`, deployed, passed a 7-step test on two phones on 2026-09-28, and merged into `master` through PR #13 on 2026-09-28 (merge commit `b8aa7f9`), §18). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
+_Last updated: 2026-09-28 (Phase 4 signed off, §8; Purchases, Claims and listing prices merged into `master` through PR #3, migrated, and passed on two phones except the "Reserved" dialog, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — merged through PR #3, migrated, and passed on two phones, §10; Phase 2 demo fixes — real donor names, listing details, up to 4 photos, editing, saved listings, expiry — built on branch `claude/phase2-demo-fixes` (PR #5), migrated, and passed on two phones with a regression round, §11; PR #5 merged into `master` as `aa3e823`; Phase 3 demo fixes — Reserve review page and receipt, removing reserved listings, real Activity and Profile records — built on branch `claude/phase3-demo-fixes` at `24fe9f2`, migrated, passed on two phones on 2026-09-27, and merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`), §12; Phase 4 demo fixes — Profile bell and Settings, notification preferences, a real notification sound, a real response rate, a live Messages inbox and chat badge — built on branch `claude/phase4-demo-fixes` at `3288d02`, migrated, passed a short 13-step test on two phones on 2026-09-27, and merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`), §13; Phase 5 part 1 — ratings and reviews, reports, an Email verified badge — built on branch `claude/phase5-reviews-reports-v6ahqn` at `3bd038c`, migrated, passed on two phones on 2026-09-28, and merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`), §14; Phase 5 part 2 — Maps: a pickup pin on an OpenStreetMap map, distances, Nearby and Nearest, Directions — built on branch `claude/phase5-maps` at `47ed894`, migrated, passed on two phones on 2026-09-28, and merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`), §15; Profile redesign and settings (Mika's PR #10) — Edit Profile with a bio, a Settings hub, food preferences — migrated, passed a 6-step test on two phones on 2026-09-28, and merged into `master` through PR #10 on 2026-09-28 (merge commit `49ac319`), §16; fixes, clean-up and optimization after the second demo audit — a photo tile instead of the stock photo, "Check your listing", Start now, required allergens, Mika's list, batch photo signing, first-start welcome pages, pull to refresh — built on branch `claude/cleanup-after-audit` at `e0f2d59`, passed a 9-step test on two phones on 2026-09-28, and merged into `master` through PR #12 on 2026-09-28 (merge commit `12e931c`), §17; automatic Supabase role for new accounts — the `set-firebase-role` Edge Function and the app's role check — built on branch `claude/auto-role-claim` at `9126799`, deployed, passed a 7-step test on two phones on 2026-09-28, and merged into `master` through PR #13 on 2026-09-28 (merge commit `b8aa7f9`), §18; Recommended for you on Home — content-based filtering on the phone — in code on branch `claude/home-recommendations`, not built or tested, §19). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -29,6 +29,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Phase 5: Maps, Reviews, Reports | Split by the developer into part 1 (ratings and reviews, reports, and an "Email verified" badge moved here from Phase 6; §14) and part 2 (Maps) | **Part 1: passed, and merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`).** Written on branch `claude/phase5-reviews-reports-v6ahqn` (from `master` at `39b57b5`) on 2026-09-27 and built with AGP at `3bd038c`. Migration `20261002_phase5_reviews_reports.sql` applied to the live project on 2026-09-27; its read-only check passed 18 of 18 and the live safety check 27 of 27. The two-phone test (§14.4, 15 steps) passed on 2026-09-28 ([results log](#results-log), §14.6). **Part 2 (Maps): passed, and merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`).** Written on branch `claude/phase5-maps` (from `master` at `711cc5e`) on 2026-09-28 and built with AGP at `47ed894`. Migration `20261003_phase5_maps.sql` applied to the live project on 2026-09-28; its read-only check passed 11 of 11 and the live safety check 22 of 22. The two-phone test (§15.4, 12 steps) passed on 2026-09-28 ([results log](#results-log), §15.6). |
 | Fixes after the second demo audit (not part of the six phases) | A neutral photo tile, "Check your listing", "My posts" times, filter help, Read more, Learn more, welcome texts; Mika's Start now, required allergens, profile circle, full-screen photos, summary columns and keyboard fix; dead code, unused images and icons; one signing request per list, reservations by ID, WebP; welcome pages only on the first start and pull to refresh (§17) | **Passed, and merged into `master` through PR #12 on 2026-09-28 (merge commit `12e931c`).** Written on branch `claude/cleanup-after-audit` (from `master` at `49ac319`) on 2026-09-28 and built with AGP at `e0f2d59` (unit tests 26 of 26, lint 0 errors). No SQL. The 9-step two-phone test (§17.4) passed on 2026-09-28 ([results log](#results-log), §17.6). |
 | Automatic Supabase role for new accounts (not part of the six phases) | The `set-firebase-role` Edge Function gives a new account the `role: authenticated` claim, called by the app when the token lacks it; replaces running the developer's script after each sign-up (§18) | **Passed, and merged into `master` through PR #13 on 2026-09-28 (merge commit `b8aa7f9`).** Written on branch `claude/auto-role-claim` (from `master` at `12e931c`) on 2026-09-28 and built with AGP at `9126799` (unit tests 34 of 34). The function was deployed and set up on 2026-09-28 (§18.2), and the 7-step two-phone test (§18.5) passed the same day ([results log](#results-log), §18.7). No SQL. |
+| Recommended for you on Home (not part of the six phases) | Home's first row becomes "Recommended for you" once the account has reserved or saved food: content-based filtering on the phone, one reason per card (§19) | **In code on branch `claude/home-recommendations` (from `master` at `b8aa7f9`); not built with AGP, not tested on a phone.** No SQL. |
 | Phase 6: Admin and Final Release | ID verification and the admin screen (the Email verified badge moved to Phase 5 part 1) | **Not started.** |
 
 - The roadmap has six phases (confirmed by the developer on 2026-09-25); earlier versions of this document went only up to Phase 4. Phases 1–3 are described in §1–§3 and Phase 4 in §8.
@@ -61,7 +62,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 - **Phase 5 part 2 (branch `claude/phase5-maps` at `47ed894`, §15):** `gradlew.bat :app:assembleDebug :app:testDebugUnitTest` BUILD SUCCESSFUL in 3m 43s on 2026-09-28, run online once to download osmdroid 6.1.20, with only the three old deprecation warnings (`FormatListBulleted`, `ArrowBack`, `Logout`). `testDebugUnitTest`: `GeoTest` 11 of 11 and `ExampleUnitTest` passed. No lint was run. The developer then installed it from Android Studio on both phones and ran the §15.4 test ([results log](#results-log)).
 - **Mika's PR #10 (branch `mika/navigation-activity-settings` at `b2b04ca`, §16):** `gradlew.bat :app:assembleDebug :app:testDebugUnitTest --offline` BUILD SUCCESSFUL in 36s on 2026-09-28, with only icon deprecation warnings; `GeoTest` 11 of 11. The developer then installed it from Android Studio on both phones and ran the §16 test ([results log](#results-log)).
 - **Fixes after the second demo audit (branch `claude/cleanup-after-audit`, §17):** `gradlew.bat :app:assembleDebug :app:testDebugUnitTest --offline` at `7feb5b5`: BUILD SUCCESSFUL in 55s on 2026-09-28 with no warnings, unit tests 26 of 26; `lintDebug`: 0 errors. At `e0f2d59` (Back on Home): `assembleDebug --offline` BUILD SUCCESSFUL. The developer then installed it from Android Studio on both phones and ran the §17.4 test ([results log](#results-log)).
-- **Automated tests:** the Android Studio templates `ExampleUnitTest` and `ExampleInstrumentedTest`, since §15 `GeoTest` (JVM tests of the distances, the distance labels, pin rounding and the pin fields' JSON), and since §17 `PhotoSigningTest` (batch signing and its fallback) and `PickupStartTest` (the 10-minute rule), all run by `testDebugUnitTest`.
+- **Automated tests:** the Android Studio templates `ExampleUnitTest` and `ExampleInstrumentedTest`, since §15 `GeoTest` (JVM tests of the distances, the distance labels, pin rounding and the pin fields' JSON), and since §17 `PhotoSigningTest` (batch signing and its fallback) and `PickupStartTest` (the 10-minute rule), all run by `testDebugUnitTest`; since §18 `SupabaseRoleTest` (when the app calls the role function); since §19 `RecommendationsTest` (the recommender; 20 tests, run only outside Gradle so far).
 
 ### Phase 1: what exists (summary)
 
@@ -1735,7 +1736,7 @@ Each check is tagged [New] or [Regression]. Where a phone must show new data, th
 - **Food preferences and pickup area** (`DiscoveryPreferences.kt`):
   - food categories, Both/Donations/For sale, and a text that must appear in the pickup location;
   - saved per account, on this phone only;
-  - while any is set, Home's "Newest listings" row becomes "For your preferences"; the full feed below is unchanged.
+  - while any is set, Home's "Newest listings" row becomes "For your preferences" (since §19, "Recommended for you" once the account has reserved or saved food, still filtered by them); the full feed below is unchanged.
 - **Bottom bar:** the second button is always Alerts (on Activity it used to be Browse).
 - **Changed by Claude before the merge:**
   - the "About distance" note on Location & distance now points to the map distances and Nearby; it used to say that distances were not available yet;
@@ -2045,3 +2046,105 @@ The steps, with the log lines and what to do on a 500 or 502, are in [`supabase/
 - **An account left without the role:** one created while phone 2 still had the old build (UID `ShBi…`) has no role until it signs in with the new build.
 - **Not tested:** the list under "Left out of the short test" in §18.5.
 - **Merged** into `master` through PR #13 on 2026-09-28 (merge commit `b8aa7f9`).
+
+---
+
+## 19. Recommended for you on Home
+
+**Status (2026-09-28): in code on branch `claude/home-recommendations` (from `master` at `b8aa7f9`, the PR #13 merge); not built with AGP, not tested on a phone.** No SQL, no database change, no new library and no new permission. Home's first row becomes "Recommended for you" once the account has reserved or saved food. The method is content-based filtering, worked out on the phone in plain Kotlin: listings are compared with the ones this account chose. There is no paid API, no language model and no server part, and the app's texts don't call it "AI".
+
+### 19.1 What changed
+
+- **The recommender** (`model/Recommendations.kt`, new): `recommendListings(feed, myProfileId, myReservations, myReviews, savedIds, now, phonePin, include)` returns up to 5 (`RECOMMENDATION_LIMIT`) `Recommendation`s (the listing, one reason or null, and a score used only for the order), or null when the account has chosen nothing yet. How it works: §19.2.
+- **The expiry rule** (`model/FoodPost.kt`): `EXPIRES_SOON_SECONDS` (3 hours) and `FoodPost.expiresSoon(now)`, which replace the same check written inline in `toHomeFood`. Home's "Expires soon" status, the Expiring Soon chip and the recommender's expiry boost all use it; the behaviour of the first two is unchanged.
+- **Knowing when the history has loaded:**
+  - `ReservationViewModel.historyLoaded`: null until the first load has finished; true once My Reservations and the account's own reviews have loaded together; false when the first load failed. It stays true after a later failure and is null again after `clearSession()`.
+  - `SavedListingViewModel.loaded`: true after a successful load of the bookmarks, false again after `clearSession()` (`loadFailed` already existed).
+  - Home now calls `reservationViewModel.refresh()` when it starts (once per signed-in profile), so the reservations and reviews are there without opening Activity.
+- **Home's first row** (`MainActivity.kt`):
+  - While the reservations, reviews or bookmarks are still loading, the row has no title and no cards (no "Loading…"). A failed first load counts as finished, so the row never waits for the rest of the session.
+  - Then: "Recommended for you" with up to 5 recommendations when the account has chosen something; otherwise, as before, "For your preferences" (food preferences set) or "Newest listings", now with up to 5 cards instead of 2 and no reasons.
+  - The empty text "No matching food yet. You can still browse all listings below." shows only when the row isn't waiting, has no cards and the feed isn't loading.
+  - The list is worked out again when the feed, the reservations, the reviews, the bookmarks, the food preferences, the profile, the phone's position or the hour changes.
+- **The card** (`RecommendationCard`): the reason replaces the status line ("Available" or "Expires soon"), in up to 2 lines ending in "…", orange when the listing expires soon and green otherwise. A card without a reason keeps its status. To fit 2 lines in the unchanged 142 × 180 dp card, the title and the price row have an explicit line height of 16 sp and the reason 14 sp: 94 photo + 8 + 16 title + 4 + 16 price row + 4 + 28 reason + 8 = 178 dp (computed from the layout, not measured on a phone).
+- **Texts:**
+  - Home → (i) "About the filters" ends with: "Recommended for you: once you have reserved or saved food, the first row shows listings like it, leaving out your own, saved and reserved ones. Food that expires soon or is near you moves up. It is worked out on this phone, and nothing about it is sent."
+  - Settings → Food preferences: the caption "Choose food for the ‘For your preferences’ row on Home." became "Choose food for Home's first row (‘Recommended for you’ or ‘For your preferences’)."
+- **Tests:** `RecommendationsTest` (20 JVM tests, §19.5).
+
+Commits: `6397dbc` (the PR #13 merge in the docs), `6008b84` (the expiry rule, the recommender and its tests), `74ef69c` (the Home row), then this document with `CLAUDE.md` and `README.md`.
+
+### 19.2 How it works (content-based filtering)
+
+1. **Words.** A listing's name and description are split into lowercase words of 3 or more letters or digits; common English and Filipino words ("the", "and", "ang", "mga", "para"…) are dropped. A word in the name counts 2, one in the description 1.
+2. **Item vectors.** Each listing becomes a vector of:
+   - its words, weighted by TF-IDF (IDF = ln((1 + N) / (1 + listings with the word)) + 1, over the feed plus the chosen listings, so a word few listings use weighs more), scaled to length 1 (`WORDS_WEIGHT` 1.0);
+   - its category (1.0), free or for sale (0.5) and its donor (0.5).
+   The whole vector is then scaled to length 1. A listing without usable words has no word part (never 0 / 0, so never NaN).
+3. **The profile.** The sum of the vectors of the listings this account chose:
+   - an open or claimed reservation: 3.0 (`RESERVED_WEIGHT`);
+   - a claimed reservation the account rated 4 or 5 stars: 4.0 (`LIKED_WEIGHT`);
+   - a saved listing that is still in the feed: 2.0 (`SAVED_WEIGHT`);
+   - cancelled reservations don't count, and a listing chosen more than once counts once, at its highest weight.
+4. **Left out:** the account's own listings, listings it reserved (in any status, cancelled included) or saved, and every listing of a donor whose latest review from this account has 1 or 2 stars. The food preferences (`DiscoveryPreferences.matches()`) then apply, as on the preferences row.
+5. **Score** = 0.7 × the cosine similarity to the profile, + 0.15 when the listing expires within 3 hours (`expiresSoon`), + 0.15 × (1 − distance / 5 km) when Home already has the phone's position, the listing has a pin and it is within 5 km (`NEARBY_RADIUS_METERS`).
+6. **Order:** the highest score first (compared as `Math.round(score × 10⁹)`, so the order is a total order), then the newest listing, then the feed's order. The first 5.
+7. **The reason**, from the biggest of the three parts (on a tie: similarity, then expiry, then distance):
+   - similarity: "Because you reserved <name>" or "Because you saved <name>", naming the chosen listing most like the card (on a tie the higher weight, then the newer choice), and only when the card shares its category or a word with it; a name longer than 20 characters is cut at a word and ends with "…";
+   - otherwise "Expires soon", or "<distance> away" (the label Home already uses), or no reason (the card shows its status).
+
+### 19.3 Privacy and security
+
+- **Only data the app already loads for this account:** the feed (what the `food_posts` SELECT policy already shows), the account's own reservations and their listings, its own reviews (`get_my_given_reviews`), its saved listing IDs, the food preferences stored on the phone, and the phone's position only when Home already has it for distances.
+- **No location request.** The feature never asks for location permission and never starts a location lookup; without a position there is simply no distance boost.
+- **Nothing stored or sent.** The profile and the scores exist only in memory while Home is shown. They are not saved, sent to Supabase or anyone else, or logged.
+- **No wider reads.** No new table, function, grant, policy or query. Identity still comes only from the signed-in account.
+- **Extra requests when Home starts:** the reservation lists and reviews now load at start instead of when Activity or Profile needs them. That is about 9 requests (the profile lookup, the reservations, their listings by ID, `get_listing_donor_profiles`, one signing batch, `get_donor_reservations`, those listings, one more signing batch and `get_my_given_reviews`), or 4 for an account with no reservations and no reserved listings of its own.
+
+### 19.4 Manual test (phone 1 = A, phone 2 = C, a new account)
+
+**Preparation:**
+- Delete your own old test listings on both phones: A's, and B's before phone 2 signs up as C. Listings that can't be deleted from the app (for example those of deleted test accounts) may still appear in the row.
+- This branch built with AGP (`assembleDebug testDebugUnitTest`) and installed on both phones. Android Studio's Run installs only on the phone picked in the device list, so run it once per phone. There is no migration.
+
+Each check is tagged [New] or [Regression].
+
+1. [New] Phone 1 (A): post 5 free listings, quantity 2 each, no description, expiring tomorrow, with the pin at the same spot: "Chicken adobo" and "Pork adobo" (Cooked meals), "Pandesal" (Bread & pastries), "Pechay" and "Kangkong" (Vegetables). Post Kangkong last.
+2. [New] Phone 2: create account C with a "+" alias email. On Home the first row's title may be blank for a moment, then reads "Newest listings", with Kangkong first; each card shows "Available" and no reason.
+3. [New] Reserve 1 Chicken adobo and close the receipt. The row reads "Recommended for you":
+   - "Pork adobo" shows "Because you reserved Chicken adobo" and comes before Pandesal, Pechay and Kangkong.
+   - The reason wraps onto 2 lines: the second line shows in full (not cut at the card's bottom, and with no "…").
+   - Chicken adobo is not in the row.
+   - Pandesal, Pechay and Kangkong show "<distance> away" when Home has the phone's position within 5 km of the pin, otherwise "Available".
+4. [New] Save Pechay with the bookmark on its card under Available food (the row's cards have no bookmark). At once Pechay leaves the row, Kangkong shows "Because you saved Pechay", and Pork adobo stays ahead of it. Unsave Pechay: Kangkong's line goes and Pechay returns. Save it again.
+5. [New] Phone 2: post "Chicken sopas" (Cooked meals, with a pin and allergens, as Post requires). It shows under Available food but not in the row; neither do Chicken adobo and Pechay.
+6. [New] Settings → Food preferences: the caption reads "Choose food for Home's first row (‘Recommended for you’ or ‘For your preferences’)." Check only "Bread & pastries" → "Save preferences" → Home: the title stays "Recommended for you", every card in the row is Bread & pastries, and Pandesal is one of them. Then uncheck everything and save.
+7. [New] Home → (i): "About the filters" ends with the paragraph quoted in §19.1.
+8. [Regression] Activity → My Reservations → cancel the Chicken adobo reservation (the "Reservation" dialog appears as before), and unsave Pechay. Home: the row is "Newest listings" again, up to 5 cards, newest first, with no reasons. Chicken adobo and Chicken sopas may show there.
+
+**Clean-up:** phone 1: delete the 5 test listings (Chicken adobo is kept as `REMOVED`, because it was reserved). Phone 2: delete Chicken sopas.
+
+**Left out of the short test:** a failed load at start (the row then shows today's row), the expiry and distance boosts with real timing, a donor rated 1–2 stars, a claimed and liked listing, long listing names, other phone languages, and the regressions not in the steps.
+
+### 19.5 Local checks (not a build or a phone)
+
+- **Kotlin:** the kotlinc 2.2.10 type check of every app source (as in §17.3 and §18.4): 0 errors.
+- **JVM tests** (JUnit 4.13.2 run directly, not through Gradle): 54 of 54 passed, of them the new `RecommendationsTest` 20: after reserving Chicken adobo, Pork adobo comes first; after saving Pechay, Kangkong names it; the same category ranks above another; a shared word ranks above the same category alone; own, saved, reserved and low-rated donors' listings are never recommended; an expiring listing beats an otherwise equal one; a nearby listing beats an otherwise equal one only with a phone position; the reason says "reserved" before "saved"; long names are shortened at a word; the similarity reason needs the same category or a word; the biggest part gives the reason; a liked listing outweighs an open reservation; no choices, no personal row; ties go to the newest listing, then the feed order; at most 5 listings; the food preferences filter the row; words are lowercase, long enough and not common; a word in the name counts twice; "expires soon" means less than 3 hours left; a listing without usable words has no word part and no NaN. The others: `SupabaseRoleTest` 8, `PhotoSigningTest` 8, `PickupStartTest` 6, `GeoTest` 11, `ExampleUnitTest` 1.
+- **The card height** (178 dp of 180) is computed from the layout, not measured.
+- **Not done:** the AGP build, lint, `testDebugUnitTest` through Gradle, and anything on a phone.
+
+### 19.6 Known limits
+
+- It learns only from this account's own choices, not from what other people reserve (it is content-based, not collaborative, filtering).
+- A saved listing counts only while it is in the feed; a reserved one counts even after it has left the feed.
+- A new account sees the usual row until its first reservation or save.
+- Nothing is live across phones: the row changes when this phone's feed, reservations or bookmarks reload.
+- No stemming: "egg" and "eggs" are different words.
+- The expiry boost is worked out again at most once an hour while Home stays open, so it can be up to 1 hour late; it never adds a wrong "Expires soon" to a listing that doesn't expire soon.
+- The extra requests when Home starts (§19.3).
+- The row's title is blank for a moment while the history loads.
+- On a recommended card the reason replaces "Expires soon"; the orange color stays, and the details page and the Available food card still say "Expires soon".
+
+### 19.7 Results
+
+None yet: not built with AGP and not tested on a phone.
