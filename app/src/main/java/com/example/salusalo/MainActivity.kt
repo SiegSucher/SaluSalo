@@ -41,13 +41,27 @@ import com.example.salusalo.data.profileErrorMessage
 import com.example.salusalo.model.UserProfile
 import android.util.Patterns
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.horizontalScroll
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -56,33 +70,56 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -91,9 +128,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import coil3.compose.AsyncImage
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
@@ -104,14 +143,6 @@ import com.google.firebase.auth.userProfileChangeRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-
-private val Green = Color(0xFF47782E)
-private val DarkGreen = Color(0xFF263C29)
-private val Cream = Color(0xFFFCFBF6)
-private val PaleGreen = Color(0xFFF3F6E8)
-private val IconGreen = Color(0xFFE4EDC9)
-private val Gray = Color(0xFF666873)
-private val Line = Color(0xFFE3E4E7)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -139,16 +170,7 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
-            MaterialTheme(
-                colorScheme = lightColorScheme(
-                    primary = Green,
-                    onPrimary = Color.White,
-                    background = Cream,
-                    onBackground = DarkGreen,
-                    surface = Color.White,
-                    onSurface = DarkGreen
-                )
-            ) {
+            SaluTheme {
                 SaluSaloApp()
             }
         }
@@ -201,6 +223,9 @@ private fun SaluSaloApp() {
         appScope.launch { clearGoogleCredentialState(context) }
         screen = "signin"
     }
+    // With a saved session ("Keep me signed in"), the branded loading screen
+    // shows instead of the sign-in form until the first account setup has finished.
+    var startupPending by remember { mutableStateOf(firebaseAuth.currentUser != null) }
     fun openAuthenticatedHome(displayNameOverride: String? = null) {
         isAuthenticating = true
         appScope.launch {
@@ -241,6 +266,7 @@ private fun SaluSaloApp() {
                 }
             }
             isAuthenticating = false
+            startupPending = false
         }
     }
 
@@ -288,10 +314,30 @@ private fun SaluSaloApp() {
         screen = "signin"
     }
 
+    // While a signed-in account is being set up (a saved session at start, or
+    // right after signing in), show the loading screen rather than a form.
+    val showStartup = screen != "home" && currentProfile == null && !canRetrySetup &&
+            firebaseAuth.currentUser != null && (startupPending || isAuthenticating)
+    val shownScreen = if (showStartup) "loading" else screen
+
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Cream
+        color = SaluColors.Background
     ) {
+        // Under Home's white bottom bar, the system navigation area is white too.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .wrapContentHeight(Alignment.Bottom)
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                    .background(if (shownScreen == "home") Color.White else SaluColors.Background)
+            )
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -299,31 +345,38 @@ private fun SaluSaloApp() {
                 .imePadding()
         ) {
             AnimatedContent(
-                targetState = screen,
+                targetState = shownScreen,
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Cream),
+                    .background(SaluColors.Background),
                 transitionSpec = {
-                    if (
-                        initialState == "welcome" &&
-                        targetState == "signup"
-                    ) {
-                        // Get Started: welcome page swipes away and the
-                        // sign-up page slides in from the right.
-                        (slideInHorizontally(
-                            animationSpec = tween(400)
-                        ) { fullWidth -> fullWidth }) togetherWith
-                                (slideOutHorizontally(
-                                    animationSpec = tween(400)
-                                ) { fullWidth -> -fullWidth })
-                    } else {
-                        // Every other screen change stays instant.
-                        EnterTransition.None togetherWith ExitTransition.None
+                    when {
+                        initialState == "welcome" && targetState == "signup" ->
+                            // Get Started: the welcome page moves away and the
+                            // sign-up page slides in from the right.
+                            (slideInHorizontally(
+                                animationSpec = tween(SaluMotion.LONG + 60, easing = SaluMotion.Emphasized)
+                            ) { fullWidth -> fullWidth }) togetherWith
+                                    (slideOutHorizontally(
+                                        animationSpec = tween(SaluMotion.LONG + 60, easing = SaluMotion.Emphasized)
+                                    ) { fullWidth -> -fullWidth / 3 } + fadeOut(tween(SaluMotion.MEDIUM)))
+
+                        // Into and out of the loading screen and Home: a calm fade.
+                        targetState == "home" || targetState == "loading" ||
+                                initialState == "home" || initialState == "loading" ->
+                            (fadeIn(tween(SaluMotion.LONG)) +
+                                    scaleIn(initialScale = 0.98f, animationSpec = tween(SaluMotion.LONG))) togetherWith
+                                    fadeOut(tween(SaluMotion.SHORT))
+
+                        // Sign In, Create Account and Reset password switch in place.
+                        else -> EnterTransition.None togetherWith ExitTransition.None
                     }
                 },
                 label = "screenTransition"
             ) { currentScreen ->
                 when (currentScreen) {
+                    "loading" -> StartupScreen()
+
                     "welcome" -> WelcomeScreen(
                         onStart = {
                             markWelcomeSeen(context)
@@ -554,6 +607,54 @@ private val welcomePages = listOf(
     )
 )
 
+/** The loading screen while a signed-in account is set up: the mark, the name and a thin progress bar. */
+@Composable
+private fun StartupScreen() {
+    val transition = rememberInfiniteTransition(label = "startup")
+    val breathe by transition.animateFloat(
+        initialValue = 0.97f,
+        targetValue = 1.03f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "startupBreathe"
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SaluColors.Background)
+            .padding(horizontal = 32.dp)
+            .semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        BrandMark(
+            size = 88.dp,
+            modifier = Modifier.graphicsLayer {
+                scaleX = breathe
+                scaleY = breathe
+            }
+        )
+        Spacer(Modifier.height(20.dp))
+        BrandWordmark()
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Good food. Less waste. Stronger community.",
+            style = SaluText.Supporting,
+            color = SaluColors.InkMuted,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(32.dp))
+        LinearProgressIndicator(
+            modifier = Modifier
+                .width(140.dp)
+                .clip(SaluRadius.Pill),
+            color = SaluColors.Yellow,
+            trackColor = SaluColors.Cream
+        )
+        Spacer(Modifier.height(12.dp))
+        Text("Getting things ready…", style = SaluText.Meta, color = SaluColors.InkMuted)
+    }
+}
+
 @Composable
 private fun WelcomeScreen(
     onStart: () -> Unit,
@@ -563,10 +664,25 @@ private fun WelcomeScreen(
     val scope = rememberCoroutineScope()
     val lastPage = pagerState.currentPage == welcomePages.lastIndex
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val imageHeight = maxHeight * 0.36f
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .background(SaluColors.Background)
+    ) {
+        val imageHeight = maxHeight * 0.34f
 
         Column(Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BrandMark(34.dp)
+                Spacer(Modifier.width(10.dp))
+                BrandWordmark(style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold))
+            }
+
             // Swipeable welcome pages
             HorizontalPager(
                 state = pagerState,
@@ -578,7 +694,11 @@ private fun WelcomeScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp)
                 ) {
+                    Spacer(Modifier.height(16.dp))
+
+                    // The illustration sits on its own light card, so its edges look intended.
                     Image(
                         painter = painterResource(page.image),
                         contentDescription = page.imageDescription,
@@ -586,58 +706,55 @@ private fun WelcomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(imageHeight)
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(IllustrationBackground)
                     )
 
-                    Column(
+                    Spacer(Modifier.height(24.dp))
+
+                    Text(
+                        text = page.title,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = SaluColors.Ink,
+                        modifier = Modifier.semantics { heading() }
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    Text(
+                        text = page.body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SaluColors.InkMuted
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(
-                                RoundedCornerShape(
-                                    topStart = 32.dp,
-                                    topEnd = 32.dp
-                                )
-                            )
-                            .background(Cream)
-                            .padding(horizontal = 26.dp, vertical = 16.dp)
+                            .height(IntrinsicSize.Min),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            text = page.title,
-                            color = DarkGreen,
-                            fontSize = 25.sp,
-                            lineHeight = 31.sp,
-                            fontWeight = FontWeight.Bold
+                        FeatureCard(
+                            title = page.leftTitle,
+                            description = page.leftDescription,
+                            icon = page.leftIcon,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
                         )
 
-                        Spacer(Modifier.height(12.dp))
-
-                        Text(
-                            text = page.body,
-                            color = Gray,
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp
+                        FeatureCard(
+                            title = page.rightTitle,
+                            description = page.rightDescription,
+                            icon = page.rightIcon,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
                         )
-
-                        Spacer(Modifier.height(16.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            FeatureCard(
-                                title = page.leftTitle,
-                                description = page.leftDescription,
-                                icon = page.leftIcon,
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            FeatureCard(
-                                title = page.rightTitle,
-                                description = page.rightDescription,
-                                icon = page.rightIcon,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
                     }
+
+                    Spacer(Modifier.height(16.dp))
                 }
             }
 
@@ -645,33 +762,18 @@ private fun WelcomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Cream)
-                    .padding(horizontal = 26.dp, vertical = 8.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
-                Row(
+                PageDots(
+                    count = welcomePages.size,
+                    current = pagerState.currentPage,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(
-                        9.dp,
-                        Alignment.CenterHorizontally
-                    )
-                ) {
-                    repeat(welcomePages.size) { index ->
-                        Box(
-                            Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (index == pagerState.currentPage) Green
-                                    else Color(0xFFDDDEDA)
-                                )
-                        )
-                    }
-                }
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = 16.dp)
+                )
 
-                PrimaryButton(
-                    title = if (lastPage) "Get Started" else "Next",
+                SaluPrimaryButton(
+                    text = if (lastPage) "Get started" else "Next",
                     onClick = {
                         if (lastPage) {
                             onStart()
@@ -687,14 +789,23 @@ private fun WelcomeScreen(
 
                 TextButton(
                     onClick = onSignIn,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .heightIn(min = 48.dp)
                 ) {
-                    Text("Already have an account? Sign in", color = Green, fontSize = 13.sp)
+                    Text(
+                        "Already have an account? Sign in",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = SaluColors.GreenInk
+                    )
                 }
             }
         }
     }
 }
+
+/** The welcome and sign-in illustrations' own background colour. */
+private val IllustrationBackground = Color(0xFFFCFBF4)
 
 @Composable
 private fun FeatureCard(
@@ -703,48 +814,26 @@ private fun FeatureCard(
     icon: ImageVector,
     modifier: Modifier
 ) {
-    Column(
-        modifier = modifier
-            .heightIn(min = 110.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(PaleGreen)
-            .padding(12.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(IconGreen),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = Green,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+    SaluCard(modifier = modifier.heightIn(min = 120.dp)) {
+        Column(Modifier.padding(14.dp)) {
+            IconBubble(icon, size = 36.dp, iconSize = 20.dp)
+
+            Spacer(Modifier.height(10.dp))
 
             Text(
                 title,
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, lineHeight = 19.sp),
+                color = SaluColors.Ink
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
+                color = SaluColors.InkMuted
             )
         }
-
-        Spacer(Modifier.height(8.dp))
-
-        Text(
-            description,
-            color = Gray,
-            fontSize = 11.sp,
-            lineHeight = 15.sp
-        )
     }
 }
 
@@ -780,9 +869,24 @@ private fun SignInScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+            .background(SaluColors.Background)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BrandMark(34.dp)
+            Spacer(Modifier.width(10.dp))
+            BrandWordmark(style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold))
+        }
+
+        Spacer(Modifier.height(16.dp))
+
         // Fit shows the entire header image rather than cutting it off.
         Image(
             painter = painterResource(R.drawable.signin_reference),
@@ -791,54 +895,36 @@ private fun SignInScreen(
             contentScale = ContentScale.Fit,
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(IllustrationBackground)
                 .aspectRatio(2.05f)
         )
 
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = Color.White,
-            shadowElevation = 3.dp
-        ) {
-            Column(
-                modifier = Modifier.padding(
-                    horizontal = 12.dp,
-                    vertical = 14.dp
-                )
-            ) {
+        Spacer(Modifier.height(20.dp))
+
+        SaluCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 if (resettingPassword) {
                     Text(
                         "Reset password",
-                        modifier = Modifier.padding(8.dp),
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Green
+                        style = SaluText.ScreenTitle,
+                        color = SaluColors.Ink,
+                        modifier = Modifier.semantics { heading() }
                     )
+
+                    Spacer(Modifier.height(6.dp))
 
                     Text(
                         "Enter the email address linked to your account.",
-                        modifier = Modifier.padding(8.dp),
-                        fontSize = 13.sp,
-                        color = Gray
+                        style = SaluText.Body,
+                        color = SaluColors.InkMuted
                     )
                 } else {
-                    Row(Modifier.fillMaxWidth()) {
-                        FormTab(
-                            title = "Sign In",
-                            selected = !creatingAccount,
-                            modifier = Modifier.weight(1f),
-                            onClick = { onNavigate("signin") }
-                        )
-
-                        FormTab(
-                            title = "Create Account",
-                            selected = creatingAccount,
-                            modifier = Modifier.weight(1f),
-                            onClick = { onNavigate("signup") }
-                        )
-                    }
+                    AuthModeSwitch(
+                        creatingAccount = creatingAccount,
+                        onSignIn = { onNavigate("signin") },
+                        onCreateAccount = { onNavigate("signup") }
+                    )
                 }
 
                 Spacer(Modifier.height(20.dp))
@@ -851,7 +937,7 @@ private fun SignInScreen(
                         icon = Icons.Outlined.Person
                     )
 
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(12.dp))
                 }
 
                 InputField(
@@ -859,212 +945,223 @@ private fun SignInScreen(
                     onChange = { email = it },
                     hint = "Email address",
                     icon = Icons.Outlined.Email,
-                    emailField = true
+                    emailField = true,
+                    last = resettingPassword
                 )
 
                 if (!resettingPassword) {
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(12.dp))
 
                     InputField(
                         value = password,
                         onChange = { password = it },
                         hint = "Password",
                         icon = Icons.Outlined.Lock,
-                        passwordField = true
+                        passwordField = true,
+                        last = !creatingAccount
                     )
 
                     if (creatingAccount) {
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(12.dp))
 
                         InputField(
                             value = confirmPassword,
                             onChange = { confirmPassword = it },
                             hint = "Confirm password",
                             icon = Icons.Outlined.Lock,
-                            passwordField = true
+                            passwordField = true,
+                            last = true
                         )
                     } else {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                                .padding(top = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clickable {
-                                        keepSignedIn = !keepSignedIn
-                                    }
-                                    .padding(vertical = 12.dp),
+                                    .clip(SaluRadius.Small)
+                                    .toggleable(
+                                        value = keepSignedIn,
+                                        role = Role.Checkbox,
+                                        onValueChange = { keepSignedIn = it }
+                                    )
+                                    .heightIn(min = 48.dp)
+                                    .padding(end = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Checkbox(
                                     checked = keepSignedIn,
                                     onCheckedChange = null,
-                                    modifier = Modifier.size(20.dp),
                                     colors = CheckboxDefaults.colors(
-                                        checkedColor = Green
+                                        checkedColor = SaluColors.GreenInk,
+                                        uncheckedColor = SaluColors.Outline
                                     )
                                 )
 
-                                Spacer(Modifier.width(6.dp))
+                                Spacer(Modifier.width(8.dp))
 
                                 Text(
                                     "Keep me signed in",
-                                    color = Gray,
-                                    fontSize = 11.sp
+                                    style = SaluText.Supporting,
+                                    color = SaluColors.Ink
                                 )
                             }
 
                             TextButton(
                                 onClick = { onNavigate("forgot") },
-                                contentPadding = PaddingValues(
-                                    horizontal = 2.dp
-                                )
+                                contentPadding = PaddingValues(horizontal = 8.dp)
                             ) {
                                 Text(
                                     "Forgot password?",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
+                                    style = SaluText.Supporting.copy(fontWeight = FontWeight.SemiBold),
+                                    color = SaluColors.GreenInk
                                 )
                             }
                         }
                     }
                 }
 
-                if (creatingAccount || resettingPassword) {
-                    Spacer(Modifier.height(16.dp))
-                }
+                Spacer(Modifier.height(if (creatingAccount || resettingPassword) 20.dp else 12.dp))
 
-                PrimaryButton(
-                    title = when {
+                SaluPrimaryButton(
+                    text = when {
                         resettingPassword -> "Send reset link"
-                        creatingAccount -> "Create Account"
+                        creatingAccount -> "Create account"
                         else -> "Continue"
                     },
-                    enabled = !isAuthenticating,
+                    loading = isAuthenticating,
                     onClick = {
                         onContinue(email, password, confirmPassword, name, keepSignedIn)
                     }
                 )
 
-                if (isAuthenticating) {
-                    Spacer(Modifier.height(12.dp))
-                    CircularProgressIndicator(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .align(Alignment.CenterHorizontally),
-                        color = Green,
-                        strokeWidth = 2.dp
-                    )
-                }
-
                 if (resettingPassword) {
                     TextButton(
                         onClick = { onNavigate("signin") },
-                        modifier = Modifier.align(
-                            Alignment.CenterHorizontally
-                        )
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .heightIn(min = 48.dp)
                     ) {
-                        Text("Back to Sign In")
+                        Text("Back to sign in", style = MaterialTheme.typography.labelLarge, color = SaluColors.GreenInk)
                     }
                 } else {
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(20.dp))
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         HorizontalDivider(
                             modifier = Modifier.weight(1f),
-                            color = Line
+                            color = SaluColors.Line
                         )
 
                         Text(
                             "or continue with",
-                            modifier = Modifier.padding(horizontal = 10.dp),
-                            fontSize = 12.sp,
-                            color = Gray
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            style = SaluText.Meta,
+                            color = SaluColors.InkMuted
                         )
 
                         HorizontalDivider(
                             modifier = Modifier.weight(1f),
-                            color = Line
+                            color = SaluColors.Line
                         )
                     }
 
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(16.dp))
 
                     // A new account made on the Create Account tab stays signed in.
                     GoogleButton(enabled = !isAuthenticating) {
                         onGoogle(if (creatingAccount) true else keepSignedIn)
                     }
 
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(16.dp))
 
                     CommunityCard()
                 }
             }
         }
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(20.dp))
 
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.Top
         ) {
             Icon(
                 Icons.Outlined.VerifiedUser,
                 contentDescription = null,
-                tint = Green,
+                tint = SaluColors.GreenInk,
                 modifier = Modifier.size(20.dp)
             )
 
-            Text(
-                "Your safety matters",
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp
-            )
+            Spacer(Modifier.width(10.dp))
+
+            Column {
+                Text(
+                    "Your safety matters",
+                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp),
+                    color = SaluColors.Ink
+                )
+
+                Text(
+                    "Agree on pickup details in the chat and check the food before you take it.",
+                    style = SaluText.Supporting,
+                    color = SaluColors.InkMuted
+                )
+            }
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(24.dp))
+    }
+}
 
-        Text(
-            "Agree on pickup details in the chat and check\n" +
-                    "the food before you take it.",
-            modifier = Modifier.padding(horizontal = 20.dp),
-            textAlign = TextAlign.Center,
-            fontSize = 12.sp,
-            lineHeight = 17.sp,
-            color = Gray
-        )
-
-        Spacer(Modifier.height(18.dp))
+/** Sign In | Create Account, as a two-part switch. */
+@Composable
+private fun AuthModeSwitch(
+    creatingAccount: Boolean,
+    onSignIn: () -> Unit,
+    onCreateAccount: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(SaluRadius.Control)
+            .background(SaluColors.Cream)
+            .padding(4.dp)
+            .selectableGroup()
+    ) {
+        AuthModeSegment("Sign in", selected = !creatingAccount, onClick = onSignIn, modifier = Modifier.weight(1f))
+        AuthModeSegment("Create account", selected = creatingAccount, onClick = onCreateAccount, modifier = Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun FormTab(
+private fun AuthModeSegment(
     title: String,
     selected: Boolean,
-    modifier: Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier
 ) {
-    Column(
-        modifier = modifier.clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(11.dp))
+            .background(if (selected) Color.White else Color.Transparent)
+            .selectable(selected = selected, onClick = onClick, role = Role.Tab)
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center
     ) {
         Text(
             title,
-            modifier = Modifier.padding(vertical = 12.dp),
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (selected) Green else Gray
-        )
-
-        HorizontalDivider(
-            color = if (selected) Green else Line,
-            thickness = if (selected) 2.dp else 1.dp
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) SaluColors.Ink else SaluColors.InkMuted,
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -1076,7 +1173,8 @@ private fun InputField(
     hint: String,
     icon: ImageVector,
     passwordField: Boolean = false,
-    emailField: Boolean = false
+    emailField: Boolean = false,
+    last: Boolean = false
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
 
@@ -1085,24 +1183,14 @@ private fun InputField(
         onValueChange = onChange,
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        shape = RoundedCornerShape(11.dp),
-        textStyle = LocalTextStyle.current.copy(
-            fontSize = 14.sp,
-            color = DarkGreen
-        ),
-        placeholder = {
-            Text(
-                hint,
-                fontSize = 13.sp,
-                color = Gray
-            )
-        },
+        shape = SaluRadius.Control,
+        textStyle = MaterialTheme.typography.bodyLarge,
+        label = { Text(hint) },
         leadingIcon = {
             Icon(
                 icon,
                 contentDescription = null,
-                modifier = Modifier.size(21.dp),
-                tint = Gray
+                modifier = Modifier.size(21.dp)
             )
         },
         trailingIcon = {
@@ -1124,7 +1212,7 @@ private fun InputField(
                             "Show password"
                         },
                         modifier = Modifier.size(21.dp),
-                        tint = Gray
+                        tint = SaluColors.InkMuted
                     )
                 }
             }
@@ -1141,42 +1229,11 @@ private fun InputField(
                 passwordField -> KeyboardType.Password
                 emailField -> KeyboardType.Email
                 else -> KeyboardType.Text
-            }
+            },
+            imeAction = if (last) ImeAction.Done else ImeAction.Next
         ),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Green,
-            unfocusedBorderColor = Line,
-            focusedContainerColor = Color.White,
-            unfocusedContainerColor = Color.White,
-            cursorColor = Green
-        )
+        colors = saluFieldColors()
     )
-}
-
-@Composable
-private fun PrimaryButton(
-    title: String,
-    enabled: Boolean = true,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp),
-        shape = RoundedCornerShape(11.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Green,
-            contentColor = Color.White
-        )
-    ) {
-        Text(
-            title,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
 }
 
 @Composable
@@ -1184,76 +1241,35 @@ private fun CommunityCard() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(13.dp))
-            .background(PaleGreen)
-            .padding(11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(9.dp)
+            .clip(SaluRadius.Control)
+            .background(SaluColors.YellowSoft)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(IconGreen),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Outlined.Groups,
-                contentDescription = null,
-                modifier = Modifier.size(23.dp),
-                tint = Green
-            )
-        }
+        IconBubble(
+            Icons.Outlined.Groups,
+            background = Color.White,
+            size = 40.dp,
+            iconSize = 22.dp
+        )
+
+        Spacer(Modifier.width(12.dp))
 
         Column(Modifier.weight(1f)) {
             Text(
                 "One account for all your good deeds",
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, lineHeight = 19.sp),
+                color = SaluColors.Ink
             )
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
 
             Text(
-                "Donate, sell, buy, and claim food —\n" +
-                        "all from one simple account.",
-                fontSize = 10.sp,
-                lineHeight = 14.sp,
-                color = Gray
+                "Donate, sell, buy, and claim food — all from one simple account.",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
+                color = SaluColors.InkMuted
             )
         }
-
-        Column(
-            verticalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                SmallCommunityIcon(Icons.Outlined.CardGiftcard)
-                SmallCommunityIcon(Icons.Outlined.LocalOffer)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                SmallCommunityIcon(Icons.Outlined.ShoppingCart)
-                SmallCommunityIcon(Icons.Outlined.ShoppingBag)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SmallCommunityIcon(icon: ImageVector) {
-    Box(
-        modifier = Modifier
-            .size(23.dp)
-            .clip(CircleShape)
-            .background(IconGreen),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = Green,
-            modifier = Modifier.size(15.dp)
-        )
     }
 }
 
@@ -1264,22 +1280,27 @@ private fun GoogleButton(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
+    val interaction = remember { MutableInteractionSource() }
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier
             .fillMaxWidth()
-            .height(46.dp),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Line)
+            .heightIn(min = 52.dp)
+            .pressScale(interaction),
+        shape = SaluRadius.Control,
+        border = BorderStroke(1.dp, SaluColors.Outline.copy(alpha = 0.55f)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = Color.White,
+            contentColor = SaluColors.Ink
+        ),
+        interactionSource = interaction
     ) {
         GoogleMark()
         Spacer(Modifier.width(10.dp))
         Text(
             "Continue with Google",
-            color = DarkGreen,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium
+            style = MaterialTheme.typography.labelLarge
         )
     }
 }
@@ -1453,12 +1474,6 @@ private fun HomeScreen(
             }
         }
     }
-    LaunchedEffect(page) {
-        if (page != "activity") {
-            activityTab = "My Listings"
-            activityFocus = null
-        }
-    }
 
     // Greeting follows the signed-in profile and the device's local time;
     // the hour is re-read every minute so it changes while Home stays open.
@@ -1482,8 +1497,6 @@ private fun HomeScreen(
     val profilePhotoUrl by produceState<String?>(null, profilePhotoPath) {
         value = userRepository.profilePhotoUrl(profilePhotoPath)
     }
-    var profilePhotoFailed by remember(profilePhotoUrl) { mutableStateOf(false) }
-    val profileInitial = currentProfile?.name?.trim()?.take(1)?.uppercase().orEmpty()
     val greeting = if (firstName.isBlank()) "$timeGreeting 👋" else "$timeGreeting, $firstName 👋"
     DisposableEffect(currentProfile?.id) {
         onDispose {
@@ -1542,669 +1555,327 @@ private fun HomeScreen(
         else -> null
     }
 
-    // Return from See all to the homepage with the phone's Back button.
-    BackHandler(enabled = page != "home") {
-        page = "home"
+    // Home and All listings keep their scroll positions while another page is
+    // open. Post keeps its draft while the user looks at other tabs; a new key
+    // gives it a fresh form after "Post another listing".
+    val homeListState = rememberLazyListState()
+    val allListState = rememberLazyListState()
+    val pageStates = rememberSaveableStateHolder()
+    var postFormKey by rememberSaveable { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+
+    // The feed shows skeleton cards, not "no food", until its first load has finished.
+    var feedStarted by remember { mutableStateOf(false) }
+    var feedSettled by remember { mutableStateOf(false) }
+    LaunchedEffect(feedLoading) {
+        if (feedLoading) feedStarted = true else if (feedStarted) feedSettled = true
+    }
+    val showFeedSkeleton = remotePosts.isEmpty() && feedError == null && !feedSettled
+
+    fun resetFilters() {
         search = ""
         category = "All"
+    }
+
+    // Leaving Post by Back discards its draft, as before; switching tabs keeps it.
+    fun leavePost() {
+        pageStates.removeState("post-$postFormKey")
+        foodViewModel.loadAvailablePosts()
+        page = "home"
+    }
+
+    // Activity opens on My Listings unless an alert chose a tab.
+    fun openActivity() {
+        activityTab = "My Listings"
+        activityFocus = null
+        page = "activity"
+    }
+
+    // The bottom bar.
+    fun openTab(tab: String) {
+        when (tab) {
+            "home" -> {
+                // Home again while on Home: back to the top.
+                if (page == "home") scope.launch { homeListState.animateScrollToItem(0) }
+                page = "home"
+                resetFilters()
+            }
+            "activity" -> openActivity()
+            else -> page = tab
+        }
+    }
+
+    // A swipe moves to the neighbouring main tab and keeps Home's filters.
+    fun swipeTo(direction: Int) {
+        val next = MainTabs.getOrNull(MainTabs.indexOf(page) + direction) ?: return
+        if (next == "activity") openActivity() else page = next
+    }
+
+    // Back returns to Home from any other page; Back on Post discards its draft.
+    BackHandler(enabled = page != "home") {
+        if (page == "post") leavePost() else page = "home"
+        resetFilters()
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Cream)
+            .background(SaluColors.Background)
     ) {
-        Box(Modifier.weight(1f)) {
-            // Separate scroll position when opening another listing screen.
-            if (page == "alerts") {
-                AlertsScreen(
-                    notificationViewModel = notificationViewModel,
-                    onOpenConversation = { id -> messageViewModel.openConversation(id) },
-                    onOpenActivity = { tab ->
-                        activityTab = tab
-                        page = "activity"
-                    },
-                    onOpenClaimedReservation = { reservationId ->
-                        // Claims until the reservation loads; Activity then switches
-                        // to Purchases if it was priced.
-                        activityTab = "Claims"
-                        activityFocus = reservationId
-                        page = "activity"
-                    },
-                    onOpenRemovedReservation = { reservationId ->
-                        // A reservation cancelled because its listing was removed.
-                        activityTab = "My Reservations"
-                        activityFocus = reservationId
-                        page = "activity"
-                    }
-                )
-            } else if (page == "messages") {
-                MessagesScreen(
-                    messageViewModel = messageViewModel,
-                    onBack = { page = "home" }
-                )
-            } else if (page == "post") {
-                PostScreen(
-                    onBack = {
-                        foodViewModel.loadAvailablePosts()
-                        page = "home"
-                    },
-                    foodViewModel = foodViewModel
-                )
-            } else if (page == "activity") {
-                ActivityScreen(
-                    onPost = { page = "post" },
-                    onAlerts = { page = "alerts" },
-                    foodViewModel = foodViewModel,
-                    reservationViewModel = reservationViewModel,
-                    messageViewModel = messageViewModel,
-                    unreadAlerts = unreadAlerts,
-                    initialTab = activityTab,
-                    focusReservationId = activityFocus,
-                    onFocusHandled = { activityFocus = null }
-                )
-            } else if (page == "profile") {
-                ProfileScreen(
-                    onAlerts = { page = "alerts" },
-                    onLogout = onLogout,
-                    notificationViewModel = notificationViewModel,
-                    remoteProfile = currentProfile,
-                    onProfileUpdated = onProfileUpdated,
-                    reservationViewModel = reservationViewModel,
-                    savedListingViewModel = savedListingViewModel,
-                    // Saved Listings and the Successful claims/donations records open
-                    // a listing by its ID: the feed's copy if it has one, else the row's.
-                    onOpenListing = { post ->
-                        selectedFood = (remotePosts.firstOrNull { it.id == post.id } ?: post).toHomeFood(null)
-                    }
-                )
-            } else key(page) {
-                // Pull down to reload the listings and, if location access is
-                // already allowed, the phone's position (never asks for access).
-                PullToRefreshBox(
-                    isRefreshing = feedLoading,
-                    onRefresh = {
-                        foodViewModel.loadAvailablePosts()
-                        if (PhoneLocation.hasPermission(context)) refreshPhonePosition(askIfNeeded = false)
-                    },
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(
-                                start = 16.dp,
-                                end = 16.dp,
-                                top = 12.dp,
-                                bottom = 100.dp
-                            )
-                    ) {
-                        if (page == "home") {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // The profile photo, else the name's initial; opens Profile.
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(IconGreen)
-                                        .clickable(role = Role.Button) { page = "profile" }
-                                        .semantics { contentDescription = "Your profile" },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    val photo = profilePhotoUrl
-                                    if (photo != null && !profilePhotoFailed) {
-                                        AsyncImage(
-                                            model = photo,
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize(),
-                                            onError = { profilePhotoFailed = true }
-                                        )
-                                    } else if (profileInitial.isNotEmpty()) {
-                                        Text(
-                                            profileInitial,
-                                            modifier = Modifier.clearAndSetSemantics { },
-                                            fontSize = 19.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Green
-                                        )
-                                    } else {
-                                        Icon(
-                                            Icons.Outlined.Person,
-                                            contentDescription = null,
-                                            tint = Green,
-                                            modifier = Modifier.size(26.dp)
-                                        )
-                                    }
-                                }
-
-                                Spacer(Modifier.width(10.dp))
-
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        greeting,
-                                        fontSize = 19.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = DarkGreen
-                                    )
-
-                                    Text(
-                                        "Make a difference today 🌿",
-                                        fontSize = 12.sp,
-                                        color = Gray
-                                    )
-                                }
-
-                                IconButton(onClick = { page = "messages" }) {
-                                    BadgedBox(
-                                        badge = {
-                                            if (unreadMessages > 0) {
-                                                Badge { Text(if (unreadMessages > 99) "99+" else "$unreadMessages") }
-                                            }
-                                        }
-                                    ) {
-                                        Icon(
-                                            Icons.Outlined.ChatBubbleOutline,
-                                            contentDescription = "Open messages",
-                                            tint = DarkGreen
-                                        )
-                                    }
-                                }
-
-                                IconButton(
-                                    onClick = {
-                                        page = "alerts"
-                                    }
-                                ) {
-                                    BadgedBox(
-                                        badge = {
-                                            if (unreadAlerts > 0) {
-                                                Badge { Text(if (unreadAlerts > 99) "99+" else "$unreadAlerts") }
-                                            }
-                                        }
-                                    ) {
-                                        Icon(
-                                            Icons.Outlined.Notifications,
-                                            contentDescription = "Open alerts",
-                                            tint = DarkGreen
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TextButton(
-                                    onClick = {
-                                        page = "home"
-                                        search = ""
-                                        category = "All"
-                                    }
-                                ) {
-                                    Text("Back")
-                                }
-
-                                Text(
-                                    "All food listings",
-                                    fontSize = 19.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .swipeBetweenTabs(enabled = page in MainTabs) { direction -> swipeTo(direction) }
+        ) {
+            AnimatedContent(
+                targetState = page,
+                modifier = Modifier.fillMaxSize(),
+                transitionSpec = { pageTransition() },
+                label = "homePage"
+            ) { shown ->
+                when (shown) {
+                    "alerts" -> AlertsScreen(
+                        notificationViewModel = notificationViewModel,
+                        onOpenConversation = { id -> messageViewModel.openConversation(id) },
+                        onOpenActivity = { tab ->
+                            activityTab = tab
+                            activityFocus = null
+                            page = "activity"
+                        },
+                        onOpenClaimedReservation = { reservationId ->
+                            // Claims until the reservation loads; Activity then switches
+                            // to Purchases if it was priced.
+                            activityTab = "Claims"
+                            activityFocus = reservationId
+                            page = "activity"
+                        },
+                        onOpenRemovedReservation = { reservationId ->
+                            // A reservation cancelled because its listing was removed.
+                            activityTab = "My Reservations"
+                            activityFocus = reservationId
+                            page = "activity"
                         }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = search,
-                                onValueChange = { search = it },
-                                modifier = Modifier.weight(1f),
-                                placeholder = {
-                                    Text(
-                                        "Search food or donors",
-                                        fontSize = 12.sp
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Outlined.Search,
-                                        contentDescription = null
-                                    )
-                                },
-                                singleLine = true,
-                                shape = RoundedCornerShape(13.dp),
-                                textStyle = LocalTextStyle.current.copy(
-                                    fontSize = 13.sp
-                                ),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = Color.White,
-                                    unfocusedContainerColor = Color.White,
-                                    focusedBorderColor = Green,
-                                    unfocusedBorderColor = Line
-                                )
-                            )
-
-                            IconButton(
-                                onClick = { filterHelp = true },
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Info,
-                                    contentDescription = "About the filters",
-                                    tint = DarkGreen
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.horizontalScroll(
-                                rememberScrollState()
-                            ),
-                            horizontalArrangement = Arrangement.spacedBy(7.dp)
-                        ) {
-                            listOf(
-                                "All",
-                                "Nearby",
-                                "Donation",
-                                "For Sale",
-                                "Expiring Soon"
-                            ).forEach { label ->
-                                FilterChip(
-                                    selected = category == label,
-                                    onClick = {
-                                        category = label
-                                        if (label == "Nearby") refreshPhonePosition(askIfNeeded = true)
-                                    },
-                                    label = {
-                                        Text(label, fontSize = 12.sp)
-                                    },
-                                    shape = RoundedCornerShape(22.dp),
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        containerColor = Cream,
-                                        labelColor = Green,
-                                        selectedContainerColor = Green,
-                                        selectedLabelColor = Color.White
-                                    ),
-                                    border = BorderStroke(
-                                        1.dp,
-                                        Green.copy(alpha = 0.3f)
-                                    )
-                                )
-                            }
-                        }
-
-                        locationLine?.let { line ->
-                            Text(
-                                line,
-                                modifier = Modifier.padding(top = 6.dp),
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp,
-                                color = Gray
-                            )
-                        }
-
-                        // Hide the general recommendations while filtering,
-                        // so the selected category's results are clear.
-                        if (
-                            page == "home" &&
-                            category == "All" &&
-                            search.isBlank()
-                        ) {
-                            Spacer(Modifier.height(12.dp))
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "✦",
-                                    color = Color(0xFFFFA125),
-                                    fontSize = 23.sp
-                                )
-
-                                Spacer(Modifier.width(6.dp))
-
-                                Text(
-                                    if (discoveryPreferences.isActive) "For your preferences" else "Newest listings",
-                                    modifier = Modifier.weight(1f),
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-
-                                TextButton(
-                                    onClick = {
-                                        page = "all"
-                                        category = "All"
-                                        search = ""
-                                        sort = "Newest"
-                                    }
-                                ) {
-                                    Text("Browse all", fontSize = 12.sp)
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.horizontalScroll(
-                                    rememberScrollState()
-                                ),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Surface(
-                                    modifier = Modifier
-                                        .width(134.dp)
-                                        .height(180.dp),
-                                    shape = RoundedCornerShape(15.dp),
-                                    color = PaleGreen
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Icon(
-                                            Icons.Outlined.Eco,
-                                            contentDescription = null,
-                                            tint = Green,
-                                            modifier = Modifier.size(30.dp)
-                                        )
-
-                                        Text(
-                                            "Help reduce food waste in your community.",
-                                            fontSize = 13.sp,
-                                            lineHeight = 17.sp
-                                        )
-
-                                        Button(
-                                            onClick = { howItWorks = true },
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(8.dp)
-                                        ) {
-                                            Text("Learn more", fontSize = 12.sp)
-                                        }
-                                    }
-                                }
-
-                                if (preferredFoods.isEmpty() && !feedLoading) {
-                                    Text("No matching food yet. You can still browse all listings below.",
-                                        modifier = Modifier.width(180.dp).padding(12.dp), color = Gray, fontSize = 13.sp)
-                                }
-                                preferredFoods.take(2).forEach { food ->
-                                    RecommendationCard(
-                                        title = food.title,
-                                        imageUrl = food.imageUrl,
-                                        hasPhoto = food.post.hasPhoto,
-                                        price = food.price,
-                                        pickupLocation = food.pickupLocation,
-                                        status = food.status,
-                                        urgent = food.urgent,
-                                        onClick = { selectedFood = food }
-                                    )
-                                }
-                            }
-
-                            Spacer(Modifier.height(18.dp))
-                            HorizontalDivider(color = Line)
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    when (category) {
-                                        "Nearby" -> "Food within 5 km"
-                                        "Donation" -> "Food for donation"
-                                        "For Sale" -> "Food for sale"
-                                        "Expiring Soon" -> "Expiring soon"
-                                        else -> "Available food"
-                                    },
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-
-                                Text(
-                                    "${visibleFoods.size} listings",
-                                    fontSize = 11.sp,
-                                    color = Gray
-                                )
-                            }
-
-                            Box {
-                                TextButton(
-                                    onClick = { sortMenu = true },
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text("Sort: $sort", fontSize = 11.sp)
-                                    Icon(
-                                        Icons.Outlined.ExpandMore,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                }
-
-                                DropdownMenu(
-                                    expanded = sortMenu,
-                                    onDismissRequest = { sortMenu = false }
-                                ) {
-                                    listOf("Newest", "Nearest", "Name").forEach { option ->
-                                        DropdownMenuItem(
-                                            text = { Text(option) },
-                                            onClick = {
-                                                sort = option
-                                                sortMenu = false
-                                                if (option == "Nearest") refreshPhonePosition(askIfNeeded = true)
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-
-                        if (visibleFoods.isEmpty()) {
-                            // Nearby without the phone's position: the line under the chips says why.
-                            if (category != "Nearby" || phonePin != null || feedLoading || feedError != null) Text(
-                                if (feedLoading) "Loading listings…" else if (feedError != null) "Could not load listings. Try again."
-                                else if (category == "Nearby") "No listings with a map pin within 5 km."
-                                else "No available food listings yet.",
-                                modifier = Modifier.padding(vertical = 20.dp),
-                                fontSize = 13.sp,
-                                color = Gray
-                            )
-
-                            TextButton(
-                                onClick = {
-                                    search = ""
-                                    category = "All"
-                                }
-                            ) {
-                                Text("Clear filters")
-                            }
-                        }
-
-                        // All matching listings are shown; scroll to see more.
-                        visibleFoods.forEach { food ->
-                            key(food.id) {
-                                AvailableFoodCard(
-                                    food = food,
-                                    // Your own listings can't be bookmarked.
-                                    canSave = food.donorId != currentProfile?.id,
-                                    saved = food.id in savedIds,
-                                    onToggleSave = { savedListingViewModel.toggle(food.id) },
-                                    onClick = { selectedFood = food }
-                                )
-                            }
-
-                            Spacer(Modifier.height(10.dp))
-                        }
-                    }
-                }
-            }
-
-            if (
-                page != "alerts" &&
-                page != "post" &&
-                page != "activity" &&
-                page != "profile"
-            ) FloatingActionButton(
-                onClick = {
-                    page = "post"
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-                shape = CircleShape,
-                containerColor = Green,
-                contentColor = Color.White
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        Icons.Outlined.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(27.dp)
                     )
 
-                    Text("Post Food", fontSize = 10.sp)
-                }
-            }
-        }
+                    "messages" -> MessagesScreen(
+                        messageViewModel = messageViewModel,
+                        onBack = { page = "home" }
+                    )
 
-        Surface(
-            color = Color.White,
-            shadowElevation = 8.dp,
-            shape = RoundedCornerShape(
-                topStart = 20.dp,
-                topEnd = 20.dp
-            )
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(65.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                listOf(
-                    "Home" to Icons.Outlined.Home,
-                    "Alerts" to Icons.Outlined.Notifications,
-                    "Post" to Icons.Outlined.Add,
-                    "Activity" to Icons.Outlined.Timeline,
-                    "Profile" to Icons.Outlined.Person
-                ).forEach { (label, icon) ->
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable {
-                                when (label) {
-                                    "Home" -> {
-                                        page = "home"
-                                        category = "All"
-                                        search = ""
-                                    }
-
-                                    "Alerts" -> {
-                                        page = "alerts"
-                                    }
-
-                                    "Post" -> {
-                                        page = "post"
-                                    }
-
-                                    "Activity" -> {
-                                        page = "activity"
-                                    }
-
-                                    "Profile" -> {
-                                        page = "profile"
-                                    }
-                                }
-                            },
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        if (label == "Post") {
-                            Box(
-                                modifier = Modifier
-                                    .size(width = 36.dp, height = 28.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Green),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    icon,
-                                    contentDescription = null,
-                                    tint = Color.White
-                                )
-                            }
-                        } else {
-                            Icon(
-                                icon,
-                                contentDescription = null,
-                                tint = if (
-                                    (label == "Alerts" && page == "alerts") ||
-                                    (label == "Activity" && page == "activity") ||
-                                    (label == "Profile" && page == "profile") ||
-                                    (
-                                            label == "Home" &&
-                                                    page !in listOf("alerts", "post", "activity", "profile")
-                                            )
-                                ) Green else Gray,
-                                modifier = Modifier.size(25.dp)
-                            )
-                        }
-
-                        Spacer(Modifier.height(3.dp))
-
-                        Text(
-                            label,
-                            fontSize = 10.sp,
-                            color = if (
-                                label == "Post" ||
-                                (label == "Alerts" && page == "alerts") ||
-                                (label == "Activity" && page == "activity") ||
-                                (label == "Profile" && page == "profile") ||
-                                (
-                                        label == "Home" &&
-                                                page !in listOf("alerts", "post", "activity", "profile")
-                                        )
-                            ) {
-                                Green
-                            } else {
-                                Gray
+                    "post" -> pageStates.SaveableStateProvider("post-$postFormKey") {
+                        PostScreen(
+                            onBack = { leavePost() },
+                            foodViewModel = foodViewModel,
+                            onPostAnother = {
+                                pageStates.removeState("post-$postFormKey")
+                                postFormKey++
                             }
                         )
                     }
+
+                    "activity" -> ActivityScreen(
+                        onPost = { page = "post" },
+                        onAlerts = { page = "alerts" },
+                        foodViewModel = foodViewModel,
+                        reservationViewModel = reservationViewModel,
+                        messageViewModel = messageViewModel,
+                        unreadAlerts = unreadAlerts,
+                        initialTab = activityTab,
+                        focusReservationId = activityFocus,
+                        onFocusHandled = { activityFocus = null }
+                    )
+
+                    "profile" -> ProfileScreen(
+                        onAlerts = { page = "alerts" },
+                        onLogout = onLogout,
+                        notificationViewModel = notificationViewModel,
+                        remoteProfile = currentProfile,
+                        onProfileUpdated = onProfileUpdated,
+                        reservationViewModel = reservationViewModel,
+                        savedListingViewModel = savedListingViewModel,
+                        // Saved Listings and the Successful claims/donations records open
+                        // a listing by its ID: the feed's copy if it has one, else the row's.
+                        onOpenListing = { post ->
+                            selectedFood = (remotePosts.firstOrNull { it.id == post.id } ?: post).toHomeFood(null)
+                        }
+                    )
+
+                    else -> {
+                        // "home" or "all": each has its own scroll position.
+                        val onHome = shown == "home"
+                        // Pull down to reload the listings and, if location access is
+                        // already allowed, the phone's position (never asks for access).
+                        PullToRefreshBox(
+                            isRefreshing = feedLoading,
+                            onRefresh = {
+                                foodViewModel.loadAvailablePosts()
+                                if (PhoneLocation.hasPermission(context)) refreshPhonePosition(askIfNeeded = false)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            LazyColumn(
+                                state = if (onHome) homeListState else allListState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(top = 8.dp, bottom = 28.dp)
+                            ) {
+                                item(key = "top") {
+                                    if (onHome) {
+                                        HomeHeader(
+                                            greeting = greeting,
+                                            photoUrl = profilePhotoUrl,
+                                            name = currentProfile?.name.orEmpty(),
+                                            unreadMessages = unreadMessages,
+                                            unreadAlerts = unreadAlerts,
+                                            onProfile = { page = "profile" },
+                                            onMessages = { page = "messages" },
+                                            onAlerts = { page = "alerts" }
+                                        )
+                                    } else {
+                                        AllListingsHeader(
+                                            onBack = {
+                                                page = "home"
+                                                resetFilters()
+                                            }
+                                        )
+                                    }
+                                }
+
+                                item(key = "search") {
+                                    FeedSearchAndFilters(
+                                        search = search,
+                                        onSearch = { search = it },
+                                        category = category,
+                                        onCategory = { value ->
+                                            category = value
+                                            if (value == "Nearby") refreshPhonePosition(askIfNeeded = true)
+                                        },
+                                        onFilterHelp = { filterHelp = true },
+                                        locationLine = locationLine,
+                                        // "Finding your location…" and the approximate-location note are not problems.
+                                        locationProblem = locationProblem != null && !(locationFinder.finding && phonePin == null)
+                                    )
+                                }
+
+                                // Hide the general recommendations while filtering,
+                                // so the selected category's results are clear.
+                                if (onHome && category == "All" && search.isBlank()) {
+                                    item(key = "picked") {
+                                        val now = Instant.now()
+                                        PickedForYouSection(
+                                            preferencesActive = discoveryPreferences.isActive,
+                                            foods = preferredFoods.take(2),
+                                            reasonFor = { food ->
+                                                discoveryPreferences.reasonFor(food.post)
+                                                    ?: postedLabel(parseTimestamp(food.createdAt), now)
+                                                    ?: "New listing"
+                                            },
+                                            loading = showFeedSkeleton,
+                                            onOpen = { food -> selectedFood = food },
+                                            onBrowseAll = {
+                                                page = "all"
+                                                category = "All"
+                                                search = ""
+                                                sort = "Newest"
+                                            },
+                                            onHowItWorks = { howItWorks = true }
+                                        )
+                                    }
+                                }
+
+                                item(key = "feed-header") {
+                                    FeedHeader(
+                                        title = when (category) {
+                                            "Nearby" -> "Food within 5 km"
+                                            "Donation" -> "Free food"
+                                            "For Sale" -> "Food for sale"
+                                            "Expiring Soon" -> "Expiring soon"
+                                            else -> "Available food"
+                                        },
+                                        subtitle = if (showFeedSkeleton) "Loading listings…" else listingCount(visibleFoods.size),
+                                        sort = sort,
+                                        sortMenu = sortMenu,
+                                        onSortMenu = { sortMenu = it },
+                                        onSort = { option ->
+                                            sort = option
+                                            sortMenu = false
+                                            if (option == "Nearest") refreshPhonePosition(askIfNeeded = true)
+                                        }
+                                    )
+                                }
+
+                                when {
+                                    showFeedSkeleton -> item(key = "skeleton") {
+                                        SkeletonGroup(
+                                            description = "Loading food listings",
+                                            modifier = Modifier.padding(horizontal = 20.dp)
+                                        ) {
+                                            repeat(3) {
+                                                FoodCardSkeleton()
+                                                Spacer(Modifier.height(12.dp))
+                                            }
+                                        }
+                                    }
+
+                                    visibleFoods.isEmpty() -> item(key = "empty") {
+                                        FeedEmptyState(
+                                            feedError = feedError,
+                                            search = search,
+                                            category = category,
+                                            hasPosition = phonePin != null,
+                                            onRetry = { foodViewModel.loadAvailablePosts() },
+                                            onClearSearch = { search = "" },
+                                            onShowAll = { category = "All" },
+                                            onPost = { page = "post" }
+                                        )
+                                    }
+
+                                    // All matching listings are shown; scroll to see more.
+                                    else -> items(visibleFoods, key = { it.id }) { food ->
+                                        AvailableFoodCard(
+                                            food = food,
+                                            // Your own listings can't be bookmarked.
+                                            canSave = food.donorId != currentProfile?.id,
+                                            saved = food.id in savedIds,
+                                            onToggleSave = { savedListingViewModel.toggle(food.id) },
+                                            onClick = { selectedFood = food },
+                                            modifier = Modifier
+                                                .animateItem()
+                                                .padding(start = 20.dp, end = 20.dp, bottom = 12.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
+
+        MainNavigationBar(
+            selected = tabOf(page),
+            unreadAlerts = unreadAlerts,
+            onSelect = { tab -> openTab(tab) }
+        )
     }
 
     if (filterHelp) {
         AlertDialog(
             onDismissRequest = { filterHelp = false },
+            icon = { Icon(Icons.Outlined.Tune, contentDescription = null, tint = SaluColors.AmberInk) },
             title = { Text("About the filters") },
             text = {
-                Text(
-                    "Nearby: listings with a map pin within 5 km of you\n" +
-                            "Donation: free food\n" +
-                            "For Sale: paid food\n" +
-                            "Expiring Soon: listings that expire within 3 hours\n\n" +
-                            "Tap a category below to filter the listings."
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    FilterHelpRow(Icons.Outlined.NearMe, "Nearby", "Listings with a map pin within 5 km of you")
+                    FilterHelpRow(Icons.Outlined.VolunteerActivism, "Free", "Donations: nothing to pay")
+                    FilterHelpRow(Icons.Outlined.Sell, "For sale", "Food with a price, paid at pickup")
+                    FilterHelpRow(Icons.Outlined.HourglassBottom, "Expiring soon", "Listings that expire within 3 hours")
+                    Text(
+                        "Tap a filter to show only those listings. Sort puts the nearest or newest first.",
+                        style = SaluText.Supporting,
+                        color = SaluColors.InkMuted
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = { filterHelp = false }) {
@@ -2275,9 +1946,610 @@ private fun HomeScreen(
     }
 }
 
+/* MAIN NAVIGATION */
+
+/** The main tabs, in bottom-bar and swipe order. */
+private val MainTabs = listOf("home", "post", "alerts", "activity", "profile")
+
+/** The tab a page belongs to: All listings and Messages open from Home. */
+private fun tabOf(page: String): String = if (page == "all" || page == "messages") "home" else page
+
+/** Left-to-right order of pages, so a transition slides the way the tabs lie. */
+private fun pageOrder(page: String): Float = when (page) {
+    "all", "messages" -> 0.5f
+    else -> MainTabs.indexOf(page).coerceAtLeast(0).toFloat()
+}
+
+/** Tab changes slide a tenth of the width with a fade: movement, not a slideshow. */
+private fun AnimatedContentTransitionScope<String>.pageTransition(): ContentTransform {
+    val direction = if (pageOrder(targetState) >= pageOrder(initialState)) 1 else -1
+    val slide = tween<IntOffset>(SaluMotion.LONG, easing = SaluMotion.Emphasized)
+    return (slideInHorizontally(slide) { width -> direction * width / 10 } +
+            fadeIn(tween(SaluMotion.MEDIUM, delayMillis = 60)))
+        .togetherWith(
+            slideOutHorizontally(slide) { width -> -direction * width / 10 } +
+                    fadeOut(tween(SaluMotion.SHORT))
+        )
+        .using(SizeTransform(clip = false))
+}
+
+/**
+ * Swipes between the main tabs: a long enough or quick enough sideways drag
+ * moves one tab over. Anything that scrolls sideways itself (chip rows, photo
+ * pagers, the map) keeps its own drags, because it takes them first.
+ */
+@Composable
+private fun Modifier.swipeBetweenTabs(enabled: Boolean, onSwipe: (direction: Int) -> Unit): Modifier {
+    val currentOnSwipe by rememberUpdatedState(onSwipe)
+    if (!enabled) return this
+    return this.pointerInput(Unit) {
+        val distance = 72.dp.toPx()
+        val flingDistance = 28.dp.toPx()
+        val flingVelocity = 700.dp.toPx()
+        val tracker = VelocityTracker()
+        var dragged = 0f
+        detectHorizontalDragGestures(
+            onDragStart = {
+                dragged = 0f
+                tracker.resetTracking()
+            },
+            onDragCancel = { dragged = 0f },
+            onDragEnd = {
+                val velocity = tracker.calculateVelocity().x
+                val direction = when {
+                    dragged <= -distance || (dragged <= -flingDistance && velocity <= -flingVelocity) -> 1
+                    dragged >= distance || (dragged >= flingDistance && velocity >= flingVelocity) -> -1
+                    else -> 0
+                }
+                if (direction != 0) currentOnSwipe(direction)
+            },
+            onHorizontalDrag = { change, amount ->
+                change.consume()
+                dragged += amount
+                tracker.addPosition(change.uptimeMillis, change.position)
+            }
+        )
+    }
+}
+
+private class NavTab(val page: String, val label: String, val selectedIcon: ImageVector, val icon: ImageVector)
+
+private val NavTabs = listOf(
+    NavTab("home", "Home", Icons.Filled.Home, Icons.Outlined.Home),
+    NavTab("post", "Post", Icons.Filled.AddCircle, Icons.Outlined.AddCircleOutline),
+    NavTab("alerts", "Alerts", Icons.Filled.Notifications, Icons.Outlined.Notifications),
+    NavTab("activity", "Activity", Icons.Rounded.Timeline, Icons.Outlined.Timeline),
+    NavTab("profile", "Profile", Icons.Filled.Person, Icons.Outlined.Person)
+)
+
+@Composable
+private fun MainNavigationBar(
+    selected: String,
+    unreadAlerts: Int,
+    onSelect: (String) -> Unit
+) {
+    Surface(color = Color.White) {
+        Column {
+            HorizontalDivider(color = SaluColors.Line)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+                    .selectableGroup(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                NavTabs.forEach { tab ->
+                    val isSelected = tab.page == selected
+                    val badge = if (tab.page == "alerts") unreadAlerts else 0
+                    val interaction = remember { MutableInteractionSource() }
+                    val indicatorAlpha by animateFloatAsState(
+                        if (isSelected) 1f else 0f,
+                        tween(SaluMotion.MEDIUM),
+                        label = "navIndicatorAlpha"
+                    )
+                    val indicatorWidth by animateDpAsState(
+                        if (isSelected) 60.dp else 36.dp,
+                        tween(SaluMotion.MEDIUM, easing = SaluMotion.Emphasized),
+                        label = "navIndicatorWidth"
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .selectable(
+                                selected = isSelected,
+                                onClick = { onSelect(tab.page) },
+                                role = Role.Tab,
+                                interactionSource = interaction,
+                                indication = ripple(bounded = false, radius = 36.dp)
+                            )
+                            .semantics {
+                                contentDescription = if (badge > 0) "${tab.label}, $badge unread" else tab.label
+                            }
+                            .padding(top = 10.dp, bottom = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .height(32.dp)
+                                .width(64.dp)
+                                .clearAndSetSemantics { },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(width = indicatorWidth, height = 32.dp)
+                                    .graphicsLayer { alpha = indicatorAlpha }
+                                    .clip(SaluRadius.Pill)
+                                    .background(SaluColors.YellowSoft)
+                            )
+                            Box {
+                                Icon(
+                                    if (isSelected) tab.selectedIcon else tab.icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) SaluColors.Ink else SaluColors.InkMuted,
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .pressScale(interaction, pressedScale = 0.88f)
+                                )
+                                CountBadge(
+                                    badge,
+                                    Modifier
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = 9.dp, y = (-6).dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            tab.label,
+                            modifier = Modifier.clearAndSetSemantics { },
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+                            ),
+                            color = if (isSelected) SaluColors.Ink else SaluColors.InkMuted,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* HOME FEED PIECES */
+
+@Composable
+private fun HomeHeader(
+    greeting: String,
+    photoUrl: String?,
+    name: String,
+    unreadMessages: Int,
+    unreadAlerts: Int,
+    onProfile: () -> Unit,
+    onMessages: () -> Unit,
+    onAlerts: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // The profile photo, else the name's initial; opens Profile.
+        Box(
+            Modifier
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClickLabel = "Open your profile", onClick = onProfile)
+        ) {
+            Avatar(photoUrl = photoUrl, name = name, size = 48.dp, contentDescription = "Your profile")
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(Modifier.weight(1f)) {
+            Text(
+                greeting,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = SaluColors.Ink,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.semantics { heading() }
+            )
+            Text(
+                "Make a difference today",
+                style = SaluText.Supporting,
+                color = SaluColors.InkMuted
+            )
+        }
+
+        HeaderIconButton(
+            icon = Icons.Outlined.ChatBubbleOutline,
+            description = "Open messages",
+            count = unreadMessages,
+            onClick = onMessages
+        )
+        HeaderIconButton(
+            icon = Icons.Outlined.Notifications,
+            description = "Open alerts",
+            count = unreadAlerts,
+            onClick = onAlerts
+        )
+    }
+}
+
+@Composable
+private fun HeaderIconButton(
+    icon: ImageVector,
+    description: String,
+    count: Int,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.semantics {
+            contentDescription = if (count > 0) "$description, $count unread" else description
+        }
+    ) {
+        Box {
+            Icon(icon, contentDescription = null, tint = SaluColors.Ink, modifier = Modifier.size(24.dp))
+            CountBadge(
+                count,
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 9.dp, y = (-7).dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AllListingsHeader(onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back to Home", tint = SaluColors.Ink)
+        }
+        Text(
+            "All food listings",
+            style = SaluText.ScreenTitle,
+            color = SaluColors.Ink,
+            modifier = Modifier.semantics { heading() }
+        )
+    }
+}
+
+/** A filter chip: the value the feed filters on, and the words people see. */
+private class FeedFilter(val value: String, val label: String, val icon: ImageVector?)
+
+private val FeedFilters = listOf(
+    FeedFilter("All", "All", null),
+    FeedFilter("Nearby", "Nearby", Icons.Outlined.NearMe),
+    FeedFilter("Donation", "Free", Icons.Outlined.VolunteerActivism),
+    FeedFilter("For Sale", "For sale", Icons.Outlined.Sell),
+    FeedFilter("Expiring Soon", "Expiring soon", Icons.Outlined.HourglassBottom)
+)
+
+@Composable
+private fun FeedSearchAndFilters(
+    search: String,
+    onSearch: (String) -> Unit,
+    category: String,
+    onCategory: (String) -> Unit,
+    onFilterHelp: () -> Unit,
+    locationLine: String?,
+    locationProblem: Boolean
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(start = 20.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = search,
+                onValueChange = onSearch,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Search food or donors", style = SaluText.Body) },
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (search.isNotEmpty()) {
+                        IconButton(onClick = { onSearch("") }) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Clear search", tint = SaluColors.InkMuted)
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = SaluRadius.Control,
+                textStyle = SaluText.Body,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                colors = saluFieldColors()
+            )
+
+            IconButton(onClick = onFilterHelp) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = "About the filters",
+                    tint = SaluColors.InkMuted
+                )
+            }
+        }
+
+        LazyRow(
+            modifier = Modifier.padding(top = 10.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(FeedFilters, key = { it.value }) { filter ->
+                SaluFilterChip(
+                    label = filter.label,
+                    selected = category == filter.value,
+                    onClick = { onCategory(filter.value) },
+                    icon = filter.icon
+                )
+            }
+        }
+
+        // One line under the chips while Nearby or Nearest is chosen.
+        AnimatedVisibility(visible = locationLine != null) {
+            InlineNotice(
+                text = locationLine.orEmpty(),
+                icon = if (locationProblem) Icons.Outlined.LocationOff else Icons.Outlined.MyLocation,
+                tone = if (locationProblem) NoticeTone.Warning else NoticeTone.Info,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp)
+            )
+        }
+    }
+}
+
+/**
+ * "Picked for you" when Food preferences or a pickup area are set, else the
+ * newest listings, each with the reason it is here. The selection itself is
+ * unchanged: listings that match the saved preferences, newest first.
+ */
+@Composable
+private fun PickedForYouSection(
+    preferencesActive: Boolean,
+    foods: List<HomeFood>,
+    reasonFor: (HomeFood) -> String,
+    loading: Boolean,
+    onOpen: (HomeFood) -> Unit,
+    onBrowseAll: () -> Unit,
+    onHowItWorks: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .padding(start = 12.dp, end = 12.dp, top = 20.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(SaluColors.YellowSoft.copy(alpha = 0.7f))
+            .padding(vertical = 16.dp)
+    ) {
+        SectionHeader(
+            title = if (preferencesActive) "Picked for you" else "Just posted",
+            subtitle = if (preferencesActive) "Matches your food preferences" else "The newest food in your community",
+            icon = Icons.Outlined.AutoAwesome,
+            modifier = Modifier.padding(start = 16.dp, end = 4.dp),
+            action = {
+                TextButton(onClick = onBrowseAll) {
+                    Text("Browse all", style = MaterialTheme.typography.labelLarge, color = SaluColors.GreenInk)
+                }
+            }
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            when {
+                loading -> items(2) {
+                    SkeletonGroup(description = "Loading listings") {
+                        RecommendationSkeleton()
+                    }
+                }
+
+                foods.isEmpty() -> item(key = "no-match") {
+                    SaluCard(Modifier.width(220.dp)) {
+                        Column(Modifier.padding(16.dp)) {
+                            IconBubble(Icons.Outlined.SearchOff, size = 36.dp, iconSize = 20.dp)
+                            Spacer(Modifier.height(10.dp))
+                            Text("No matching food yet", style = SaluText.FoodTitle, color = SaluColors.Ink)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "You can still browse all listings below.",
+                                style = SaluText.Supporting,
+                                color = SaluColors.InkMuted
+                            )
+                        }
+                    }
+                }
+
+                else -> items(foods, key = { it.id }) { food ->
+                    RecommendationCard(
+                        food = food,
+                        reason = reasonFor(food),
+                        onClick = { onOpen(food) }
+                    )
+                }
+            }
+
+            item(key = "how-it-works") {
+                SaluCard(Modifier.width(196.dp)) {
+                    Column(Modifier.padding(16.dp)) {
+                        IconBubble(Icons.Outlined.Eco, tint = SaluColors.GreenInk, background = SaluColors.GreenSoft, size = 36.dp, iconSize = 20.dp)
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "Help reduce food waste in your community.",
+                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, lineHeight = 19.sp),
+                            color = SaluColors.Ink
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(
+                            onClick = onHowItWorks,
+                            contentPadding = PaddingValues(horizontal = 0.dp)
+                        ) {
+                            Text("Learn more", style = MaterialTheme.typography.labelLarge, color = SaluColors.GreenInk)
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = SaluColors.GreenInk, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeedHeader(
+    title: String,
+    subtitle: String,
+    sort: String,
+    sortMenu: Boolean,
+    onSortMenu: (Boolean) -> Unit,
+    onSort: (String) -> Unit
+) {
+    SectionHeader(
+        title = title,
+        subtitle = subtitle,
+        modifier = Modifier.padding(start = 20.dp, end = 8.dp, top = 24.dp, bottom = 12.dp),
+        action = {
+            Box {
+                TextButton(
+                    onClick = { onSortMenu(true) },
+                    modifier = Modifier.semantics { contentDescription = "Sort listings, now $sort" }
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.Sort,
+                        contentDescription = null,
+                        tint = SaluColors.Ink,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(sort, style = MaterialTheme.typography.labelLarge, color = SaluColors.Ink)
+                    Icon(
+                        Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = SaluColors.InkMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = sortMenu,
+                    onDismissRequest = { onSortMenu(false) }
+                ) {
+                    listOf("Newest", "Nearest", "Name").forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = { onSort(option) },
+                            trailingIcon = {
+                                if (option == sort) {
+                                    Icon(Icons.Outlined.Check, contentDescription = "Selected", tint = SaluColors.GreenInk)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    )
+}
+
+/** What to say when the feed has nothing to show, and what the user can do. */
+@Composable
+private fun FeedEmptyState(
+    feedError: String?,
+    search: String,
+    category: String,
+    // False while Nearby has no phone position; the note under the chips says why.
+    hasPosition: Boolean,
+    onRetry: () -> Unit,
+    onClearSearch: () -> Unit,
+    onShowAll: () -> Unit,
+    onPost: () -> Unit
+) {
+    val modifier = Modifier.padding(horizontal = 20.dp)
+    when {
+        feedError != null -> EmptyState(
+            icon = Icons.Outlined.CloudOff,
+            title = "Could not load listings",
+            message = "Check your internet connection, then try again or pull down to refresh.",
+            actionLabel = "Try again",
+            onAction = onRetry,
+            tint = SaluColors.PinkInk,
+            iconBackground = SaluColors.PinkSoft,
+            modifier = modifier
+        )
+
+        search.isNotBlank() -> EmptyState(
+            icon = Icons.Outlined.SearchOff,
+            title = "No food matches “${search.trim()}”",
+            message = "Try another word, or clear the search to see every listing.",
+            actionLabel = "Clear search",
+            onAction = onClearSearch,
+            modifier = modifier
+        )
+
+        category == "Nearby" -> EmptyState(
+            icon = Icons.Outlined.NearMe,
+            title = if (hasPosition) "No nearby listings" else "Nearby needs your location",
+            message = if (hasPosition) {
+                "No listings with a map pin within 5 km."
+            } else {
+                "Nearby shows listings with a map pin within 5 km of your phone."
+            },
+            actionLabel = "Show all food",
+            onAction = onShowAll,
+            modifier = modifier
+        )
+
+        category != "All" -> EmptyState(
+            icon = Icons.Outlined.FilterAltOff,
+            title = "Nothing here right now",
+            message = when (category) {
+                "Donation" -> "No free food is listed at the moment."
+                "For Sale" -> "No food is for sale at the moment."
+                else -> "No listings expire within the next 3 hours."
+            },
+            actionLabel = "Show all food",
+            onAction = onShowAll,
+            modifier = modifier
+        )
+
+        else -> EmptyState(
+            icon = Icons.Outlined.RiceBowl,
+            title = "No available food listings yet",
+            message = "When people in your community share surplus food, it appears here. Have extra food? Share it.",
+            actionLabel = "Post food",
+            onAction = onPost,
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun FilterHelpRow(icon: ImageVector, label: String, text: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        IconBubble(icon, size = 32.dp, iconSize = 18.dp)
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(label, style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp), color = SaluColors.Ink)
+            Text(text, style = SaluText.Supporting, color = SaluColors.InkMuted)
+        }
+    }
+}
+
+/** "1 listing", "12 listings". */
+private fun listingCount(count: Int): String = if (count == 1) "1 listing" else "$count listings"
+
 private fun FoodPost.toHomeFood(distanceMeters: Double?): HomeFood {
+    val now = Instant.now()
     val expiration = parseTimestamp(expirationDate)
-    val urgent = expiration?.isBefore(Instant.now().plusSeconds(3 * 60 * 60)) == true
+    val urgent = expiration?.isBefore(now.plusSeconds(3 * 60 * 60)) == true
     return HomeFood(
         id = id,
         donorId = donorId,
@@ -2294,6 +2566,8 @@ private fun FoodPost.toHomeFood(distanceMeters: Double?): HomeFood {
         description = description?.takeIf { it.isNotBlank() },
         createdAt = createdAt,
         distanceMeters = distanceMeters,
+        expiresText = expiryLabel(expiration, now),
+        unitLabel = unitSingular(unit),
         post = this
     )
 }
@@ -2316,207 +2590,302 @@ private data class HomeFood(
     val createdAt: String? = null,
     // Straight line from the phone to the pickup pin; null without either.
     val distanceMeters: Double? = null,
+    // "Expires in 2 h" or "Expires Sep 30"; null when the time is unknown.
+    val expiresText: String? = null,
+    // The unit one price is for, e.g. "pack" for packs.
+    val unitLabel: String = "",
     // The listing itself, for the details that the cards don't show.
     val post: FoodPost
-)
+) {
+    val free: Boolean get() = price == "Free"
+}
 
+/** A card in "Picked for you": photo with its price, the name, and why it is here. */
 @Composable
 private fun RecommendationCard(
-    title: String,
-    imageUrl: String?,
-    hasPhoto: Boolean,
-    price: String,
-    pickupLocation: String,
-    status: String,
-    urgent: Boolean,
+    food: HomeFood,
+    reason: String,
     onClick: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier
-            .width(142.dp)
-            .height(180.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(15.dp),
-        color = Color.White,
-        shadowElevation = 2.dp
+    SaluCard(
+        modifier = Modifier.width(212.dp),
+        onClick = onClick
     ) {
         Column {
-            ListingPhoto(
-                imageUrl = imageUrl,
-                hasPhoto = hasPhoto,
-                contentDescription = title,
-                modifier = Modifier
+            Box(
+                Modifier
                     .fillMaxWidth()
-                    .height(94.dp)
-            )
-
-            Column(Modifier.padding(8.dp)) {
-                Text(
-                    title,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
+                    .height(118.dp)
+            ) {
+                ListingPhoto(
+                    imageUrl = food.imageUrl,
+                    hasPhoto = food.post.hasPhoto,
+                    contentDescription = food.title,
+                    modifier = Modifier.fillMaxSize()
                 )
 
-                Spacer(Modifier.height(4.dp))
+                PhotoPriceLabel(
+                    food = food,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp)
+                )
 
-                Row {
-                    Text(
-                        price,
-                        color = if (urgent) Color(0xFFE85B13) else Green,
-                        fontSize = 12.sp
+                if (food.urgent) {
+                    StatusBadge(
+                        SaluStatus.ExpiresSoon,
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
                     )
+                }
+            }
 
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    food.title,
+                    style = SaluText.FoodTitle,
+                    color = SaluColors.Ink,
+                    minLines = 2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(
+                        Icons.Outlined.AutoAwesome,
+                        contentDescription = null,
+                        tint = SaluColors.AmberInk,
+                        modifier = Modifier
+                            .padding(top = 1.dp)
+                            .size(14.dp)
+                    )
+                    Spacer(Modifier.width(5.dp))
                     Text(
-                        "  •  $pickupLocation",
-                        color = Gray,
-                        fontSize = 11.sp,
-                        maxLines = 1
+                        reason,
+                        style = SaluText.Meta,
+                        color = SaluColors.AmberInk,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Spacer(Modifier.height(4.dp))
-
                 Text(
-                    status,
-                    color = if (urgent) Color(0xFFE85B13) else Green,
-                    fontSize = 11.sp
+                    listOfNotNull(
+                        food.quantity,
+                        food.distanceMeters?.let { "${distanceLabel(it)} away" } ?: food.pickupLocation
+                    ).joinToString(" · "),
+                    style = SaluText.Meta,
+                    color = SaluColors.InkMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
     }
 }
 
+/** The price on a white label over a photo: "Free" in green, else the price per unit. */
+@Composable
+private fun PhotoPriceLabel(food: HomeFood, modifier: Modifier = Modifier) {
+    Text(
+        if (food.free) "Free" else "${food.price} / ${food.unitLabel}",
+        style = SaluText.Meta.copy(fontWeight = FontWeight.Bold),
+        color = if (food.free) SaluColors.GreenInk else SaluColors.Ink,
+        maxLines = 1,
+        modifier = modifier
+            .clip(SaluRadius.Small)
+            .background(Color.White)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    )
+}
+
+/** Skeleton of a "Picked for you" card. */
+@Composable
+private fun RecommendationSkeleton() {
+    SaluCard(Modifier.width(212.dp)) {
+        Column {
+            SkeletonBlock(
+                Modifier
+                    .fillMaxWidth()
+                    .height(118.dp),
+                RoundedCornerShape(0.dp)
+            )
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SkeletonBlock(
+                    Modifier
+                        .fillMaxWidth(0.85f)
+                        .height(16.dp)
+                )
+                SkeletonBlock(
+                    Modifier
+                        .fillMaxWidth(0.6f)
+                        .height(12.dp)
+                )
+                SkeletonBlock(
+                    Modifier
+                        .fillMaxWidth(0.45f)
+                        .height(12.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A Home listing: the photo and name first, then who shares it, the price and
+ * amount, and when and where to pick it up.
+ */
 @Composable
 private fun AvailableFoodCard(
     food: HomeFood,
     canSave: Boolean,
     saved: Boolean,
     onToggleSave: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(15.dp),
-        color = Color.White,
-        shadowElevation = 2.dp
+    SaluCard(
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick
     ) {
-        Row(
-            modifier = Modifier.heightIn(min = 116.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ListingPhoto(
-                imageUrl = food.imageUrl,
-                hasPhoto = food.post.hasPhoto,
-                contentDescription = food.title,
-                modifier = Modifier.width(92.dp).height(116.dp).clip(RoundedCornerShape(14.dp))
-            )
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 10.dp, end = 3.dp, top = 7.dp, bottom = 7.dp)
+        Row(Modifier.padding(12.dp)) {
+            Box(
+                Modifier
+                    .size(104.dp)
+                    .clip(SaluRadius.Photo)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                ListingPhoto(
+                    imageUrl = food.imageUrl,
+                    hasPhoto = food.post.hasPhoto,
+                    contentDescription = food.title,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            Spacer(Modifier.width(14.dp))
+
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.Top) {
                     Text(
                         food.title,
-                        modifier = Modifier.weight(1f),
-                        fontSize = 13.sp,
-                        lineHeight = 16.sp,
-                        fontWeight = FontWeight.Bold
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(top = 2.dp),
+                        style = SaluText.FoodTitle,
+                        color = SaluColors.Ink,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
 
-                    if (canSave) IconButton(
-                        onClick = onToggleSave,
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (saved) {
-                                Icons.Outlined.Bookmark
-                            } else {
-                                Icons.Outlined.BookmarkBorder
-                            },
-                            contentDescription = if (saved) {
-                                "Remove saved ${food.title}"
-                            } else {
-                                "Save ${food.title}"
-                            },
-                            tint = if (saved) Green else DarkGreen,
-                            modifier = Modifier.size(19.dp)
-                        )
+                    if (canSave) {
+                        IconButton(
+                            onClick = onToggleSave,
+                            modifier = Modifier.offset(x = 10.dp, y = (-10).dp)
+                        ) {
+                            SaveToggleIcon(saved = saved, title = food.title)
+                        }
                     }
                 }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(food.quantity, fontSize = 11.sp, color = Gray)
-                    Text("  •  ", fontSize = 11.sp, color = Gray)
-
-                    Text(
-                        food.price,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(PaleGreen)
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                        color = Green,
-                        fontSize = 11.sp
-                    )
-                }
-
-                Spacer(Modifier.height(5.dp))
 
                 Text(
-                    listOfNotNull(
-                        food.status,
-                        food.distanceMeters?.let { "${distanceLabel(it)} away" },
-                        food.pickupLocation
-                    ).joinToString("  •  "),
-                    fontSize = 10.sp,
-                    lineHeight = 14.sp,
-                    color = if (food.urgent) {
-                        Color(0xFFE85B13)
-                    } else {
-                        Green
-                    }
+                    buildAnnotatedString {
+                        append(food.donorName)
+                        food.donorRating?.let {
+                            append("  ")
+                            withStyle(SpanStyle(color = SaluColors.AmberInk, fontWeight = FontWeight.SemiBold)) { append(it) }
+                        }
+                    },
+                    style = SaluText.Supporting,
+                    color = SaluColors.InkMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(Modifier.height(5.dp))
+                Spacer(Modifier.height(8.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Outlined.Person,
-                        contentDescription = null,
-                        tint = Green,
-                        modifier = Modifier.size(13.dp)
-                    )
-
-                    Spacer(Modifier.width(3.dp))
-
+                    PriceTag(price = food.price, free = food.free, unit = food.unitLabel.takeIf { !food.free })
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        food.donorName,
-                        fontSize = 9.sp,
-                        modifier = Modifier
-                            .weight(1f, fill = food.donorRating == null)
-                            .padding(end = 5.dp)
+                        "${food.quantity} available",
+                        style = SaluText.Meta,
+                        color = SaluColors.InkMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+                }
 
-                    food.donorRating?.let {
-                        Text(
-                            it,
-                            fontSize = 9.sp,
-                            color = RatingAmber,
-                            modifier = Modifier.padding(end = 5.dp)
+                Spacer(Modifier.height(8.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    food.expiresText?.let { expires ->
+                        MetaItem(
+                            icon = if (food.urgent) Icons.Outlined.HourglassBottom else Icons.Outlined.Schedule,
+                            text = expires,
+                            color = if (food.urgent) SaluColors.PinkInk else SaluColors.InkMuted
                         )
+                        Spacer(Modifier.width(12.dp))
                     }
+                    MetaItem(
+                        icon = Icons.Outlined.LocationOn,
+                        text = food.distanceMeters?.let { "${distanceLabel(it)} away" } ?: food.pickupLocation,
+                        color = SaluColors.InkMuted,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
                 }
             }
         }
     }
+}
+
+/** A small icon and a short text on one line. */
+@Composable
+private fun MetaItem(
+    icon: ImageVector,
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(15.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text,
+            style = SaluText.Meta,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** The bookmark icon; it pops briefly when the saved state changes. */
+@Composable
+private fun SaveToggleIcon(saved: Boolean, title: String, tint: Color = SaluColors.InkMuted) {
+    val scale = remember { Animatable(1f) }
+    var shown by remember { mutableStateOf(saved) }
+    LaunchedEffect(saved) {
+        if (saved != shown) {
+            shown = saved
+            scale.animateTo(1.25f, tween(110))
+            scale.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 500f))
+        }
+    }
+    Icon(
+        imageVector = if (saved) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+        contentDescription = if (saved) "Remove saved $title" else "Save $title",
+        tint = if (saved) SaluColors.Pink else tint,
+        modifier = Modifier
+            .size(24.dp)
+            .graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+            }
+    )
 }
 
 /* FOOD DETAILS SCREEN */
@@ -2687,489 +3056,432 @@ private fun FoodDetailsScreen(
         )
     }
 
-    val orange = Color(0xFFE85B13)
+    val role = if (donation) "donor" else "seller"
+    val payLine = if (donation) {
+        "Free — nothing to pay. Please be respectful and pick up on time."
+    } else {
+        "You'll pay ${formatPeso(reservationTotal(food.unitPrice, quantity))} " +
+                "at pickup for $quantity $unit. The app takes no payments."
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Cream
+        color = SaluColors.Background
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-        ) {
-            // Food photograph and floating controls
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(210.dp)
-            ) {
-                // Swipe between the photos; each has its own fallback.
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize()
-                ) { index ->
-                    if (index == 0) {
-                        ListingPhoto(
-                            imageUrl = food.imageUrl,
-                            hasPhoto = food.post.hasPhoto,
-                            contentDescription = food.title,
-                            modifier = photoModifier(index),
-                            textSize = 12.sp
-                        )
-                    } else {
-                        val loaded = extraPhotos
-                        // A plain tile while photos 2–4 are still being signed (loaded == null).
-                        ListingPhoto(
-                            imageUrl = loaded?.getOrNull(index - 1),
-                            hasPhoto = loaded != null,
-                            contentDescription = "${food.title}, photo ${index + 1}",
-                            modifier = photoModifier(index),
-                            textSize = 12.sp
-                        )
-                    }
-                }
-
-                if (photoCount > 1) {
-                    Text(
-                        "${pagerState.currentPage + 1} / $photoCount",
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(bottom = 30.dp, end = 16.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.Black.copy(alpha = 0.55f))
-                            .padding(horizontal = 9.dp, vertical = 3.dp),
-                        color = Color.White,
-                        fontSize = 11.sp
-                    )
-                }
-
-                FilledIconButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(16.dp)
-                        .size(42.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = Color.White,
-                        contentColor = DarkGreen
-                    )
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back to food listings"
-                    )
-                }
-
-                // Your own listing can't be bookmarked.
-                if (!isOwnFood) FilledIconButton(
-                    onClick = onToggleSave,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
-                        .size(42.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = Color.White,
-                        contentColor = Green
-                    )
-                ) {
-                    Icon(
-                        imageVector = if (saved) {
-                            Icons.Outlined.Bookmark
-                        } else {
-                            Icons.Outlined.BookmarkBorder
-                        },
-                        contentDescription = if (saved) {
-                            "Remove bookmark"
-                        } else {
-                            "Save food"
-                        }
-                    )
-                }
-            }
-
-            // Rounded details panel
+        Column(Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
-                    .offset(y = (-20).dp)
-                    .fillMaxWidth()
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = 26.dp,
-                            topEnd = 26.dp
-                        )
-                    )
-                    .background(Cream)
-                    .padding(18.dp)
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
             ) {
-                Text(
-                    food.title,
-                    fontSize = 25.sp,
-                    lineHeight = 30.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DarkGreen
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // Food photographs and floating controls
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp)
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White,
-                        shadowElevation = 1.dp,
-                        modifier = Modifier.weight(1f)
+                    // Swipe between the photos; each has its own fallback.
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { index ->
+                        if (index == 0) {
+                            ListingPhoto(
+                                imageUrl = food.imageUrl,
+                                hasPhoto = food.post.hasPhoto,
+                                contentDescription = food.title,
+                                modifier = photoModifier(index),
+                                textSize = 12.sp
+                            )
+                        } else {
+                            val loaded = extraPhotos
+                            // A plain tile while photos 2–4 are still being signed (loaded == null).
+                            ListingPhoto(
+                                imageUrl = loaded?.getOrNull(index - 1),
+                                hasPhoto = loaded != null,
+                                contentDescription = "${food.title}, photo ${index + 1}",
+                                modifier = photoModifier(index),
+                                textSize = 12.sp
+                            )
+                        }
+                    }
+
+                    // A soft shade behind the buttons, so they read on any photo.
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(88.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Black.copy(alpha = 0.25f), Color.Transparent)
+                                )
+                            )
+                    )
+
+                    if (photoCount > 1) {
+                        PageDots(
+                            count = photoCount,
+                            current = pagerState.currentPage,
+                            onDark = true,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .clip(SaluRadius.Pill)
+                                .background(Color.Black.copy(alpha = 0.35f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilledIconButton(
+                            onClick = onBack,
+                            modifier = Modifier.size(44.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = Color.White,
+                                contentColor = SaluColors.Ink
+                            )
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.ArrowBack,
+                                contentDescription = "Back to food listings"
+                            )
+                        }
+
+                        Spacer(Modifier.weight(1f))
+
+                        // Your own listing can't be bookmarked.
+                        if (!isOwnFood) FilledIconButton(
+                            onClick = onToggleSave,
+                            modifier = Modifier.size(44.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = Color.White,
+                                contentColor = SaluColors.Ink
+                            )
+                        ) {
+                            SaveToggleIcon(saved = saved, title = food.title, tint = SaluColors.Ink)
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 12.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        StatusBadge(if (food.urgent) SaluStatus.ExpiresSoon else SaluStatus.Available)
+                        Text(
+                            post.category,
+                            style = SaluText.Status,
+                            color = SaluColors.InkMuted,
+                            modifier = Modifier
+                                .clip(SaluRadius.Pill)
+                                .background(SaluColors.Cream)
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        food.title,
+                        style = SaluText.ScreenTitle,
+                        color = SaluColors.Ink,
+                        modifier = Modifier.semantics { heading() }
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Who shares it; opens the Donor/Seller page with the reviews.
+                    SaluCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { foodAction = "provider" }
                     ) {
                         Row(
-                            modifier = Modifier.padding(
-                                horizontal = 10.dp,
-                                vertical = 8.dp
-                            ),
+                            modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                Icons.Outlined.Storefront,
-                                contentDescription = null,
-                                tint = Green,
-                                modifier = Modifier.size(17.dp)
-                            )
+                            Avatar(photoUrl = null, name = food.donorName, size = 44.dp)
 
-                            Spacer(Modifier.width(5.dp))
+                            Spacer(Modifier.width(12.dp))
 
-                            Text(
-                                food.donorName,
-                                fontSize = 11.sp,
-                                maxLines = 2,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-
-                            food.donorRating?.let {
-                                Text(
-                                    "  $it",
-                                    fontSize = 11.sp,
-                                    color = RatingAmber,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                // Four equal summary columns, as tall as the tallest, so the captions line up.
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min)
-                ) {
-                    FoodSummaryItem(
-                        value = food.quantity,
-                        caption = "Available",
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    FoodSummaryItem(
-                        value = food.price,
-                        caption = if (donation) "Donation" else "For sale",
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    FoodSummaryItem(
-                        value = expires,
-                        caption = "Expires",
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    FoodSummaryItem(
-                        value = food.status,
-                        caption = "Status",
-                        modifier = Modifier.weight(1f),
-                        valueColor = if (food.urgent) orange else Green
-                    )
-                }
-
-                Spacer(Modifier.height(18.dp))
-
-                Text(
-                    description,
-                    fontSize = 13.sp,
-                    lineHeight = 20.sp,
-                    color = DarkGreen,
-                    maxLines = if (expanded) Int.MAX_VALUE else 4,
-                    overflow = TextOverflow.Ellipsis,
-                    onTextLayout = { layout -> if (!expanded) descriptionOverflows = layout.hasVisualOverflow }
-                )
-
-                // Only a description longer than 4 lines has Read more.
-                if (expanded || descriptionOverflows) TextButton(
-                    onClick = { expanded = !expanded },
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text(
-                        if (expanded) "Read less" else "Read more",
-                        fontSize = 12.sp
-                    )
-
-                    Icon(
-                        imageVector = if (expanded) {
-                            Icons.Outlined.ExpandLess
-                        } else {
-                            Icons.Outlined.ExpandMore
-                        },
-                        contentDescription = null,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                // Information card
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color.White,
-                    shadowElevation = 2.dp
-                ) {
-                    Column {
-                        FoodInfoRow(
-                            icon = Icons.Outlined.Eco,
-                            title = "Allergens",
-                            value = allergens,
-                            onClick = { messageDonor("Hi! What allergens does ${food.title} contain?") }
-                        )
-
-                        HorizontalDivider(color = Line)
-
-                        FoodInfoRow(
-                            icon = Icons.Outlined.Schedule,
-                            title = "Pickup Window",
-                            value = pickupWindow,
-                            onClick = { messageDonor("Hi! When can I pick up ${food.title}?") }
-                        )
-
-                        HorizontalDivider(color = Line)
-
-                        FoodInfoRow(
-                            icon = Icons.Outlined.Handshake,
-                            title = "Handover",
-                            value = handover,
-                            onClick = { messageDonor("Hi! How will the handover for ${food.title} work?") }
-                        )
-
-                        HorizontalDivider(color = Line)
-
-                        FoodInfoRow(
-                            icon = Icons.Outlined.LocationOn,
-                            title = "Pickup Address",
-                            value = food.pickupLocation + (food.distanceMeters?.let {
-                                "\nAbout ${distanceLabel(it)} away (straight line)"
-                            } ?: ""),
-                            onClick = { foodAction = "location" }
-                        )
-
-                        OutlinedButton(
-                            onClick = { foodAction = "location" },
-                            modifier = Modifier
-                                .align(Alignment.End)
-                                .padding(end = 12.dp, bottom = 8.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(
-                                horizontal = 10.dp,
-                                vertical = 0.dp
-                            )
-                        ) {
-                            Icon(
-                                Icons.Outlined.Map,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-
-                            Spacer(Modifier.width(5.dp))
-                            Text("View on map", fontSize = 11.sp)
-                        }
-
-                        HorizontalDivider(color = Line)
-
-                        FoodInfoRow(
-                            icon = Icons.Outlined.AcUnit,
-                            title = "Storage Note",
-                            value = storageNote,
-                            onClick = { messageDonor("Hi! How should I store ${food.title} after pickup?") }
-                        )
-
-                        HorizontalDivider(color = Line)
-
-                        FoodInfoRow(
-                            icon = Icons.Outlined.Person,
-                            title = if (donation) "Donor" else "Seller",
-                            value = food.donorRating?.let { "${food.donorName} • $it" } ?: food.donorName,
-                            onClick = { foodAction = "provider" }
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(14.dp))
-
-                // Quantity selector
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color.White,
-                    shadowElevation = 2.dp
-                ) {
-                    Column(Modifier.padding(12.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "Select quantity",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    food.donorName,
+                                    style = SaluText.FoodTitle,
+                                    color = SaluColors.Ink,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
-
-                                Spacer(Modifier.height(4.dp))
-
                                 Text(
-                                    "Up to ${food.quantity}",
-                                    fontSize = 11.sp,
-                                    color = Gray
+                                    buildAnnotatedString {
+                                        append(if (donation) "Donor" else "Seller")
+                                        append(" · ")
+                                        val rating = food.donorRating
+                                        if (rating != null) {
+                                            withStyle(SpanStyle(color = SaluColors.AmberInk, fontWeight = FontWeight.SemiBold)) {
+                                                append(rating)
+                                            }
+                                        } else {
+                                            append("No reviews yet")
+                                        }
+                                    },
+                                    style = SaluText.Supporting,
+                                    color = SaluColors.InkMuted
                                 )
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, Green),
-                                color = PaleGreen
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    IconButton(
-                                        onClick = { quantity-- },
-                                        enabled = quantity > 1
+                                if (post.donorEmailVerified) {
+                                    Row(
+                                        modifier = Modifier.padding(top = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            Icons.Outlined.Remove,
-                                            contentDescription = "Decrease quantity"
+                                            Icons.Outlined.Verified,
+                                            contentDescription = null,
+                                            tint = SaluColors.GreenInk,
+                                            modifier = Modifier.size(14.dp)
                                         )
-                                    }
-
-                                    Text(
-                                        quantity.toString(),
-                                        modifier = Modifier.widthIn(min = 24.dp),
-                                        textAlign = TextAlign.Center,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-
-                                    IconButton(
-                                        onClick = { quantity++ },
-                                        enabled = quantity < available
-                                    ) {
-                                        Icon(
-                                            Icons.Outlined.Add,
-                                            contentDescription = "Increase quantity"
-                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Email verified", style = SaluText.Meta, color = SaluColors.GreenInk)
                                     }
                                 }
                             }
-                        }
 
-                        Spacer(Modifier.height(7.dp))
-
-                        Text(
-                            "You’re requesting $quantity $unit",
-                            modifier = Modifier.align(Alignment.End),
-                            fontSize = 11.sp,
-                            color = Gray
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                // Main actions
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(7.dp)
-                ) {
-                    FoodActionButton(
-                        title = if (isOwnFood) "Your listing" else if (donation) "Message Donor" else "Message Seller",
-                        subtitle = if (isOwnFood) "Questions go to Messages" else "Ask a question",
-                        background = Color.White,
-                        foreground = Green,
-                        modifier = Modifier.weight(1f),
-                        onClick = { messageDonor("") }
-                    )
-
-                    FoodActionButton(
-                        title = if (isOwnFood) "Your listing" else "Reserve",
-                        subtitle = if (isOwnFood) "You cannot reserve it" else "Hold for pickup",
-                        background = Green,
-                        foreground = Color.White,
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            if (isOwnFood) {
-                                noticeTitle = "Your listing"
-                                notice = "You cannot reserve your own food post."
+                            if (!isOwnFood) {
+                                Spacer(Modifier.width(8.dp))
+                                SaluSecondaryButton(
+                                    text = "Message",
+                                    onClick = { messageDonor("") },
+                                    modifier = Modifier,
+                                    icon = Icons.Outlined.ChatBubbleOutline
+                                )
                             } else {
-                                reservationViewModel.clearReserveResult()
-                                reviewing = true
+                                Icon(
+                                    Icons.Outlined.ChevronRight,
+                                    contentDescription = null,
+                                    tint = SaluColors.InkMuted
+                                )
                             }
                         }
-                    )
-                }
+                    }
 
-                Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                // What the chosen quantity costs, near Reserve. The amount owed is
-                // fixed by the server when the reservation is made.
-                Text(
-                    if (donation) {
-                        "Free — nothing to pay."
-                    } else {
-                        "You'll pay ${formatPeso(reservationTotal(food.unitPrice, quantity))} " +
-                                "at pickup for $quantity $unit."
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    fontSize = 14.sp,
-                    lineHeight = 19.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    color = DarkGreen
-                )
-
-                Spacer(Modifier.height(3.dp))
-
-                Text(
-                    if (donation) {
-                        "Please be respectful and pick up on time."
-                    } else {
-                        "The app takes no payments."
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
-                    textAlign = TextAlign.Center,
-                    color = DarkGreen
-                )
-
-                if (!isOwnFood) {
-                    Spacer(Modifier.height(10.dp))
-
-                    TextButton(
-                        onClick = { reporting = true },
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    // Three facts at a glance: how much, what it costs, until when.
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min)
+                            .clip(SaluRadius.Card)
+                            .background(SaluColors.Cream.copy(alpha = 0.7f))
+                            .padding(vertical = 14.dp)
                     ) {
-                        Text(
-                            "Report this listing",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.error
+                        KeyFact(
+                            icon = Icons.Outlined.Inventory2,
+                            value = food.quantity,
+                            caption = "Available",
+                            modifier = Modifier.weight(1f)
                         )
+                        KeyFactDivider()
+                        KeyFact(
+                            icon = if (donation) Icons.Outlined.VolunteerActivism else Icons.Outlined.Sell,
+                            value = food.price,
+                            caption = if (donation) "Donation" else "Per ${food.unitLabel}",
+                            modifier = Modifier.weight(1f),
+                            valueColor = if (donation) SaluColors.GreenInk else SaluColors.Ink
+                        )
+                        KeyFactDivider()
+                        KeyFact(
+                            icon = if (food.urgent) Icons.Outlined.HourglassBottom else Icons.Outlined.Schedule,
+                            value = expires,
+                            caption = "Expires",
+                            modifier = Modifier.weight(1f),
+                            valueColor = if (food.urgent) SaluColors.PinkInk else SaluColors.Ink
+                        )
+                    }
+
+                    Spacer(Modifier.height(24.dp))
+
+                    DetailSection("About this food") {
+                        Text(
+                            description,
+                            modifier = Modifier.smoothSize(),
+                            style = SaluText.Body,
+                            color = if (food.description == null) SaluColors.InkMuted else SaluColors.Ink,
+                            maxLines = if (expanded) Int.MAX_VALUE else 4,
+                            overflow = TextOverflow.Ellipsis,
+                            onTextLayout = { layout -> if (!expanded) descriptionOverflows = layout.hasVisualOverflow }
+                        )
+
+                        // Only a description longer than 4 lines has Read more.
+                        if (expanded || descriptionOverflows) TextButton(
+                            onClick = { expanded = !expanded },
+                            contentPadding = PaddingValues(horizontal = 0.dp)
+                        ) {
+                            Text(
+                                if (expanded) "Read less" else "Read more",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = SaluColors.GreenInk
+                            )
+
+                            Icon(
+                                imageVector = if (expanded) {
+                                    Icons.Outlined.ExpandLess
+                                } else {
+                                    Icons.Outlined.ExpandMore
+                                },
+                                contentDescription = null,
+                                tint = SaluColors.GreenInk,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(24.dp))
+
+                    DetailSection("Pickup") {
+                        DetailRow(
+                            icon = Icons.Outlined.Schedule,
+                            label = "Pickup window",
+                            value = pickupWindow,
+                            missing = pickupWindow == notSet,
+                            actionLabel = "Ask the $role when to pick up",
+                            onClick = { messageDonor("Hi! When can I pick up ${food.title}?") }
+                        )
+
+                        DetailRow(
+                            icon = Icons.Outlined.Handshake,
+                            label = "Handover",
+                            value = handover,
+                            missing = handover == notSet,
+                            actionLabel = "Ask the $role about the handover",
+                            onClick = { messageDonor("Hi! How will the handover for ${food.title} work?") }
+                        )
+
+                        DetailRow(
+                            icon = Icons.Outlined.LocationOn,
+                            label = "Pickup location",
+                            value = food.pickupLocation + (food.distanceMeters?.let {
+                                "\nAbout ${distanceLabel(it)} away (straight line)"
+                            } ?: ""),
+                            trailing = Icons.Outlined.Map,
+                            actionLabel = "View the pickup location",
+                            onClick = { foodAction = "location" }
+                        )
+
+                        SaluSecondaryButton(
+                            text = "View on map",
+                            onClick = { foodAction = "location" },
+                            icon = Icons.Outlined.Map,
+                            modifier = Modifier
+                                .padding(start = 48.dp, top = 4.dp)
+                        )
+                    }
+
+                    Spacer(Modifier.height(24.dp))
+
+                    DetailSection("Food safety") {
+                        DetailRow(
+                            icon = Icons.Outlined.WarningAmber,
+                            label = "Allergens",
+                            value = allergens,
+                            missing = allergens == notProvided,
+                            actionLabel = "Ask the $role about allergens",
+                            onClick = { messageDonor("Hi! What allergens does ${food.title} contain?") }
+                        )
+
+                        DetailRow(
+                            icon = Icons.Outlined.AcUnit,
+                            label = "Storage",
+                            value = storageNote,
+                            missing = storageNote == notProvided,
+                            actionLabel = "Ask the $role about storage",
+                            onClick = { messageDonor("Hi! How should I store ${food.title} after pickup?") }
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        if (isOwnFood) {
+                            "Questions from others about this listing appear in Messages."
+                        } else {
+                            "Tap a detail to ask the $role about it in the chat."
+                        },
+                        style = SaluText.Meta,
+                        color = SaluColors.InkMuted
+                    )
+
+                    if (!isOwnFood) {
+                        Spacer(Modifier.height(12.dp))
+
+                        TextButton(
+                            onClick = { reporting = true },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Icon(
+                                Icons.Outlined.Flag,
+                                contentDescription = null,
+                                tint = SaluColors.PinkInk,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "Report this listing",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = SaluColors.PinkInk
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Main action, always in reach: how many, what it costs, Reserve.
+            Surface(color = Color.White) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                ) {
+                    HorizontalDivider(color = SaluColors.Line)
+                    Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
+                        if (isOwnFood) {
+                            InlineNotice(
+                                text = "This is your listing, so you cannot reserve it. " +
+                                        "Questions from others appear in Messages.",
+                                icon = Icons.Outlined.Info
+                            )
+                        } else {
+                            Text(payLine, style = SaluText.Supporting, color = SaluColors.Ink)
+
+                            Spacer(Modifier.height(10.dp))
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                QuantityStepper(
+                                    quantity = quantity,
+                                    available = available,
+                                    unit = unit,
+                                    onDecrease = { quantity-- },
+                                    onIncrease = { quantity++ }
+                                )
+
+                                Spacer(Modifier.width(12.dp))
+
+                                SaluPrimaryButton(
+                                    text = "Reserve",
+                                    onClick = {
+                                        reservationViewModel.clearReserveResult()
+                                        reviewing = true
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -3207,128 +3519,164 @@ private fun listingPickupWindow(start: String?, end: String?): String? {
             if (sameDay) listingClockFormat.format(to.atZone(zone)) else listingTime(to)
 }
 
+/** One of the three facts under a listing's title: an icon, the value (up to 2 lines) and a caption. */
 @Composable
-private fun FoodSummaryItem(
+private fun KeyFact(
+    icon: ImageVector,
     value: String,
     caption: String,
     modifier: Modifier,
-    valueColor: Color = DarkGreen
+    valueColor: Color = SaluColors.Ink
 ) {
-    // The value on top (up to 2 lines), the caption at the bottom.
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .padding(end = 6.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Icon(icon, contentDescription = null, tint = SaluColors.AmberInk, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             value,
-            fontSize = 12.sp,
-            lineHeight = 16.sp,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, lineHeight = 18.sp),
             color = valueColor,
+            textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-
+        Spacer(Modifier.weight(1f))
         Text(
             caption,
-            modifier = Modifier.padding(top = 5.dp),
-            fontSize = 10.sp,
-            color = Gray
+            modifier = Modifier.padding(top = 4.dp),
+            style = SaluText.Meta,
+            color = SaluColors.InkMuted,
+            textAlign = TextAlign.Center
         )
     }
 }
 
 @Composable
-private fun FoodInfoRow(
+private fun KeyFactDivider() {
+    Box(
+        Modifier
+            .fillMaxHeight()
+            .padding(vertical = 4.dp)
+            .width(1.dp)
+            .background(SaluColors.CreamDeep)
+    )
+}
+
+/** A titled group of details, separated by space rather than boxes. */
+@Composable
+private fun DetailSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            title,
+            style = SaluText.SectionTitle,
+            color = SaluColors.Ink,
+            modifier = Modifier.semantics { heading() }
+        )
+        Spacer(Modifier.height(8.dp))
+        content()
+    }
+}
+
+/**
+ * A detail with its icon. Tapping it does [actionLabel] (asks the donor in the
+ * chat, or opens the map); [missing] values are shown in muted text.
+ */
+@Composable
+private fun DetailRow(
     icon: ImageVector,
-    title: String,
+    label: String,
     value: String,
-    onClick: () -> Unit
+    actionLabel: String,
+    onClick: () -> Unit,
+    missing: Boolean = false,
+    trailing: ImageVector = Icons.Outlined.ChatBubbleOutline
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .clip(SaluRadius.Small)
+            .clickable(onClickLabel = actionLabel, onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Icon(
+        IconBubble(
             icon,
-            contentDescription = null,
-            tint = Green,
-            modifier = Modifier.size(20.dp)
+            tint = SaluColors.Ink,
+            background = SaluColors.Cream,
+            size = 36.dp,
+            iconSize = 19.dp
         )
 
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(12.dp))
 
-        Text(
-            title,
-            modifier = Modifier.width(83.dp),
-            fontSize = 11.sp,
-            lineHeight = 15.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Text(
-            value,
-            modifier = Modifier.weight(1f),
-            fontSize = 11.sp,
-            lineHeight = 16.sp,
-            color = Gray
-        )
+        Column(Modifier.weight(1f)) {
+            Text(label, style = SaluText.Meta, color = SaluColors.InkMuted)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                value,
+                style = SaluText.Body,
+                color = if (missing) SaluColors.InkMuted else SaluColors.Ink
+            )
+        }
 
         Icon(
-            Icons.Outlined.ChevronRight,
+            trailing,
             contentDescription = null,
-            tint = Gray,
-            modifier = Modifier.size(16.dp)
+            tint = SaluColors.InkMuted,
+            modifier = Modifier
+                .padding(start = 8.dp, top = 8.dp)
+                .size(18.dp)
         )
     }
 }
 
+/** − quantity + for the reservation; the server still checks the amount. */
 @Composable
-private fun FoodActionButton(
-    title: String,
-    subtitle: String,
-    background: Color,
-    foreground: Color,
-    modifier: Modifier,
-    onClick: () -> Unit
+private fun QuantityStepper(
+    quantity: Int,
+    available: Int,
+    unit: String,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit
 ) {
-    Surface(
-        modifier = modifier
-            .heightIn(min = 70.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        color = background,
-        border = BorderStroke(1.dp, PaleGreen)
+    Row(
+        modifier = Modifier
+            .clip(SaluRadius.Control)
+            .background(SaluColors.Cream)
+            .semantics(mergeDescendants = false) {
+                stateDescription = "$quantity of $available $unit"
+            },
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.padding(
-                horizontal = 5.dp,
-                vertical = 12.dp
-            ),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+        IconButton(
+            onClick = onDecrease,
+            enabled = quantity > 1
         ) {
-            Text(
-                title,
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                color = foreground
+            Icon(
+                Icons.Outlined.Remove,
+                contentDescription = "Decrease quantity"
             )
+        }
 
-            Spacer(Modifier.height(4.dp))
+        Text(
+            quantity.toString(),
+            modifier = Modifier.widthIn(min = 28.dp),
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.titleMedium,
+            color = SaluColors.Ink
+        )
 
-            Text(
-                subtitle,
-                fontSize = 9.sp,
-                textAlign = TextAlign.Center,
-                color = foreground
+        IconButton(
+            onClick = onIncrease,
+            enabled = quantity < available
+        ) {
+            Icon(
+                Icons.Outlined.Add,
+                contentDescription = "Increase quantity"
             )
         }
     }
