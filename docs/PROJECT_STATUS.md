@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-09-28 (Phase 4 signed off, §8; Purchases, Claims and listing prices merged into `master` through PR #3, migrated, and passed on two phones except the "Reserved" dialog, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — merged through PR #3, migrated, and passed on two phones, §10; Phase 2 demo fixes — real donor names, listing details, up to 4 photos, editing, saved listings, expiry — built on branch `claude/phase2-demo-fixes` (PR #5), migrated, and passed on two phones with a regression round, §11; PR #5 merged into `master` as `aa3e823`; Phase 3 demo fixes — Reserve review page and receipt, removing reserved listings, real Activity and Profile records — built on branch `claude/phase3-demo-fixes` at `24fe9f2`, migrated, passed on two phones on 2026-09-27, and merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`), §12; Phase 4 demo fixes — Profile bell and Settings, notification preferences, a real notification sound, a real response rate, a live Messages inbox and chat badge — built on branch `claude/phase4-demo-fixes` at `3288d02`, migrated, passed a short 13-step test on two phones on 2026-09-27, and merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`), §13; Phase 5 part 1 — ratings and reviews, reports, an Email verified badge — built on branch `claude/phase5-reviews-reports-v6ahqn` at `3bd038c`, migrated, passed on two phones on 2026-09-28, and merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`), §14; Phase 5 part 2 — Maps: a pickup pin on an OpenStreetMap map, distances, Nearby and Nearest, Directions — built on branch `claude/phase5-maps` at `47ed894`, migrated, and passed on two phones on 2026-09-28, not merged yet, §15). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
+_Last updated: 2026-09-28 (Phase 4 signed off, §8; Purchases, Claims and listing prices merged into `master` through PR #3, migrated, and passed on two phones except the "Reserved" dialog, §9; Phase 1 demo fixes — Google sign-in, Keep me signed in, profile name and photo, password change — merged through PR #3, migrated, and passed on two phones, §10; Phase 2 demo fixes — real donor names, listing details, up to 4 photos, editing, saved listings, expiry — built on branch `claude/phase2-demo-fixes` (PR #5), migrated, and passed on two phones with a regression round, §11; PR #5 merged into `master` as `aa3e823`; Phase 3 demo fixes — Reserve review page and receipt, removing reserved listings, real Activity and Profile records — built on branch `claude/phase3-demo-fixes` at `24fe9f2`, migrated, passed on two phones on 2026-09-27, and merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`), §12; Phase 4 demo fixes — Profile bell and Settings, notification preferences, a real notification sound, a real response rate, a live Messages inbox and chat badge — built on branch `claude/phase4-demo-fixes` at `3288d02`, migrated, passed a short 13-step test on two phones on 2026-09-27, and merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`), §13; Phase 5 part 1 — ratings and reviews, reports, an Email verified badge — built on branch `claude/phase5-reviews-reports-v6ahqn` at `3bd038c`, migrated, passed on two phones on 2026-09-28, and merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`), §14; Phase 5 part 2 — Maps: a pickup pin on an OpenStreetMap map, distances, Nearby and Nearest, Directions — built on branch `claude/phase5-maps` at `47ed894`, migrated, passed on two phones on 2026-09-28, and merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`), §15; Profile redesign and settings (Mika's PR #10) — Edit Profile with a bio, a Settings hub, food preferences — migrated and passed a 6-step test on two phones on 2026-09-28, §16). Based on the code at commit `d4f65fe` on `master`, plus the image changes described in §3.2 and §3.3 and the load-failure fixes in §3.4, which were committed together with this document on 2026-09-25, and the known-issue fixes in §3.5 (commit `85c9263`). Manual test results reported on 2026-09-25 are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -26,7 +26,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Phase 2 demo fixes: listings (fixes to finished Phase 2 features; not part of Phase 5) | Real donor names, no ratings or distances, newest-first feed, the listing's own pickup address, pickup window, handover, allergens and storage notes saved and shown, up to 4 photos, Edit listing, real Saved Listings, "Expired" from the expiry date (§11) | **Passed.** Built with AGP on branch `claude/phase2-demo-fixes` at `4b6aac6` (PR #5), and migration `20260929_phase2_listing_details.sql` applied to the live project on 2026-09-26. The §11.4 two-phone test (steps 1–25) and its regression round (steps 26–39) passed the same day ([results log](#results-log), §11.6). New small issues are listed in §11.5. |
 | Phase 3 demo fixes: reservations, Activity, Profile (fixes to finished Phase 3 features; not part of Phase 5) | Reserve review page and receipt, pickup questions and notes through the chat, deleting reserved listings by removing them, real Activity records, real Profile claims and donations, Phase 2 leftovers (§12) | **Passed.** Built with AGP on branch `claude/phase3-demo-fixes` at `24fe9f2`. Migration `20260930_phase3_demo_fixes.sql` applied to the live project on 2026-09-26; its read-only check passed 13 of 13 and the live safety check 14 of 14. The two-phone test (§12.4, 32 steps) passed on 2026-09-27 ([results log](#results-log), §12.6). Merged into `master` through PR #7 on 2026-09-27 (merge commit `c184d9b`). |
 | Phase 4 demo fixes: messages, alerts, Profile (fixes to finished Phase 4 features; not part of Phase 5) | The Profile bell opens Alerts and the gear opens Settings, the unused Food recommendations and Pickup reminders switches and Compact preview removed, a real notification sound, a real response rate, a live Messages inbox and a chat badge that counts unread messages (§13) | **Passed.** Written on branch `claude/phase4-demo-fixes` (from `master` at `c184d9b`) on 2026-09-27 and built with AGP at `3288d02`. Migration `20261001_phase4_demo_fixes.sql` applied to the live project on 2026-09-27; its read-only check passed 9 of 9. A short two-phone test (§13.4, 13 steps) passed the same day ([results log](#results-log), §13.6); the checks it left out are listed in §13.6. Merged into `master` through PR #8 on 2026-09-27 (merge commit `39b57b5`). |
-| Phase 5: Maps, Reviews, Reports | Split by the developer into part 1 (ratings and reviews, reports, and an "Email verified" badge moved here from Phase 6; §14) and part 2 (Maps) | **Part 1: passed, and merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`).** Written on branch `claude/phase5-reviews-reports-v6ahqn` (from `master` at `39b57b5`) on 2026-09-27 and built with AGP at `3bd038c`. Migration `20261002_phase5_reviews_reports.sql` applied to the live project on 2026-09-27; its read-only check passed 18 of 18 and the live safety check 27 of 27. The two-phone test (§14.4, 15 steps) passed on 2026-09-28 ([results log](#results-log), §14.6). **Part 2 (Maps): passed; not merged yet.** Written on branch `claude/phase5-maps` (from `master` at `711cc5e`) on 2026-09-28 and built with AGP at `47ed894`. Migration `20261003_phase5_maps.sql` applied to the live project on 2026-09-28; its read-only check passed 11 of 11 and the live safety check 22 of 22. The two-phone test (§15.4, 12 steps) passed on 2026-09-28 ([results log](#results-log), §15.6). |
+| Phase 5: Maps, Reviews, Reports | Split by the developer into part 1 (ratings and reviews, reports, and an "Email verified" badge moved here from Phase 6; §14) and part 2 (Maps) | **Part 1: passed, and merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`).** Written on branch `claude/phase5-reviews-reports-v6ahqn` (from `master` at `39b57b5`) on 2026-09-27 and built with AGP at `3bd038c`. Migration `20261002_phase5_reviews_reports.sql` applied to the live project on 2026-09-27; its read-only check passed 18 of 18 and the live safety check 27 of 27. The two-phone test (§14.4, 15 steps) passed on 2026-09-28 ([results log](#results-log), §14.6). **Part 2 (Maps): passed, and merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`).** Written on branch `claude/phase5-maps` (from `master` at `711cc5e`) on 2026-09-28 and built with AGP at `47ed894`. Migration `20261003_phase5_maps.sql` applied to the live project on 2026-09-28; its read-only check passed 11 of 11 and the live safety check 22 of 22. The two-phone test (§15.4, 12 steps) passed on 2026-09-28 ([results log](#results-log), §15.6). |
 | Phase 6: Admin and Final Release | ID verification and the admin screen (the Email verified badge moved to Phase 5 part 1) | **Not started.** |
 
 - The roadmap has six phases (confirmed by the developer on 2026-09-25); earlier versions of this document went only up to Phase 4. Phases 1–3 are described in §1–§3 and Phase 4 in §8.
@@ -57,6 +57,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 - **Phase 4 demo fixes (branch `claude/phase4-demo-fixes` at `3288d02`, §13):** `gradlew.bat :app:assembleDebug --offline` BUILD SUCCESSFUL in 43s on 2026-09-27, with only old deprecation warnings (`ArrowBack`, `Logout`). No tests or lint were run. Before that, only a kotlinc 2.2.10 type check against desktop Compose jars and hand-written Android stubs had been run (§13.3). The developer then installed it from Android Studio on both phones and ran the §13.4 test ([results log](#results-log)).
 - **Phase 5 part 1 (branch `claude/phase5-reviews-reports-v6ahqn` at `3bd038c`, §14):** `gradlew.bat :app:assembleDebug --offline` BUILD SUCCESSFUL in 57s on 2026-09-27, with only the three old deprecation warnings (`FormatListBulleted`, `ArrowBack`, `Logout`). No tests or lint were run. Before that, only a kotlinc 2.2.10 type check against desktop Compose jars and hand-written Android stubs had been run (§14.3). The developer then installed it from Android Studio on both phones and ran the §14.4 test ([results log](#results-log)).
 - **Phase 5 part 2 (branch `claude/phase5-maps` at `47ed894`, §15):** `gradlew.bat :app:assembleDebug :app:testDebugUnitTest` BUILD SUCCESSFUL in 3m 43s on 2026-09-28, run online once to download osmdroid 6.1.20, with only the three old deprecation warnings (`FormatListBulleted`, `ArrowBack`, `Logout`). `testDebugUnitTest`: `GeoTest` 11 of 11 and `ExampleUnitTest` passed. No lint was run. The developer then installed it from Android Studio on both phones and ran the §15.4 test ([results log](#results-log)).
+- **Mika's PR #10 (branch `mika/navigation-activity-settings` at `b2b04ca`, §16):** `gradlew.bat :app:assembleDebug :app:testDebugUnitTest --offline` BUILD SUCCESSFUL in 36s on 2026-09-28, with only icon deprecation warnings; `GeoTest` 11 of 11. The developer then installed it from Android Studio on both phones and ran the §16 test ([results log](#results-log)).
 - **Automated tests:** the Android Studio templates `ExampleUnitTest` and `ExampleInstrumentedTest`, and since §15 `GeoTest` (JVM tests of the distances, the distance labels, pin rounding and the pin fields' JSON, run by `testDebugUnitTest`).
 
 ### Phase 1: what exists (summary)
@@ -555,6 +556,8 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 | 2026-09-28 | live project (SQL Editor): `20261003_phase5_maps.sql`, then `supabase/tests/phase5_maps_check.sql` in the same run | Developer | Passed | Phase 5 part 2 migration applied; the read-only check returned 11 of 11 PASS (§15.6). |
 | 2026-09-28 | live project (SQL Editor); script `supabase/tests/phase5_maps_live_safety_check.sql` | Developer | Passed | 22 passed, 0 failed, 0 skipped. The donor of the newest listing and the newest other account (the two test accounts) were the donor and the outsider. The sanity checks confirmed the simulated sign-ins, a listing posted through RLS with a pin sent with 7 decimals and stored as 9.647812, 123.854013, a listing without a pin, moving a pin together with a name change in one call, and adding a pin to a listing without one. Refused as expected: on insert, a half pin, latitude 91 and longitude 181 (the check constraint); on edit, one coordinate, 90.5, −180.5, NaN and a blank name sent with a new pin, each leaving the pin unchanged; the outsider, an expired listing, a `REMOVED` listing, a missing listing, no login and another project's token; a direct UPDATE by the donor. An edit with both pin arguments NULL and an edit through the old `update_my_food_post` both kept the pin. The outsider saw the pin while the listing was available and nothing once it had expired, while the donor still did. The closing error rolled everything back. |
 | 2026-09-28 | `47ed894` (branch `claude/phase5-maps`); migration applied | Developer | Passed | Phase 5 part 2 (§15): the §15.4 two-phone test, 12 steps, sent in two parts (steps 1–7, then 8–12) and reported as passed. Covered: the pin picker on Post (the note, the map starting at Tagbilaran with the attribution, "Place the pickup pin on the map.", placing the pin by tapping, and "Use my location" with Android's prompt and Precise); B's Nearby with the prompt, "Food within 5 km" and the filter help; distances on the cards, Nearest (listings without a pin last) and Name; the details' distance line; the Pickup location page's map, attribution link, Directions (Google Maps), new pickup instructions and "Ask for exact location"; a listing without a pin (no distance or map, "Search area in Maps"); Reserve through the review page and "Directions" in My Reservations; A's alerts and chat reply; moving a pin on Edit, and the "no pickup pin yet" text on an older listing; B seeing the moved pin after a reload; location access removed on B (no distances, the Nearby and Nearest line, the map and Directions still working); location turned off on A (the "Use my location" and Nearby texts, then back on); Mark claimed, with no Directions on the Claims record. Not covered: the "Left out" list in §15.4. |
+| 2026-09-28 | live project (SQL Editor): `20261004_profile_bio.sql`, then `supabase/tests/profile_bio_check.sql` in the same run | Developer | Passed | Profile bio migration (Mika's PR #10) applied; the read-only check returned 6 of 6 PASS (§16.3). |
+| 2026-09-28 | `b2b04ca` (branch `mika/navigation-activity-settings`); migration applied | Developer | Passed | Mika's Profile redesign and settings (§16): a 6-step two-phone test, reported as passed. Covered: A's new Profile layout; Edit Profile saving a new name and a bio; the Settings hub; Food preferences turning Home's row into "For your preferences" and back; the new "About distance" note; Alerts in the bottom bar on Activity; Nearby distances; B seeing A's new name on the cards and the Donor row; B's new Profile, Log out and signing in again. Not covered: the list under "Not tested" in §16.3. |
 
 - **Build:** the test phone's app code was deployed on 2026-09-25 at 10:37 (+08:00), after the last source change (10:04), so it matches the working tree above. That same code was committed on 2026-09-25, with no source changes after 10:04. The build on any second device was not checked.
 - **Phase 4 retest build:** `c7323b8`, built at 21:21 (+08:00) with no local source changes and installed from Android Studio. A's phone showed the new "Loading your alert settings…" text, so it ran this build; which build the second phone ran was not checked.
@@ -640,7 +643,7 @@ Started on 2026-09-25 at the developer's request; scope and status are in §8. R
 6. Run the negative tests on the live project. **Passed on 2026-09-25** (21 of 21, `supabase/tests/phase4_live_safety_check.sql`). Not yet done: the password-reset email (part of the step 10 regression in §4).
 7. Sign off Phase 4. **Signed off by the developer on 2026-09-25.** The password-reset email was not tested; Phase 4 did not change its code.
 
-Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow. Phase 5 part 1 (reviews, reports, Email verified) passed on two phones on 2026-09-28 and was merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`) (§14). Phase 5 part 2 (Maps) passed on two phones on 2026-09-28 on branch `claude/phase5-maps` and is not merged yet (§15); Phase 6 has not started.
+Phase 5 (Maps, Reviews, Reports) and Phase 6 (Admin and Final Release) follow. Phase 5 part 1 (reviews, reports, Email verified) passed on two phones on 2026-09-28 and was merged into `master` through PR #9 on 2026-09-28 (merge commit `711cc5e`) (§14). Phase 5 part 2 (Maps) passed on two phones on 2026-09-28 and was merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`) (§15). Mika's Profile redesign and settings (PR #10) passed a short test on two phones on 2026-09-28 (§16). Phase 6 has not started.
 
 ---
 
@@ -1552,7 +1555,7 @@ Each step is tagged [New] or [Regression]. Where Home must show new data, the st
 
 ## 15. Phase 5 part 2: Maps
 
-**Status (2026-09-28): built with AGP at `47ed894`, migration applied to the live project (read-only check 11 of 11, live safety check 22 of 22), and the 12-step two-phone test (§15.4) passed on 2026-09-28; not merged yet.** Written on branch `claude/phase5-maps` (from `master` at `711cc5e`, the PR #9 merge). Before that, the SQL was tested on a local PostgreSQL 16 copy, and the Kotlin passed a kotlinc type check and a JVM unit test (§15.3). Results: §15.6.
+**Status (2026-09-28): built with AGP at `47ed894`, migration applied to the live project (read-only check 11 of 11, live safety check 22 of 22), and the 12-step two-phone test (§15.4) passed on 2026-09-28; merged into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`).** Written on branch `claude/phase5-maps` (from `master` at `711cc5e`, the PR #9 merge). Before that, the SQL was tested on a local PostgreSQL 16 copy, and the Kotlin passed a kotlinc type check and a JVM unit test (§15.3). Results: §15.6.
 
 ### 15.1 What changed
 
@@ -1704,3 +1707,68 @@ Each check is tagged [New] or [Regression]. Where a phone must show new data, th
 - **Live safety check:** `supabase/tests/phase5_maps_live_safety_check.sql` on 2026-09-28: 22 passed, 0 failed, 0 skipped, rolled back by its closing error. The donor was the donor of the newest listing and the outsider the newest other account (the two test accounts).
 - **Two-phone test:** §15.4 steps 1–12 passed on 2026-09-28, sent in two parts (steps 1–7, then 8–12).
 - **Not tested:** the list under "Left out of the short test" in §15.4. Lint was not run.
+- **Merged** into `master` through PR #11 on 2026-09-28 (merge commit `255b0f8`).
+
+---
+
+## 16. Profile redesign and settings (Mika's PR #10)
+
+**Status (2026-09-28): the 6-step two-phone test passed and the migration is applied (check 6 of 6); merged through PR #10 right after this commit (the next branch records the merge commit).** Written by Mika S on branch `mika/navigation-activity-settings` (commit `7888309`, from `master` at `711cc5e`). Before the merge, Claude merged `master` (Maps) into her branch and fixed its one conflict (`308a499`), then changed one sentence and the migration (`b2b04ca`).
+
+### 16.1 What changed
+
+- **Profile** (`ProfileScreen.kt`):
+  - a larger photo with the camera button, and the name with a pencil that opens Edit Profile;
+  - the bio under the name, or "Add a little about yourself using the pencil." when it is empty;
+  - Claims, Donations and Rating; Verification Status; Ratings & Reviews; Saved Listings;
+  - "Response: …%" and "Member since …" at the bottom, and a Log out button.
+  - The bell is gone: Alerts is always in the bottom bar.
+- **Edit Profile** (`ProfileSettingsUi.kt`): the display name and "About me" (at most 160 characters), saved with `update_my_profile_details` ("Profile saved to your account."). The photo can also be changed there.
+- **Settings** (the gear): Notifications, Food preferences, Location & distance, Account & security, Help & food safety and About Salu-Salo, with the "How Salu-Salo works" and "Reservations & pickups" help pages. The old account-name editor is gone.
+- **Food preferences and pickup area** (`DiscoveryPreferences.kt`):
+  - food categories, Both/Donations/For sale, and a text that must appear in the pickup location;
+  - saved per account, on this phone only;
+  - while any is set, Home's "Newest listings" row becomes "For your preferences"; the full feed below is unchanged.
+- **Bottom bar:** the second button is always Alerts (on Activity it used to be Browse).
+- **Changed by Claude before the merge:**
+  - the "About distance" note on Location & distance now points to the map distances and Nearby; it used to say that distances were not available yet;
+  - the migration was renamed from `20261002_profile_bio.sql` to `20261004_profile_bio.sql`, so it sorts after the Maps file, and it got `users_bio_length_check`.
+
+### 16.2 Migration `20261004_profile_bio.sql`
+
+- `users.bio text` (nullable) and the check `users_bio_length_check` (at most 160 characters), which also covers a profile's first insert.
+- SECURITY DEFINER `update_my_profile_details(p_name, p_bio)`:
+  - takes the caller from the token and changes only their own row;
+  - the name must have 1–120 characters and the bio at most 160 (blank is stored as NULL);
+  - executable by `authenticated` only;
+  - never changes `role`, `email` or `firebase_uid`.
+- `update_my_profile_name` is unchanged, so older builds keep working.
+- Only the owner sees the bio, because `users` rows can be read only by their owner.
+- It must run before the new build is installed; without it, Save changes on Edit Profile fails.
+- Read-only check: `supabase/tests/profile_bio_check.sql` (6 checks).
+
+### 16.3 Results
+
+- **Build:** `gradlew.bat :app:assembleDebug :app:testDebugUnitTest --offline` at `b2b04ca`: BUILD SUCCESSFUL in 36s on 2026-09-28, with only icon deprecation warnings; `GeoTest` 11 of 11. The developer installed it from Android Studio on both phones.
+- **Migration:** applied to the live project on 2026-09-28, with `supabase/tests/profile_bio_check.sql` in the same run: 6 of 6 PASS.
+- **Two-phone test (6 steps, 2026-09-28): passed.** Covered:
+  - A: the new Profile layout;
+  - A: Edit Profile, saving a new name and a bio ("Profile saved to your account.");
+  - A: the Settings hub, and Food preferences turning Home's row into "For your preferences" and back;
+  - A: the new "About distance" note;
+  - A: Alerts in the bottom bar on Activity, and Nearby distances;
+  - B: A's new name on the cards and the Donor row;
+  - B: the new Profile, Log out and signing in again.
+- **Not tested:**
+  - the photo change on Edit Profile;
+  - the pickup-area filter itself;
+  - the 160-character limit;
+  - Account & security, Help & food safety and About;
+  - email verification from the new layout;
+  - a Google account's password page.
+
+### 16.4 Known limits
+
+- Food preferences and the pickup area are saved on the phone, per account; they don't follow the account to another phone.
+- The pickup-area filter matches the typed text in pickup locations, not a distance; Nearby does that.
+- Only the owner sees the bio; other people's pages don't show it.

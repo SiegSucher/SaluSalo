@@ -1,5 +1,11 @@
 package com.example.salusalo
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -83,8 +89,6 @@ fun ProfileSections(
     val userRepository = remember { UserRepository() }
     val scope = rememberCoroutineScope()
     val currentName = profile?.name.orEmpty()
-    var name by rememberSaveable { mutableStateOf(currentName) }
-    var savingName by remember { mutableStateOf(false) }
     var feedback by rememberSaveable { mutableStateOf("") }
 
     var sound by rememberSaveable {
@@ -95,6 +99,13 @@ fun ProfileSections(
     // recommendations and pickup_reminders columns stay but have no switch; a
     // save writes back the values it loaded. Notification sound stays on this phone.
     val serverPreferences by notificationViewModel.preferences.collectAsStateWithLifecycle()
+    val preferenceError by notificationViewModel.message.collectAsStateWithLifecycle()
+    LaunchedEffect(preferenceError, page) {
+        if (page == "notifications" && preferenceError != null) {
+            feedback = preferenceError.orEmpty()
+            notificationViewModel.clearMessage()
+        }
+    }
     var messageAlerts by rememberSaveable { mutableStateOf(true) }
     var reservationAlerts by rememberSaveable { mutableStateOf(true) }
     LaunchedEffect(page) {
@@ -148,10 +159,17 @@ fun ProfileSections(
         "response" -> "Response Rate"
         "verification" -> "Email Verification"
         "saved" -> "Saved Listings"
-        "notifications" -> "Notification Preferences"
-        "account" -> "Account Details"
+        "notifications" -> "Notifications"
+        "account" -> "Account & security"
         "security" -> "Account Security"
         "password" -> "Change Password"
+        "edit_profile" -> "Edit Profile"
+        "food_preferences" -> "Food preferences"
+        "location" -> "Location & distance"
+        "help" -> "Help & food safety"
+        "about" -> "About Salu-Salo"
+        "how_it_works" -> "How Salu-Salo works"
+        "pickup_help" -> "Reservations & pickups"
         "settings" -> "Settings"
         "safety" -> "Trust & Safety"
         "report" -> "Report a Concern"
@@ -187,8 +205,8 @@ fun ProfileSections(
                             .fillMaxWidth()
                             .padding(8.dp)
                     ) {
-                        TextButton(onClick = { back() }) {
-                            Text("Back", color = SectionGreen)
+                        IconButton(onClick = { back() }) {
+                            Icon(Icons.Outlined.ArrowBack, "Back", tint = SectionGreen)
                         }
 
                         Column(
@@ -418,7 +436,7 @@ fun ProfileSections(
                                                 .onFailure { error ->
                                                     feedback = (error as? VerificationException)?.message
                                                         ?: "The verification email could not be sent. " +
-                                                        "Check your internet connection and try again."
+                                                                "Check your internet connection and try again."
                                                 }
                                             sendingEmail = false
                                         }
@@ -533,7 +551,8 @@ fun ProfileSections(
                             "notifications" -> {
                                 SectionCard {
                                     if (serverPreferences == null) {
-                                        Text("Loading your alert settings…", fontSize = 13.sp)
+                                        Text("Alert preferences have not loaded yet.", fontSize = 13.sp)
+                                        TextButton(onClick = { notificationViewModel.loadPreferences() }) { Text("Retry") }
                                     } else {
                                         SectionToggle(
                                             "New messages",
@@ -553,13 +572,9 @@ fun ProfileSections(
                                 }
 
                                 Text(
-                                    "New messages and Reservation updates are saved to your " +
-                                            "account and decide which alerts you get on the Alerts " +
-                                            "page. Notification sound is saved on this phone: it " +
-                                            "plays the phone's notification sound when a new alert " +
-                                            "arrives while the app is open, and stays quiet in " +
-                                            "silent and vibrate mode. Phone notifications while " +
-                                            "the app is closed are not available yet.",
+                                    "Choose which updates appear in Alerts. Sound plays while " +
+                                            "Salu-Salo is open. Notifications while the app is " +
+                                            "closed are not available yet.",
                                     fontSize = 12.sp
                                 )
 
@@ -583,65 +598,31 @@ fun ProfileSections(
                                         ) { feedback = "Preferences saved to your account." }
                                     }
                                 }
-                            }
-
-                            "account" -> {
-                                SectionCard {
-                                    OutlinedTextField(
-                                        value = name,
-                                        onValueChange = { name = it },
-                                        label = { Text("Display name") },
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    // The sign-in email comes from the account and cannot be edited here.
-                                    OutlinedTextField(
-                                        value = profile?.email.orEmpty(),
-                                        onValueChange = {},
-                                        label = { Text("Email (used to sign in)") },
-                                        singleLine = true,
-                                        enabled = false,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-
-                                SectionButton(
-                                    "Save account details",
-                                    enabled = !savingName && profile != null
-                                ) {
-                                    val trimmed = name.trim()
-                                    when {
-                                        trimmed.isEmpty() -> feedback = "Enter your name."
-                                        trimmed.length > 120 ->
-                                            feedback = "Your name must be 120 characters or fewer."
-                                        else -> {
-                                            savingName = true
-                                            feedback = ""
-                                            scope.launch {
-                                                runCatching { userRepository.updateMyName(trimmed) }
-                                                    .onSuccess { updated ->
-                                                        name = updated.name
-                                                        onProfileUpdated(updated)
-                                                        feedback = "Saved to your account."
-                                                    }
-                                                    .onFailure { error ->
-                                                        feedback = supabaseErrorText(
-                                                            error,
-                                                            "Your name could not be saved. Check " +
-                                                                    "your internet connection and try again."
-                                                        )
-                                                    }
-                                                savingName = false
-                                            }
+                                OutlinedButton(
+                                    onClick = {
+                                        val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                            Uri.parse("package:${context.packageName}"))
+                                        val target = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                        } else fallback
+                                        try { context.startActivity(target) }
+                                        catch (_: Exception) {
+                                            try { context.startActivity(fallback) }
+                                            catch (_: Exception) { feedback = "Open your phone Settings, then Apps, then Salu-Salo." }
                                         }
-                                    }
-                                }
-
-                                SectionLink(
-                                    "Account security",
-                                    "Change your password"
-                                ) { navigate("security") }
+                                    }, modifier = Modifier.fillMaxWidth()
+                                ) { Text("Open device notification settings") }
                             }
+
+                            "edit_profile" -> ProfileEditor(profile, onProfileUpdated)
+                            "account" -> AccountSecuritySettings(profile, ::navigate)
+                            "food_preferences" -> FoodPreferenceSettings(profile?.id)
+                            "location" -> LocationPreferenceSettings(profile?.id)
+                            "help" -> HelpSettings(::navigate)
+                            "about" -> AboutSettings(::navigate)
+                            "how_it_works" -> HowItWorksSettings(pickups = false)
+                            "pickup_help" -> HowItWorksSettings(pickups = true)
 
                             "security" -> {
                                 SectionLink(
@@ -715,7 +696,7 @@ fun ProfileSections(
                                                     }.onFailure { error ->
                                                         feedback = (error as? PasswordChangeException)?.message
                                                             ?: "Your password could not be changed. Check " +
-                                                            "your internet connection and try again."
+                                                                    "your internet connection and try again."
                                                     }
                                                     changingPassword = false
                                                 }
@@ -725,32 +706,7 @@ fun ProfileSections(
                                 }
                             }
 
-                            "settings" -> {
-                                SectionLink(
-                                    "Account details",
-                                    "Edit your display name"
-                                ) { navigate("account") }
-
-                                SectionLink(
-                                    "Security",
-                                    "Change your password"
-                                ) { navigate("security") }
-
-                                SectionLink(
-                                    "Notifications",
-                                    "Message and reservation alerts, sound"
-                                ) { navigate("notifications") }
-
-                                SectionLink(
-                                    "Verification",
-                                    "Confirm your email address"
-                                ) { navigate("verification") }
-
-                                SectionLink(
-                                    "Trust & safety",
-                                    "Community information and reporting"
-                                ) { navigate("safety") }
-                            }
+                            "settings" -> SettingsHub(::navigate)
 
                             "safety" -> {
                                 SectionCard {
@@ -886,7 +842,7 @@ fun ProfileSections(
                                 }
 
                                 SectionButton("Edit account details") {
-                                    navigate("account")
+                                    navigate("edit_profile")
                                 }
                             }
                         }

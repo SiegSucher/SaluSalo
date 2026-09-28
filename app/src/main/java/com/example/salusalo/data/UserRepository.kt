@@ -80,6 +80,13 @@ class UserRepository(
             put("p_name", name.trim())
         }).decodeAs()
 
+    /** Saves only the authenticated caller's name and bio through the restricted RPC. */
+    suspend fun updateMyProfile(name: String, bio: String): UserProfile =
+        supabase.postgrest.rpc("update_my_profile_details", buildJsonObject {
+            put("p_name", name.trim())
+            put("p_bio", bio.trim())
+        }).decodeAs()
+
     /**
      * Uploads a new profile photo (already a JPEG) under the user's own folder,
      * points the profile at it, then removes the previous photo. Each upload
