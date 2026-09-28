@@ -227,7 +227,7 @@ internal fun LocationPreferenceSettings(profileId: String?) {
     Surface(color = SettingsPale, shape = RoundedCornerShape(16.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("About distance", fontWeight = FontWeight.Bold)
-            Text("Listings currently use written pickup locations. Exact kilometre distances and a radius filter are not available yet.", fontSize = 13.sp)
+            Text("Listings with a map pin show how far away they are, and Home's Nearby chip lists those within 5 km. This pickup area filter matches the written pickup location instead.", fontSize = 13.sp)
         }
     }
     SettingsCaption("Used with your food preferences on Home and saved for this account on this phone.")
