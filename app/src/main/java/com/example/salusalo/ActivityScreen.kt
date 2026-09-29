@@ -51,6 +51,7 @@ import com.example.salusalo.model.reservationTotal
 import com.example.salusalo.viewmodel.DeleteResult
 import com.example.salusalo.viewmodel.FoodViewModel
 import com.example.salusalo.viewmodel.MessageViewModel
+import com.example.salusalo.viewmodel.ReservationAction
 import com.example.salusalo.viewmodel.ReservationViewModel
 import com.example.salusalo.viewmodel.ReviewResult
 import com.example.salusalo.viewmodel.text
@@ -145,6 +146,8 @@ fun ActivityScreen(
     val donorReservations by reservationViewModel.donorReservations.collectAsStateWithLifecycle()
     val foodSaving by foodViewModel.saving.collectAsStateWithLifecycle()
     val foodLoading by foodViewModel.loading.collectAsStateWithLifecycle()
+    val myPostsLoaded by foodViewModel.myPostsLoaded.collectAsStateWithLifecycle()
+    val myPostsError by foodViewModel.myPostsError.collectAsStateWithLifecycle()
     val reservationSaving by reservationViewModel.saving.collectAsStateWithLifecycle()
     val reservationsBusy by reservationViewModel.loading.collectAsStateWithLifecycle()
     val reservationsLoadFailed by reservationViewModel.loadFailed.collectAsStateWithLifecycle()
@@ -152,18 +155,11 @@ fun ActivityScreen(
     // This account's own reviews, and the page to rate a claimed pickup's donor.
     val myReviews by reservationViewModel.myReviews.collectAsStateWithLifecycle()
     val reviewResult by reservationViewModel.reviewResult.collectAsStateWithLifecycle()
-    val reservationMessage by reservationViewModel.message.collectAsStateWithLifecycle()
+    val reservationAction by reservationViewModel.actionResult.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         foodViewModel.loadMyPosts()
         reservationViewModel.refresh()
-    }
-
-    // My Listings shows skeleton cards, not "no listings", until its first load here has finished.
-    var listingsStarted by remember { mutableStateOf(false) }
-    var listingsSettled by remember { mutableStateOf(false) }
-    LaunchedEffect(foodLoading) {
-        if (foodLoading) listingsStarted = true else if (listingsStarted) listingsSettled = true
     }
 
     // A new or changed review changes the donor's rating on Home, so reload the feed.
@@ -171,20 +167,17 @@ fun ActivityScreen(
         if (reviewResult is ReviewResult.Saved) foodViewModel.loadAvailablePosts()
     }
 
-    // Show reservation results (cancel, claim, or a failed load) on this screen,
-    // then clear them so they do not reappear later in the food details dialog.
+    // Show reservation results (cancel, claim, release) on this screen, then
+    // clear them so they do not reappear later in the food details dialog.
     var reservationNotice by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(reservationMessage) {
-        reservationMessage?.let {
-            // The button says "Mark as picked up", so its result does too.
-            reservationNotice = if (it == "Reservation marked as claimed.") {
-                "Marked as picked up. You'll find it under Completed."
-            } else {
-                it
+    LaunchedEffect(reservationAction) {
+        reservationAction?.let { result ->
+            reservationNotice = result.text()
+            reservationViewModel.clearActionResult()
+            // A cancel or release returns quantity to the listing, so refresh the Home feed.
+            if (result == ReservationAction.Cancelled || result == ReservationAction.Released) {
+                foodViewModel.loadAvailablePosts()
             }
-            reservationViewModel.clearMessage()
-            // A cancel returns quantity to the listing, so refresh the Home feed.
-            if (it.startsWith("Reservation cancelled")) foodViewModel.loadAvailablePosts()
         }
     }
 
@@ -200,6 +193,7 @@ fun ActivityScreen(
     var pickupKey by rememberSaveable { mutableStateOf<String?>(null) }
     var confirmClaim by remember { mutableStateOf<ActivityReservation?>(null) }
     var confirmCancel by remember { mutableStateOf<ActivityReservation?>(null) }
+    var confirmRelease by remember { mutableStateOf<ActivityReservation?>(null) }
     var pendingDelete by remember { mutableStateOf<FoodPost?>(null) }
     var editing by remember { mutableStateOf<FoodPost?>(null) }
     var editNotice by remember { mutableStateOf("") }
@@ -215,8 +209,11 @@ fun ActivityScreen(
 
     // Active: can still be reserved, or has reservations to hand over. Nothing on
     // the server marks a listing EXPIRED; it is worked out from expiration_date.
+    // Until the reservations have loaded, a fully reserved listing counts as
+    // active: it may still have food to hand over.
     fun isActive(post: FoodPost): Boolean =
         onListing[post.id].orEmpty().any { it.status == ReservationStatus.RESERVED } ||
+            (!reservationsLoaded && post.status == FoodPostStatus.RESERVED) ||
             (post.status == FoodPostStatus.AVAILABLE && !post.isExpired(now))
 
     // Removed listings are left out by the repository.
@@ -247,7 +244,7 @@ fun ActivityScreen(
 
     // Skeletons until the list shown has loaded once; a failed load says so instead.
     val showSkeleton = if (tab == TAB_LISTINGS) {
-        myPosts.isEmpty() && !listingsSettled
+        !myPostsLoaded && myPostsError == null
     } else {
         !reservationsLoaded && !reservationsLoadFailed
     }
@@ -346,7 +343,8 @@ fun ActivityScreen(
                 }
             }
 
-            if (tab == TAB_HISTORY) {
+            // Totals only from loaded reservations, never zeros from a failed load.
+            if (tab == TAB_HISTORY && reservationsLoaded) {
                 item(key = "totals") {
                     HistoryTotals(
                         completed = completedCount,
@@ -366,12 +364,16 @@ fun ActivityScreen(
                 }
             }
 
-            if (reservationsLoadFailed) {
+            // Over lists loaded before, or My Listings (its reservation counts are
+            // missing); a reservation tab that never loaded says so below instead.
+            if (reservationsLoadFailed && (reservationsLoaded || tab == TAB_LISTINGS)) {
                 item(key = "load-failed") {
                     InlineNotice(
                         text = ReservationViewModel.LOAD_FAILED,
                         icon = Icons.Outlined.CloudOff,
                         tone = NoticeTone.Error,
+                        actionLabel = "Try again",
+                        onAction = { reservationViewModel.refresh() },
                         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp)
                     )
                 }
@@ -383,8 +385,47 @@ fun ActivityScreen(
                     ActivitySkeleton(cardModifier)
                 }
 
+                // Reservations or History after a failed first load: not "none".
+                tab != TAB_LISTINGS && !reservationsLoaded -> item(key = "reservations-failed-$tab") {
+                    EmptyState(
+                        icon = Icons.Outlined.CloudOff,
+                        title = "Could not load your reservations",
+                        message = "Check your internet connection, then try again.",
+                        actionLabel = "Try again",
+                        onAction = { reservationViewModel.refresh() },
+                        tint = SaluColors.Error,
+                        iconBackground = SaluColors.ErrorSoft
+                    )
+                }
+
                 tab == TAB_LISTINGS -> {
-                    if (shownListings.isEmpty()) {
+                    // A failed reload keeps the listings already shown.
+                    if (myPostsError != null && myPostsLoaded) {
+                        item(key = "listings-error") {
+                            InlineNotice(
+                                text = "Couldn't refresh your listings. These may be out of date.",
+                                icon = Icons.Outlined.CloudOff,
+                                tone = NoticeTone.Error,
+                                actionLabel = "Try again",
+                                onAction = { foodViewModel.loadMyPosts() },
+                                modifier = cardModifier
+                            )
+                        }
+                    }
+                    if (!myPostsLoaded) {
+                        // Only reached after a failed first load (the skeleton shows before).
+                        item(key = "listings-failed") {
+                            EmptyState(
+                                icon = Icons.Outlined.CloudOff,
+                                title = "Could not load your listings",
+                                message = "Check your internet connection, then try again.",
+                                actionLabel = "Try again",
+                                onAction = { foodViewModel.loadMyPosts() },
+                                tint = SaluColors.Error,
+                                iconBackground = SaluColors.ErrorSoft
+                            )
+                        }
+                    } else if (shownListings.isEmpty()) {
                         item(key = "empty-listings-$listingFilter") {
                             if (listingFilter == "Active") {
                                 EmptyState(
@@ -406,6 +447,7 @@ fun ActivityScreen(
                         ActivityListingCard(
                             post = post,
                             reservations = reservationsHere,
+                            reservationsKnown = reservationsLoaded,
                             now = now,
                             onManage = { openManage(post) },
                             onView = { viewingPostId = post.id },
@@ -534,6 +576,7 @@ fun ActivityScreen(
             saving = reservationSaving,
             onMessage = { messageViewModel.openForReservation(it.id) },
             onMarkPickedUp = { confirmClaim = it },
+            onRelease = { confirmRelease = it },
             onBack = { managingPostId = null }
         )
     }
@@ -549,6 +592,7 @@ fun ActivityScreen(
             onCancel = { confirmCancel = item },
             onRate = { startRating(item) },
             onMarkPickedUp = { confirmClaim = item },
+            onRelease = { confirmRelease = item },
             onBack = { openReservationKey = null }
         )
     }
@@ -596,6 +640,31 @@ fun ActivityScreen(
             },
             dismissButton = {
                 TextButton(onClick = { confirmClaim = null }) { Text("Not yet") }
+            }
+        )
+    }
+
+    confirmRelease?.let { item ->
+        val name = item.otherName ?: "The recipient"
+        AlertDialog(
+            onDismissRequest = { confirmRelease = null },
+            title = { Text("Release this reservation?") },
+            text = {
+                Text(
+                    "Do this only if $name won't pick up ${item.amount} of ${item.post.name}. " +
+                        "$name will be told, and the amount can be reserved by others again."
+                )
+            },
+            confirmButton = {
+                TextButton(enabled = !reservationSaving, onClick = {
+                    if (reservationViewModel.release(item.id)) {
+                        confirmRelease = null
+                        openReservationKey = null
+                    }
+                }) { Text("Release reservation", color = SaluColors.Error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRelease = null }) { Text("Keep it") }
             }
         )
     }
@@ -942,6 +1011,8 @@ private fun listingStatus(post: FoodPost, now: Instant): SaluStatus? = when {
 private fun ActivityListingCard(
     post: FoodPost,
     reservations: List<ActivityReservation>,
+    // False until the reservations have loaded: no count rather than a wrong one.
+    reservationsKnown: Boolean,
     now: Instant,
     onManage: () -> Unit,
     onView: () -> Unit,
@@ -979,7 +1050,7 @@ private fun ActivityListingCard(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            ReservationCountChip(open = open, any = reservations.isNotEmpty())
+                            if (reservationsKnown) ReservationCountChip(open = open, any = reservations.isNotEmpty())
                             listingStatus(post, now)?.let { StatusBadge(it) }
                         }
                     }
@@ -1395,6 +1466,7 @@ private fun ManageReservationsPage(
     saving: Boolean,
     onMessage: (ActivityReservation) -> Unit,
     onMarkPickedUp: (ActivityReservation) -> Unit,
+    onRelease: (ActivityReservation) -> Unit,
     onBack: () -> Unit
 ) {
     val byFilter = reservations.groupBy { manageFilterFor(it.status) }
@@ -1476,7 +1548,8 @@ private fun ManageReservationsPage(
                         now = now,
                         saving = saving,
                         onMessage = { onMessage(item) },
-                        onMarkPickedUp = { onMarkPickedUp(item) }
+                        onMarkPickedUp = { onMarkPickedUp(item) },
+                        onRelease = { onRelease(item) }
                     )
                 }
             }
@@ -1494,7 +1567,8 @@ private fun ManagedReservationCard(
     now: Instant,
     saving: Boolean,
     onMessage: () -> Unit,
-    onMarkPickedUp: () -> Unit
+    onMarkPickedUp: () -> Unit,
+    onRelease: () -> Unit
 ) {
     // Donors see the recipient's name only, so the avatar is their initial.
     val name = item.otherName ?: "Recipient"
@@ -1548,6 +1622,10 @@ private fun ManagedReservationCard(
                     )
                 }
             }
+            // For a recipient who won't come: the food can be reserved again.
+            if (item.status == ReservationStatus.RESERVED) {
+                DestructiveTextButton(text = "Release reservation", enabled = !saving, onClick = onRelease)
+            }
         }
     }
 }
@@ -1573,6 +1651,9 @@ private fun reservationNote(item: ActivityReservation): String {
         ReservationStatus.CANCELLED -> when {
             item.mine && item.reservation.cancelledByListingRemoval ->
                 "Cancelled because the donor removed this listing."
+            item.mine && item.reservation.releasedByDonor ->
+                "The provider released this reservation, so the food is no longer held for you."
+            item.reservation.releasedByDonor -> "You released this reservation."
             item.mine -> "You cancelled this reservation." +
                 if (removedLater) " The donor has since removed this listing." else ""
             removedLater -> "This reservation was cancelled. You have since removed this listing."
@@ -1597,6 +1678,7 @@ private fun ReservationDetailsPage(
     onCancel: () -> Unit,
     onRate: () -> Unit,
     onMarkPickedUp: () -> Unit,
+    onRelease: () -> Unit,
     onBack: () -> Unit
 ) {
     val post = item.post
@@ -1661,6 +1743,7 @@ private fun ReservationDetailsPage(
             !item.mine && open -> {
                 ActionButton(text = "Mark as picked up", enabled = !saving, onClick = onMarkPickedUp)
                 SaluSecondaryButton(text = messageLabel, icon = Icons.Outlined.ChatBubbleOutline, onClick = onMessage)
+                DestructiveTextButton(text = "Release reservation", enabled = !saving, onClick = onRelease)
             }
             else -> SaluSecondaryButton(text = messageLabel, icon = Icons.Outlined.ChatBubbleOutline, onClick = onMessage)
         }

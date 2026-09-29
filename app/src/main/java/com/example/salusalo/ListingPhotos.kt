@@ -56,7 +56,9 @@ internal fun ListingPhoto(
     contentDescription: String?,
     modifier: Modifier,
     contentScale: ContentScale = ContentScale.Crop,
-    textSize: TextUnit = 10.sp
+    textSize: TextUnit = 10.sp,
+    // For example to fetch fresh signed URLs: they expire after 1 hour.
+    onLoadError: () -> Unit = {}
 ) {
     var failed by remember(imageUrl) { mutableStateOf(false) }
     if (imageUrl != null && !failed) {
@@ -70,7 +72,10 @@ internal fun ListingPhoto(
             contentDescription = contentDescription,
             contentScale = contentScale,
             modifier = modifier.background(PhotoTile),
-            onError = { failed = true }
+            onError = {
+                failed = true
+                onLoadError()
+            }
         )
     } else {
         BoxWithConstraints(modifier.background(PhotoTile), contentAlignment = Alignment.Center) {

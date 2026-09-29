@@ -8,6 +8,7 @@ import com.example.salusalo.model.ListingDonorProfile
 import com.example.salusalo.model.NewFoodPost
 import com.example.salusalo.model.RemoveFoodPostResult
 import com.google.firebase.auth.FirebaseAuth
+import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
@@ -20,7 +21,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.add
-import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.hours
 
@@ -41,6 +41,11 @@ class FoodRepository(
             filter {
                 filter("status", FilterOperator.EQ, FoodPostStatus.AVAILABLE.name)
                 filter("expiration_date", FilterOperator.GT, now)
+                // Not once the pickup time has ended: it can't be reserved any more.
+                or {
+                    exact("pickup_end", null)
+                    filter("pickup_end", FilterOperator.GT, now)
+                }
             }
             order("created_at", Order.DESCENDING)
         }.decodeList<FoodPost>()
@@ -88,11 +93,16 @@ class FoodRepository(
     }
 
     /**
-     * Uploads the photos (the first is the cover), then inserts the listing.
-     * Every photo is already a shrunk JPEG. If an upload or the insert fails,
-     * the photos uploaded so far are deleted, best effort.
+     * Uploads the photos (the first is the cover), then inserts the listing
+     * with the ID [id]. Every photo is already a shrunk JPEG.
+     *
+     * Safe to call again with the same [id] after a failure: a listing that was
+     * saved although its answer never arrived is found and returned, never
+     * posted twice. Photos are deleted only when the listing is known not to
+     * exist; when that can't be checked they stay (a retry reuses their paths),
+     * and [PublishUnconfirmedException] is thrown.
      */
-    suspend fun createFoodPost(draft: FoodPostDraft, photos: List<ByteArray>): FoodPost {
+    suspend fun createFoodPost(id: String, draft: FoodPostDraft, photos: List<ByteArray>): FoodPost {
         require(photos.isNotEmpty() && photos.all { it.isNotEmpty() }) { "Choose a food image before posting." }
         require(photos.size <= MAX_LISTING_PHOTOS) { "Choose at most $MAX_LISTING_PHOTOS photos." }
         val pin = draft.pickupPin.rounded()
@@ -100,24 +110,9 @@ class FoodRepository(
         val profile = userRepository.getCurrentProfile()
         val firebaseUid = firebaseAuth.currentUser?.uid
             ?: throw ProfileException.NotSignedIn
-        val id = UUID.randomUUID().toString()
         val paths = photos.indices.map { index ->
             storageRepository.listingPhotoPath(firebaseUid = firebaseUid, postId = id, number = index + 1)
         }
-
-        val uploaded = mutableListOf<String>()
-        try {
-            photos.forEachIndexed { index, bytes ->
-                bucket.upload(paths[index], bytes) {
-                    upsert = false
-                }
-                uploaded += paths[index]
-            }
-        } catch (error: Exception) {
-            if (uploaded.isNotEmpty()) runCatching { bucket.delete(uploaded) }
-            throw error
-        }
-
         val newPost = NewFoodPost(
             id = id,
             donorId = profile.id,
@@ -140,17 +135,37 @@ class FoodRepository(
             pickupLongitude = pin.longitude
         )
 
-        // Remove the uploaded photos only when the insert itself fails. Once the
-        // row exists it references them, so a later decode or signing problem
-        // must not delete them.
-        val inserted = try {
-            supabase.from("food_posts").insert(newPost) { select() }
-        } catch (error: Exception) {
-            runCatching { bucket.delete(paths) }
-            throw error
-        }
-        return inserted.decodeSingle<FoodPost>().withSignedImageUrl(bucket)
+        return publishOnce(
+            find = { findMyFoodPost(id) },
+            upload = {
+                val uploaded = mutableListOf<String>()
+                try {
+                    photos.forEachIndexed { index, bytes ->
+                        // upsert: a retry replaces what an earlier try left at the same path.
+                        bucket.upload(paths[index], bytes) {
+                            upsert = true
+                        }
+                        uploaded += paths[index]
+                    }
+                } catch (error: Exception) {
+                    // No listing with this ID exists (publishOnce checked), so nothing uses them.
+                    if (uploaded.isNotEmpty()) runCatching { bucket.delete(uploaded) }
+                    throw error
+                }
+            },
+            insert = { supabase.from("food_posts").insert(newPost) { select() }.decodeSingle<FoodPost>() },
+            deletePhotos = { bucket.delete(paths) },
+            // Only the database's own refusal proves nothing was saved; a
+            // duplicate ID (23505) means an earlier try was.
+            refused = { it is PostgrestRestException && it.code != null && it.code != "23505" }
+        ).withSignedImageUrl(bucket)
     }
+
+    /** The caller's own listing with this ID, or null if there is none. */
+    private suspend fun findMyFoodPost(id: String): FoodPost? =
+        supabase.from("food_posts").select {
+            filter { filter("id", FilterOperator.EQ, id) }
+        }.decodeSingleOrNull<FoodPost>()
 
     /**
      * Edits the caller's own listing, including its pickup pin, through
@@ -204,6 +219,45 @@ class FoodRepository(
             if (paths.isNotEmpty()) runCatching { bucket.delete(paths) }
         }
         return result
+    }
+}
+
+/** Posting failed in a way that may have come after the listing was saved, and checking failed too. */
+class PublishUnconfirmedException : Exception("The listing may or may not have been published.")
+
+/**
+ * [FoodRepository.createFoodPost] without the network: [find] looks for the
+ * listing, [upload] stores the photos, [insert] saves the listing and
+ * [deletePhotos] removes the photos. A listing already saved by an earlier try
+ * is returned without uploading. After a failed insert the photos are deleted
+ * only when [refused] says the database refused it, or a check finds no
+ * listing; a lost answer may come after the save. When that check fails too,
+ * the photos stay and [PublishUnconfirmedException] is thrown.
+ */
+internal suspend fun <T : Any> publishOnce(
+    find: suspend () -> T?,
+    upload: suspend () -> Unit,
+    insert: suspend () -> T,
+    deletePhotos: suspend () -> Unit,
+    refused: (Exception) -> Boolean
+): T {
+    find()?.let { return it }
+    upload()
+    return try {
+        insert()
+    } catch (error: Exception) {
+        if (error is CancellationException) throw error
+        if (!refused(error)) {
+            val saved = try {
+                find()
+            } catch (checkError: Exception) {
+                if (checkError is CancellationException) throw checkError
+                throw PublishUnconfirmedException()
+            }
+            if (saved != null) return saved
+        }
+        runCatching { deletePhotos() }
+        throw error
     }
 }
 

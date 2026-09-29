@@ -2,6 +2,7 @@ package com.example.salusalo.data
 
 import com.example.salusalo.BuildConfig
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
@@ -31,11 +32,17 @@ object SupabaseClientProvider {
             supabaseKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY
         ) {
             accessToken = {
-                FirebaseAuth.getInstance()
-                    .currentUser
-                    ?.getIdToken(false)
-                    ?.await()
-                    ?.token
+                val auth = FirebaseAuth.getInstance()
+                try {
+                    auth.currentUser?.getIdToken(false)?.await()?.token
+                } catch (error: FirebaseAuthInvalidUserException) {
+                    // The account was disabled or deleted, or its sign-in was
+                    // revoked or expired: this session can't be used again, so
+                    // end it (the app then returns to Sign In). A network
+                    // failure is a different exception and keeps the session.
+                    auth.signOut()
+                    throw error
+                }
             }
             install(Postgrest)
             install(Storage)

@@ -2,6 +2,8 @@ package com.example.salusalo
 
 import android.os.Bundle
 import com.example.salusalo.model.FoodPost
+import com.example.salusalo.model.FoodPostStatus
+import com.example.salusalo.model.reserveBlocker
 import com.example.salusalo.model.ListingHandover
 import com.example.salusalo.model.ReportTarget
 import com.example.salusalo.model.donorRatingLabel
@@ -19,7 +21,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import com.example.salusalo.model.formatPeso
 import com.example.salusalo.model.reservationTotal
 import com.example.salusalo.viewmodel.FoodViewModel
+import com.example.salusalo.viewmodel.PostResult
 import com.example.salusalo.viewmodel.ReservationViewModel
+import com.example.salusalo.viewmodel.ReserveResult
 import com.example.salusalo.viewmodel.MessageViewModel
 import com.example.salusalo.viewmodel.NotificationViewModel
 import com.example.salusalo.model.NotificationType
@@ -38,6 +42,10 @@ import androidx.credentials.exceptions.NoCredentialException
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.example.salusalo.data.profileErrorMessage
+import com.example.salusalo.data.ProfileException
+import com.example.salusalo.data.supabaseErrorText
+import androidx.activity.compose.LocalActivity
+import kotlinx.serialization.json.Json
 import com.example.salusalo.model.UserProfile
 import android.util.Patterns
 import androidx.compose.animation.AnimatedContent
@@ -97,6 +105,7 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
@@ -176,6 +185,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// The signed-in profile as JSON for rememberSaveable (UserProfile is @Serializable).
+private val ProfileSaver = Saver<UserProfile?, String>(
+    save = { profile -> profile?.let { Json.encodeToString(UserProfile.serializer(), it) } },
+    restore = { saved -> runCatching { Json.decodeFromString(UserProfile.serializer(), saved) }.getOrNull() }
+)
+
 // Device-only "Keep me signed in" choice. It survives sign-out, so the next
 // fresh start can act on the choice made at the last sign-in. When it was never
 // saved (a session from an older build), the session is kept.
@@ -208,19 +223,42 @@ private fun SaluSaloApp() {
     val firebaseAuth = remember { FirebaseAuth.getInstance() }
     val profileRepository = remember { UserRepository() }
     val appScope = rememberCoroutineScope()
-    var currentProfile by remember { mutableStateOf<UserProfile?>(null) }
+    // Saved with the screen, so rotation, dark mode, font size and Android
+    // recreating the app keep the user on Home instead of repeating the setup
+    // (which, offline, would end on Sign In).
+    var currentProfile by rememberSaveable(stateSaver = ProfileSaver) { mutableStateOf<UserProfile?>(null) }
     // The name typed on Create Account, kept so "Try again" creates the profile with it.
     var signUpName by rememberSaveable { mutableStateOf<String?>(null) }
     // True while the message is an account setup failure that "Try again" can repeat.
     var canRetrySetup by rememberSaveable { mutableStateOf(false) }
+    // True while the message offers to restore an earlier profile with this email.
+    var canRelink by rememberSaveable { mutableStateOf(false) }
 
     fun logOut() {
-        firebaseAuth.signOut()
+        // Home is left before Firebase signs out, so the listener below doesn't
+        // take this for a session that ended by itself.
         currentProfile = null
         signUpName = null
+        screen = "signin"
+        firebaseAuth.signOut()
         // Also forget the Google account chosen in Credential Manager (best effort).
         appScope.launch { clearGoogleCredentialState(context) }
-        screen = "signin"
+    }
+
+    // The Firebase session ended while the app was open: the account was
+    // disabled or deleted, or its sign-in revoked (SupabaseClientProvider signs
+    // out then). Back to Sign In, saying why. A network failure never ends it.
+    DisposableEffect(firebaseAuth) {
+        val listener = FirebaseAuth.AuthStateListener { auth ->
+            if (auth.currentUser == null && screen == "home") {
+                currentProfile = null
+                signUpName = null
+                screen = "signin"
+                message = "Your session has ended. Please sign in again."
+            }
+        }
+        firebaseAuth.addAuthStateListener(listener)
+        onDispose { firebaseAuth.removeAuthStateListener(listener) }
     }
     // True while an account setup runs (after a sign-in, or Try again), and from a
     // start with a saved session ("Keep me signed in") until its setup has finished:
@@ -240,6 +278,7 @@ private fun SaluSaloApp() {
                 if (canRetrySetup) {
                     message = ""
                     canRetrySetup = false
+                    canRelink = false
                 }
                 signUpName = null
                 currentProfile = profile
@@ -260,14 +299,50 @@ private fun SaluSaloApp() {
             }.onFailure { error ->
                 // Nothing to report when an overlapping attempt already reached Home.
                 if (currentProfile == null) {
-                    // The user stays signed in to Firebase, so Sign In offers "Try again".
+                    // The user stays signed in to Firebase, so Sign In offers "Try again",
+                    // or "Restore profile" when an earlier profile has this email.
                     screen = "signin"
                     canRetrySetup = true
+                    canRelink = error == ProfileException.EmailInUse
                     message = profileErrorMessage(error)
                 }
             }
             isAuthenticating = false
             setupPending = false
+        }
+    }
+
+    // The user asked to restore the earlier profile with this account's email.
+    // The server moves it only when Firebase says the email is verified.
+    fun restoreEarlierProfile() {
+        isAuthenticating = true
+        appScope.launch {
+            try {
+                if (profileRepository.relinkProfile() != null) {
+                    isAuthenticating = false
+                    // Finds the restored profile and opens Home as after any sign-in.
+                    openAuthenticatedHome()
+                    return@launch
+                }
+                val sent = runCatching { profileRepository.sendVerificationEmail() }.isSuccess
+                message = if (sent) {
+                    "First confirm that this email address is yours: we sent a link to " +
+                        "${firebaseAuth.currentUser?.email}. Open it, then come back and tap Restore profile."
+                } else {
+                    "First confirm that this email address is yours. The confirmation email could not be " +
+                        "sent; check your internet connection and try again."
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                message = supabaseErrorText(
+                    error,
+                    "Your profile could not be restored. Check your internet connection and try again."
+                )
+            }
+            canRetrySetup = true
+            canRelink = true
+            isAuthenticating = false
         }
     }
 
@@ -498,16 +573,25 @@ private fun SaluSaloApp() {
         // After a failed account setup the user is still signed in to Firebase,
         // so "Try again" repeats the setup without signing in again.
         val retry = canRetrySetup && firebaseAuth.currentUser != null
+        val relink = retry && canRelink
         val close = {
             message = ""
             canRetrySetup = false
+            canRelink = false
         }
         AlertDialog(
             onDismissRequest = close,
-            title = { Text("Salu-Salo") },
+            title = { Text(if (relink) "Restore your profile?" else "Salu-Salo") },
             text = { Text(message) },
             confirmButton = {
-                if (retry) {
+                if (relink) {
+                    TextButton(onClick = {
+                        close()
+                        restoreEarlierProfile()
+                    }) {
+                        Text("Restore profile")
+                    }
+                } else if (retry) {
                     TextButton(onClick = {
                         close()
                         openAuthenticatedHome(signUpName)
@@ -1403,7 +1487,10 @@ private fun HomeScreen(
     var activityFocus by rememberSaveable { mutableStateOf<String?>(null) }
     val remotePosts by foodViewModel.availablePosts.collectAsStateWithLifecycle()
     val feedLoading by foodViewModel.loading.collectAsStateWithLifecycle()
-    val feedError by foodViewModel.error.collectAsStateWithLifecycle()
+    val feedLoaded by foodViewModel.feedLoaded.collectAsStateWithLifecycle()
+    val feedError by foodViewModel.feedError.collectAsStateWithLifecycle()
+    val postResult by foodViewModel.postResult.collectAsStateWithLifecycle()
+    val reserveResult by reservationViewModel.reserveResult.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // The phone's position, only for distances, Nearby and Nearest. It stays in
@@ -1438,7 +1525,9 @@ private fun HomeScreen(
         return distanceMeters(here, pin)
     }
 
-    LaunchedEffect(currentProfile?.id) { foodViewModel.loadAvailablePosts() }
+    // The feed loads when Home starts and again when Home or All listings is
+    // opened or the app comes back, at most every 30 seconds (refreshFeedIfStale).
+    LaunchedEffect(currentProfile?.id) { foodViewModel.refreshFeedIfStale() }
     LaunchedEffect(currentProfile?.id) {
         if (PhoneLocation.hasPermission(context)) refreshPhonePosition(askIfNeeded = false)
     }
@@ -1446,13 +1535,16 @@ private fun HomeScreen(
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { notificationViewModel.start(it) } }
     // The inbox loads once per session and then follows new messages live.
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { messageViewModel.start(it) } }
-    // Realtime misses messages while the app is in the background, so the inbox
-    // reloads once when the app comes back (not on the first start).
+    // Realtime misses messages and alerts while the app is in the background, so
+    // the inbox and alerts reload once when the app comes back (not on the first
+    // start), and the feed too unless it loaded in the last 30 seconds.
     var wasStopped by remember { mutableStateOf(false) }
     LifecycleStartEffect(messageViewModel) {
         if (wasStopped) {
             wasStopped = false
             messageViewModel.loadConversations(quiet = true)
+            notificationViewModel.refresh(quiet = true)
+            foodViewModel.refreshFeedIfStale()
             // The phone may have moved meanwhile; never asks for access here.
             if (PhoneLocation.hasPermission(context)) refreshPhonePosition(askIfNeeded = false)
         }
@@ -1513,8 +1605,12 @@ private fun HomeScreen(
         value = userRepository.profilePhotoUrl(profilePhotoPath)
     }
     val greeting = if (firstName.isBlank()) "$timeGreeting 👋" else "$timeGreeting, $firstName 👋"
+    // Kept through rotation and other configuration changes (the ViewModels
+    // survive them), cleared when the account leaves Home.
+    val activity = LocalActivity.current
     DisposableEffect(currentProfile?.id) {
         onDispose {
+            if (activity?.isChangingConfigurations == true) return@onDispose
             foodViewModel.clearSession()
             reservationViewModel.clearSession()
             messageViewModel.clearSession()
@@ -1579,13 +1675,20 @@ private fun HomeScreen(
     var postFormKey by rememberSaveable { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
-    // The feed shows skeleton cards, not "no food", until its first load has finished.
-    var feedStarted by remember { mutableStateOf(false) }
-    var feedSettled by remember { mutableStateOf(false) }
-    LaunchedEffect(feedLoading) {
-        if (feedLoading) feedStarted = true else if (feedStarted) feedSettled = true
+    // The feed shows skeleton cards, not "no food", until its first load has
+    // finished; a failed first load shows the error instead.
+    val showFeedSkeleton = !feedLoaded && feedError == null
+    LaunchedEffect(page) {
+        if (page == "home" || page == "all") foodViewModel.refreshFeedIfStale()
     }
-    val showFeedSkeleton = remotePosts.isEmpty() && feedError == null && !feedSettled
+    // A refused reservation (a new price, less left, pickup over) reloads the
+    // feed, so the open details and review page show the listing as it is now.
+    LaunchedEffect(reserveResult) {
+        if (reserveResult is ReserveResult.Failed) foodViewModel.loadAvailablePosts()
+    }
+    // The pull-to-refresh spinner shows only for a pull, not for automatic reloads.
+    var feedPulled by remember { mutableStateOf(false) }
+    LaunchedEffect(feedLoading) { if (!feedLoading) feedPulled = false }
 
     fun resetFilters() {
         search = ""
@@ -1593,9 +1696,11 @@ private fun HomeScreen(
     }
 
     // Leaving Post by Back discards its draft, as before; switching tabs keeps it.
+    // Home's filters are cleared, so a listing just posted is not hidden by them.
     fun leavePost() {
         pageStates.removeState("post-$postFormKey")
         foodViewModel.loadAvailablePosts()
+        resetFilters()
         page = "home"
     }
 
@@ -1722,8 +1827,9 @@ private fun HomeScreen(
                         // Pull down to reload the listings and, if location access is
                         // already allowed, the phone's position (never asks for access).
                         PullToRefreshBox(
-                            isRefreshing = feedLoading,
+                            isRefreshing = feedPulled && feedLoading,
                             onRefresh = {
+                                feedPulled = true
                                 foodViewModel.loadAvailablePosts()
                                 if (PhoneLocation.hasPermission(context)) refreshPhonePosition(askIfNeeded = false)
                             },
@@ -1793,7 +1899,8 @@ private fun HomeScreen(
                                                 search = ""
                                                 sort = "Newest"
                                             },
-                                            onHowItWorks = { howItWorks = true }
+                                            onHowItWorks = { howItWorks = true },
+                                            onPhotoError = foodViewModel::refreshExpiredPhotoUrls
                                         )
                                     }
                                 }
@@ -1819,6 +1926,20 @@ private fun HomeScreen(
                                     )
                                 }
 
+                                // A failed reload keeps the listings already shown.
+                                if (feedError != null && remotePosts.isNotEmpty()) {
+                                    item(key = "feed-error") {
+                                        InlineNotice(
+                                            text = "Couldn't refresh the listings. These may be out of date.",
+                                            icon = Icons.Outlined.CloudOff,
+                                            tone = NoticeTone.Error,
+                                            actionLabel = "Try again",
+                                            onAction = { foodViewModel.loadAvailablePosts() },
+                                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp)
+                                        )
+                                    }
+                                }
+
                                 when {
                                     showFeedSkeleton -> item(key = "skeleton") {
                                         SkeletonGroup(
@@ -1834,7 +1955,8 @@ private fun HomeScreen(
 
                                     visibleFoods.isEmpty() -> item(key = "empty") {
                                         FeedEmptyState(
-                                            feedError = feedError,
+                                            // Only when there is nothing to show; filters otherwise.
+                                            feedError = feedError.takeIf { remotePosts.isEmpty() },
                                             search = search,
                                             category = category,
                                             hasPosition = phonePin != null,
@@ -1854,6 +1976,7 @@ private fun HomeScreen(
                                             saved = food.id in savedIds,
                                             onToggleSave = { savedListingViewModel.toggle(food.id) },
                                             onClick = { selectedFood = food },
+                                            onPhotoError = foodViewModel::refreshExpiredPhotoUrls,
                                             modifier = Modifier
                                                 .animateItem()
                                                 .padding(start = 20.dp, end = 20.dp, bottom = 12.dp)
@@ -1906,7 +2029,10 @@ private fun HomeScreen(
         }
     }
 
-    selectedFood?.let { food ->
+    selectedFood?.let { opened ->
+        // The feed's latest copy while it has one: fresh photo URLs, price,
+        // quantity and status after a reload.
+        val food = remotePosts.firstOrNull { it.id == opened.id }?.toHomeFood(null) ?: opened
         androidx.compose.ui.window.Dialog(
             onDismissRequest = { selectedFood = null },
             properties = androidx.compose.ui.window.DialogProperties(
@@ -1928,6 +2054,7 @@ private fun HomeScreen(
                 },
                 onMessage = { draft -> messageViewModel.openForListing(food.id, draft) },
                 onMessageReservation = { reservationId -> messageViewModel.openForReservation(reservationId) },
+                onPhotoError = foodViewModel::refreshExpiredPhotoUrls,
                 onBack = { selectedFood = null }
             )
         }
@@ -1957,6 +2084,23 @@ private fun HomeScreen(
             title = { Text("Messages") },
             text = { Text(error) },
             confirmButton = { TextButton(onClick = { messageViewModel.clearMessage() }) { Text("OK") } }
+        )
+    }
+
+    // A listing finished posting while Post was not open; the form shows its own result.
+    if (page != "post") postResult?.let { result ->
+        AlertDialog(
+            onDismissRequest = { foodViewModel.clearPostResult() },
+            title = { Text(if (result is PostResult.Published) "Listing published" else "Listing not published") },
+            text = {
+                Text(
+                    when (result) {
+                        is PostResult.Published -> "“${result.post.name}” is now in the community feed."
+                        is PostResult.Failed -> result.message
+                    }
+                )
+            },
+            confirmButton = { TextButton(onClick = { foodViewModel.clearPostResult() }) { Text("OK") } }
         )
     }
 }
@@ -2361,7 +2505,8 @@ private fun PickedForYouSection(
     loading: Boolean,
     onOpen: (HomeFood) -> Unit,
     onBrowseAll: () -> Unit,
-    onHowItWorks: () -> Unit
+    onHowItWorks: () -> Unit,
+    onPhotoError: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -2417,7 +2562,8 @@ private fun PickedForYouSection(
                     RecommendationCard(
                         food = food,
                         reason = reasonFor(food),
-                        onClick = { onOpen(food) }
+                        onClick = { onOpen(food) },
+                        onPhotoError = onPhotoError
                     )
                 }
             }
@@ -2650,7 +2796,8 @@ private data class HomeFood(
 private fun RecommendationCard(
     food: HomeFood,
     reason: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onPhotoError: () -> Unit
 ) {
     SaluCard(
         modifier = Modifier.width(212.dp),
@@ -2666,7 +2813,8 @@ private fun RecommendationCard(
                     imageUrl = food.imageUrl,
                     hasPhoto = food.post.hasPhoto,
                     contentDescription = food.title,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    onLoadError = onPhotoError
                 )
 
                 PhotoPriceLabel(
@@ -2791,6 +2939,7 @@ private fun AvailableFoodCard(
     saved: Boolean,
     onToggleSave: () -> Unit,
     onClick: () -> Unit,
+    onPhotoError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     SaluCard(
@@ -2807,7 +2956,8 @@ private fun AvailableFoodCard(
                     imageUrl = food.imageUrl,
                     hasPhoto = food.post.hasPhoto,
                     contentDescription = food.title,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    onLoadError = onPhotoError
                 )
             }
 
@@ -2950,6 +3100,7 @@ private fun FoodDetailsScreen(
     onReserved: () -> Unit,
     onMessage: (String) -> Unit,
     onMessageReservation: (String) -> Unit,
+    onPhotoError: () -> Unit,
     onBack: () -> Unit
 ) {
     val available = food.quantity
@@ -2963,6 +3114,11 @@ private fun FoodDetailsScreen(
     var quantity by rememberSaveable(food.id) {
         mutableStateOf(1)
     }
+    // A reload may leave less than the amount chosen.
+    LaunchedEffect(available) { if (quantity > available) quantity = available.coerceAtLeast(1) }
+    // Why a reservation would be refused now (a saved or older copy may be
+    // removed, expired, past its pickup time or fully reserved); null if it wouldn't.
+    val blocker = food.post.reserveBlocker()
     var expanded by rememberSaveable(food.id) {
         mutableStateOf(false)
     }
@@ -3060,7 +3216,8 @@ private fun FoodDetailsScreen(
             expires = expires,
             saving = reserveSaving,
             result = reserveResult,
-            onConfirm = { note -> reservationViewModel.reserve(food.id, quantity, note) },
+            // The price shown; the server refuses if it has changed since.
+            onConfirm = { note -> reservationViewModel.reserve(food.id, quantity, food.post.price, note) },
             onMessageDonor = { reservationId -> onMessageReservation(reservationId) },
             onFinished = {
                 reviewing = false
@@ -3138,7 +3295,8 @@ private fun FoodDetailsScreen(
                                 hasPhoto = food.post.hasPhoto,
                                 contentDescription = food.title,
                                 modifier = photoModifier(index),
-                                textSize = 12.sp
+                                textSize = 12.sp,
+                                onLoadError = onPhotoError
                             )
                         } else {
                             val loaded = extraPhotos
@@ -3222,7 +3380,14 @@ private fun FoodDetailsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        StatusBadge(if (food.urgent) SaluStatus.ExpiresSoon else SaluStatus.Available)
+                        StatusBadge(
+                            when {
+                                food.post.status == FoodPostStatus.REMOVED -> SaluStatus.Removed
+                                blocker == null -> if (food.urgent) SaluStatus.ExpiresSoon else SaluStatus.Available
+                                food.post.status == FoodPostStatus.AVAILABLE && food.post.quantity > 0 -> SaluStatus.Expired
+                                else -> SaluStatus.Reserved
+                            }
+                        )
                         Text(
                             post.category,
                             style = SaluText.Status,
@@ -3503,6 +3668,8 @@ private fun FoodDetailsScreen(
                                         "Questions from others appear in Messages.",
                                 icon = Icons.Outlined.Info
                             )
+                        } else if (blocker != null) {
+                            InlineNotice(text = blocker, icon = Icons.Outlined.Info)
                         } else {
                             Text(payLine, style = SaluText.Supporting, color = SaluColors.DarkGreen)
 

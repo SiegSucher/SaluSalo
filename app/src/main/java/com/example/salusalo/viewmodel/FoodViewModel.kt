@@ -2,9 +2,11 @@ package com.example.salusalo.viewmodel
 
 import android.app.Application
 import android.net.Uri
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.salusalo.data.FoodRepository
+import com.example.salusalo.data.PublishUnconfirmedException
 import com.example.salusalo.data.encodeListingPhoto
 import com.example.salusalo.data.shortErrorText
 import com.example.salusalo.data.supabaseErrorText
@@ -17,6 +19,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
+
+/**
+ * The outcome of Post listing for the form with [draftId]. Another form (after
+ * Post another, or leaving Post) has another ID and never shows it.
+ */
+sealed interface PostResult {
+    val draftId: String
+    data class Published(override val draftId: String, val post: FoodPost) : PostResult
+    data class Failed(override val draftId: String, val message: String) : PostResult
+}
 
 /** The outcome of an edit, for the Edit Listing dialog. */
 sealed interface EditResult {
@@ -53,12 +65,25 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
     val myPosts = _myPosts.asStateFlow()
     private val _loading = MutableStateFlow(false)
     val loading = _loading.asStateFlow()
-    private val _error = MutableStateFlow<String?>(null)
-    val error = _error.asStateFlow()
-    private val _createdPost = MutableStateFlow<FoodPost?>(null)
-    val createdPost = _createdPost.asStateFlow()
-    private val _createError = MutableStateFlow<String?>(null)
-    val createError = _createError.asStateFlow()
+    // Each list: whether it has loaded once this session (it may be empty), and
+    // why its last load failed (null after a good one). A failed load keeps the
+    // last good list, so a failure is never shown as "nothing here".
+    private val _feedLoaded = MutableStateFlow(false)
+    val feedLoaded = _feedLoaded.asStateFlow()
+    private val _feedError = MutableStateFlow<String?>(null)
+    val feedError = _feedError.asStateFlow()
+    private val _myPostsLoaded = MutableStateFlow(false)
+    val myPostsLoaded = _myPostsLoaded.asStateFlow()
+    private val _myPostsError = MutableStateFlow<String?>(null)
+    val myPostsError = _myPostsError.asStateFlow()
+    /** The draft being posted now, or null. */
+    private val _postingDraftId = MutableStateFlow<String?>(null)
+    val postingDraftId = _postingDraftId.asStateFlow()
+    private val _postResult = MutableStateFlow<PostResult?>(null)
+    val postResult = _postResult.asStateFlow()
+    /** Drafts published this session (a draft's ID is its listing's ID), so a kept form shows "published". */
+    private val _publishedDraftIds = MutableStateFlow<Set<String>>(emptySet())
+    val publishedDraftIds = _publishedDraftIds.asStateFlow()
     private val _editResult = MutableStateFlow<EditResult?>(null)
     val editResult = _editResult.asStateFlow()
     private val _deleteResult = MutableStateFlow<DeleteResult?>(null)
@@ -75,10 +100,38 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
     private val requestMutex = Mutex()
     private var myPostsLoadPending = false
     private var feedLoadPending = false
+    // When the feed was last asked for, and last loaded with fresh photo URLs
+    // (SystemClock.elapsedRealtime()).
+    private var feedRequestedAt = 0L
+    private var feedLoadedAt = 0L
 
     fun loadAvailablePosts() {
-        feedLoadPending = true
+        queueFeedLoad()
         if (!requestMutex.isLocked) launchRequest {}
+    }
+
+    /**
+     * For Home opening and the app coming back: reloads the feed unless it was
+     * asked for less than [FEED_REFRESH_INTERVAL_MILLIS] ago, so switching tabs
+     * or recomposing never floods Supabase.
+     */
+    fun refreshFeedIfStale() {
+        if (SystemClock.elapsedRealtime() - feedRequestedAt >= FEED_REFRESH_INTERVAL_MILLIS) loadAvailablePosts()
+    }
+
+    /**
+     * A feed photo failed to load. Its 1-hour signed URL may have expired, so
+     * the feed reloads for fresh URLs, but only when it is old enough for that.
+     * On fresh URLs a failing photo is really unavailable and causes no reload,
+     * so a photo is retried once, never in a loop.
+     */
+    fun refreshExpiredPhotoUrls() {
+        if (SystemClock.elapsedRealtime() - feedLoadedAt >= PHOTO_URLS_OLD_MILLIS) refreshFeedIfStale()
+    }
+
+    private fun queueFeedLoad() {
+        feedRequestedAt = SystemClock.elapsedRealtime()
+        feedLoadPending = true
     }
 
     fun loadMyPosts() {
@@ -86,29 +139,43 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         if (!requestMutex.isLocked) launchRequest {}
     }
 
-    /** Returns false when ignored because another write has not finished yet. */
-    fun createPost(draft: FoodPostDraft, photoUris: List<Uri>): Boolean = launchWrite {
-        _createError.value = null
-        try {
+    /**
+     * Posts the form's listing under [draftId], the listing's ID. The form keeps
+     * its ID, so tapping Post again after a failure can never post it twice.
+     * The result stays here ([postResult]) until shown, even if Post is left.
+     * Returns false when ignored because another write has not finished yet.
+     */
+    fun createPost(draftId: String, draft: FoodPostDraft, photoUris: List<Uri>): Boolean = launchWrite {
+        _postingDraftId.value = draftId
+        _postResult.value = try {
             // Shrinks and re-encodes every photo as JPEG off the main thread.
             val photos = photoUris.map { uri ->
                 encodeListingPhoto(getApplication(), uri) ?: throw UnreadablePhotoException()
             }
-            _createdPost.value = repository.createFoodPost(draft, photos)
+            val post = repository.createFoodPost(draftId, draft, photos)
             // Reload My Listings, then the feed, as separate loads at the end of this
             // request, so a failed feed reload cannot stop My Listings from refreshing.
             myPostsLoadPending = true
-            feedLoadPending = true
+            queueFeedLoad()
+            _publishedDraftIds.value = _publishedDraftIds.value + draftId
+            PostResult.Published(draftId, post)
         } catch (error: UnreadablePhotoException) {
-            _createError.value = "One of the photos could not be read. Please choose another photo."
+            PostResult.Failed(draftId, "One of the photos could not be read. Please choose another photo.")
+        } catch (error: PublishUnconfirmedException) {
+            PostResult.Failed(draftId, PUBLISH_UNCONFIRMED)
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error
-            _createError.value = if (error is IllegalArgumentException && error !is SerializationException) {
-                // The repository's own checks, for example "Choose a food image before posting."
-                error.message ?: PUBLISH_FAILED
-            } else {
-                shortErrorText(error, PUBLISH_FAILED)
-            }
+            PostResult.Failed(
+                draftId,
+                if (error is IllegalArgumentException && error !is SerializationException) {
+                    // The repository's own checks, for example "Choose a food image before posting."
+                    error.message ?: PUBLISH_FAILED
+                } else {
+                    shortErrorText(error, PUBLISH_FAILED)
+                }
+            )
+        } finally {
+            _postingDraftId.value = null
         }
     }
 
@@ -117,7 +184,7 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         _editResult.value = try {
             repository.updateMyFoodPost(postId, edit)
             myPostsLoadPending = true
-            feedLoadPending = true
+            queueFeedLoad()
             EditResult.Updated
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error
@@ -140,7 +207,7 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
             _myPosts.value = _myPosts.value.filterNot { it.id == post.id }
             _availablePosts.value = _availablePosts.value.filterNot { it.id == post.id }
             myPostsLoadPending = true
-            feedLoadPending = true
+            queueFeedLoad()
             if (result.deleted) DeleteResult.Deleted else DeleteResult.Removed(result.cancelledReservations)
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error
@@ -156,17 +223,21 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
     fun clearSession() {
         myPostsLoadPending = false
         feedLoadPending = false
+        feedRequestedAt = 0L
+        feedLoadedAt = 0L
         _availablePosts.value = emptyList()
         _myPosts.value = emptyList()
-        _createdPost.value = null
-        _createError.value = null
+        _feedLoaded.value = false
+        _feedError.value = null
+        _myPostsLoaded.value = false
+        _myPostsError.value = null
+        _postResult.value = null
+        _publishedDraftIds.value = emptySet()
         _editResult.value = null
         _deleteResult.value = null
-        _error.value = null
     }
 
-    fun clearCreatedPost() { _createdPost.value = null }
-    fun clearCreateError() { _createError.value = null }
+    fun clearPostResult() { _postResult.value = null }
     fun clearEditResult() { _editResult.value = null }
     fun clearDeleteResult() { _deleteResult.value = null }
 
@@ -186,29 +257,34 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             requestMutex.withLock {
                 _loading.value = true
-                _error.value = null
-                runCatching { block() }.onFailure { reportError(it) }
+                // Writes report their own results.
+                runCatching { block() }
                 // Each queued load succeeds or fails on its own.
                 while (myPostsLoadPending || feedLoadPending) {
                     if (myPostsLoadPending) {
                         myPostsLoadPending = false
-                        runCatching { _myPosts.value = repository.getUserFoodPosts() }
-                            .onFailure { reportError(it) }
+                        runCatching { repository.getUserFoodPosts() }
+                            .onSuccess {
+                                _myPosts.value = it
+                                _myPostsLoaded.value = true
+                                _myPostsError.value = null
+                            }
+                            .onFailure { _myPostsError.value = errorText(it) }
                     } else {
                         feedLoadPending = false
-                        runCatching { _availablePosts.value = repository.getAvailableFoodPosts() }
-                            .onFailure { reportError(it) }
+                        runCatching { repository.getAvailableFoodPosts() }
+                            .onSuccess {
+                                _availablePosts.value = it
+                                feedLoadedAt = SystemClock.elapsedRealtime()
+                                _feedLoaded.value = true
+                                _feedError.value = null
+                            }
+                            .onFailure { _feedError.value = errorText(it) }
                     }
                 }
                 _loading.value = false
             }
         }
-    }
-
-    // Keeps the first failure of the current request for the UI.
-    private fun reportError(throwable: Throwable) {
-        if (_error.value != null) return
-        _error.value = errorText(throwable)
     }
 
     // Only the short server text: the full exception message can include the URL and headers.
@@ -220,5 +296,12 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val PUBLISH_FAILED =
             "Your listing could not be published. Check your internet connection and try again."
+        const val PUBLISH_UNCONFIRMED =
+            "We couldn't confirm whether your listing was published. Check your internet connection, " +
+                "then tap Post listing again: it will not be posted twice."
+        // Automatic feed reloads (Home opened, the app back) at most every 30 seconds.
+        const val FEED_REFRESH_INTERVAL_MILLIS = 30_000L
+        // Signed photo URLs last 1 hour; after 50 minutes a failing photo may be an expired URL.
+        const val PHOTO_URLS_OLD_MILLIS = 50 * 60_000L
     }
 }

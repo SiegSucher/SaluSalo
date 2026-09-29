@@ -9,6 +9,7 @@ import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.functions.functions
+import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
@@ -85,8 +86,28 @@ class UserRepository(
                 .decodeSingle()
         } catch (error: Exception) {
             // A second request may have created the same profile first.
-            findProfile(firebaseUser.uid) ?: throw error
+            findProfile(firebaseUser.uid)?.let { return it }
+            // Otherwise a duplicate can only be the email: an earlier profile
+            // uses it, for example from a Firebase account deleted and created
+            // again. The user may restore it ([relinkProfile]).
+            if (error is PostgrestRestException && error.code == "23505") throw ProfileException.EmailInUse
+            throw error
         }
+    }
+
+    /**
+     * Moves the earlier profile with this account's email to this account
+     * (relink_my_profile), after the user confirmed it. The server allows it
+     * only when Firebase's signed token says the email is verified, so the
+     * Firebase user is reloaded and the token refreshed first. Returns null,
+     * without calling the server, while the email is not verified.
+     */
+    suspend fun relinkProfile(): UserProfile? {
+        val user = firebaseAuth.currentUser ?: throw ProfileException.NotSignedIn
+        user.reload().await()
+        if (!user.isEmailVerified) return null
+        user.getIdToken(true).await()
+        return supabase.postgrest.rpc("relink_my_profile").decodeAs()
     }
 
     suspend fun getCurrentProfile(): UserProfile {
@@ -119,9 +140,22 @@ class UserRepository(
                 put("p_path", path)
             }).decodeAs<UserProfile>()
         } catch (error: Exception) {
-            // The profile still points at the old photo; drop the unused upload.
-            runCatching { profileImages.delete(path) }
-            throw error
+            if (error is CancellationException) throw error
+            // Only the database's own refusal proves the profile still points at
+            // the old photo. After a lost answer, look before deleting the upload.
+            val refused = error is PostgrestRestException && error.code != null
+            val current = if (refused) null else try {
+                getCurrentProfile()
+            } catch (checkError: Exception) {
+                if (checkError is CancellationException) throw checkError
+                null
+            }
+            if (current?.profileImageUrl != path) {
+                // Kept when the profile couldn't be read: it may point here already.
+                if (refused || current != null) runCatching { profileImages.delete(path) }
+                throw error
+            }
+            current
         }
 
         if (!previousPath.isNullOrBlank() && previousPath != path) {
@@ -293,6 +327,7 @@ sealed class ProfileException(message: String) : Exception(message) {
     data object MissingEmail : ProfileException("The Firebase account has no email address.")
     data object NotFound : ProfileException("No profile exists for this account.")
     data object RoleSetupFailed : ProfileException("The account's Supabase role could not be set up.")
+    data object EmailInUse : ProfileException("An earlier profile uses this account's email address.")
 }
 
 fun profileErrorMessage(error: Throwable): String = when (error) {
@@ -305,6 +340,10 @@ fun profileErrorMessage(error: Throwable): String = when (error) {
     ProfileException.RoleSetupFailed ->
         "Your account is signed in, but Salu-Salo couldn't finish setting it up. " +
                 "Check your internet connection, then tap Try again."
+    ProfileException.EmailInUse ->
+        "An earlier Salu-Salo profile uses this email address, for example from an account that was " +
+                "deleted and created again. You can restore that profile, with its listings, " +
+                "reservations and chats, to this account."
     else ->
         "We could not load your profile. Check your internet connection and try again."
 }

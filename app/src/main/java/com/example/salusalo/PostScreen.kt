@@ -75,12 +75,14 @@ import com.example.salusalo.model.ListingHandover
 import com.example.salusalo.model.isExpired
 import com.example.salusalo.model.isPickupStartAllowed
 import com.example.salusalo.viewmodel.FoodViewModel
+import com.example.salusalo.viewmodel.PostResult
 import java.math.BigDecimal
 import java.time.Instant
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 /** Keeps the pickup pin across rotation: [latitude, longitude], or nothing. */
 private val PinSaver = listSaver<GeoPin?, Double>(
@@ -108,8 +110,9 @@ fun PostScreen(
 ) {
     val context = LocalContext.current
     val myPosts by foodViewModel.myPosts.collectAsStateWithLifecycle()
-    val createdPost by foodViewModel.createdPost.collectAsStateWithLifecycle()
-    val createError by foodViewModel.createError.collectAsStateWithLifecycle()
+    val postResult by foodViewModel.postResult.collectAsStateWithLifecycle()
+    val postingDraftId by foodViewModel.postingDraftId.collectAsStateWithLifecycle()
+    val publishedDraftIds by foodViewModel.publishedDraftIds.collectAsStateWithLifecycle()
     val backendSaving by foodViewModel.saving.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { foodViewModel.loadMyPosts() }
@@ -141,7 +144,11 @@ fun PostScreen(
     var info by rememberSaveable { mutableStateOf("") }
     var checking by rememberSaveable { mutableStateOf(false) }
     var savedId by rememberSaveable { mutableStateOf("") }
-    var saving by remember { mutableStateOf(false) }
+    // This form's listing ID, kept across rotation and retries: posting again
+    // after a failure can't publish it twice, and results of other forms are
+    // never shown here.
+    val draftId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
+    val posting = postingDraftId == draftId
     var showLocal by rememberSaveable { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<com.example.salusalo.model.FoodPost?>(null) }
     var editing by remember { mutableStateOf<com.example.salusalo.model.FoodPost?>(null) }
@@ -211,6 +218,8 @@ fun PostScreen(
             textLength(name) > 160 -> "The food name must be 160 characters or fewer."
             category.isBlank() -> "Select a category."
             count == null || count <= 0 -> "Enter a whole quantity greater than zero."
+            // The database refuses more (food_posts_check_values).
+            count > 10_000 -> "Enter a quantity of at most 10,000."
             unit.isBlank() -> "Select a unit."
             !donation && (
                     amount == null ||
@@ -230,24 +239,20 @@ fun PostScreen(
             allergens.isBlank() -> ALLERGENS_MISSING
             textLength(allergens) > 300 -> "Allergens must be 300 characters or fewer."
             textLength(storage) > 300 -> "Storage notes must be 300 characters or fewer."
+            textLength(description) > 2000 -> "The description must be 2,000 characters or fewer."
             else -> ""
         }
     }
 
-    LaunchedEffect(createdPost) {
-        createdPost?.let { post ->
-            savedId = post.id
-            saving = false
-            foodViewModel.clearCreatedPost()
-        }
+    // Published, also when Home showed the result while this form was not open.
+    LaunchedEffect(publishedDraftIds) {
+        if (draftId in publishedDraftIds) savedId = draftId
     }
-    LaunchedEffect(createError) {
-        createError?.let { message ->
-            if (saving) {
-                saving = false
-                error = message
-            }
-            foodViewModel.clearCreateError()
+    LaunchedEffect(postResult) {
+        val result = postResult
+        if (result != null && result.draftId == draftId) {
+            if (result is PostResult.Failed) error = result.message
+            foodViewModel.clearPostResult()
         }
     }
     val postScroll = rememberScrollState()
@@ -514,16 +519,16 @@ fun PostScreen(
                 }
 
                 SaluPrimaryButton(
-                    text = if (saving || backendSaving) "Posting…" else "Post listing",
-                    loading = saving || backendSaving,
+                    text = if (posting || backendSaving) "Posting…" else "Post listing",
+                    loading = posting || backendSaving,
                     onClick = {
                         error = validate()
                         val pin = pickupPin
 
                         if (error.isBlank() && pin != null) {
-                            // Only an accepted request is waited for, so the
-                            // button can never stay on "Posting…".
-                            saving = foodViewModel.createPost(
+                            // Ignored while another write runs; the button shows it.
+                            foodViewModel.createPost(
+                                draftId,
                                 FoodPostDraft(
                                     name = name,
                                     description = description,
@@ -898,6 +903,7 @@ fun EditListingDialog(
             allergens.isBlank() -> ALLERGENS_MISSING
             textLength(allergens) > 300 -> "Allergens must be 300 characters or fewer."
             textLength(storage) > 300 -> "Storage notes must be 300 characters or fewer."
+            textLength(description) > 2000 -> "The description must be 2,000 characters or fewer."
             else -> ""
         }
     }
