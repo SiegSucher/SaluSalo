@@ -80,10 +80,19 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
      * reservation's chat. Returns false when ignored because another write has
      * not finished yet.
      */
-    fun reserve(foodPostId: String, quantity: Int, note: String): Boolean = launchWrite {
+    fun reserve(
+        foodPostId: String,
+        quantity: Int,
+        note: String,
+        pickupMinutes: Int
+    ): Boolean = launchWrite {
         _reserveResult.value = null
         _reserveResult.value = try {
-            val reservation = repository.createReservation(foodPostId, quantity)
+            val reservation = repository.createReservation(
+                foodPostId = foodPostId,
+                quantity = quantity,
+                pickupMinutes = pickupMinutes
+            )
             refreshPending = true
             val text = note.trim()
             val noteSent = if (text.isEmpty()) null else try {

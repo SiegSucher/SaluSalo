@@ -3060,7 +3060,14 @@ private fun FoodDetailsScreen(
             expires = expires,
             saving = reserveSaving,
             result = reserveResult,
-            onConfirm = { note -> reservationViewModel.reserve(food.id, quantity, note) },
+            onConfirm = { note, pickupMinutes ->
+                reservationViewModel.reserve(
+                    foodPostId = food.id,
+                    quantity = quantity,
+                    note = note,
+                    pickupMinutes = pickupMinutes
+                )
+            },
             onMessageDonor = { reservationId -> onMessageReservation(reservationId) },
             onFinished = {
                 reviewing = false

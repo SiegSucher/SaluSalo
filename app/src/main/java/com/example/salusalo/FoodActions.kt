@@ -472,7 +472,7 @@ fun ReservationReviewDialog(
     expires: String,
     saving: Boolean,
     result: ReserveResult?,
-    onConfirm: (note: String) -> Unit,
+    onConfirm: (note: String, pickupMinutes: Int) -> Unit,
     onMessageDonor: (reservationId: String) -> Unit,
     // Back or Done on the receipt: closes the receipt and the details page.
     onFinished: () -> Unit,
@@ -482,6 +482,10 @@ fun ReservationReviewDialog(
     val priced = unitPrice > 0
     val donorRole = if (priced) "seller" else "donor"
     var note by rememberSaveable(foodPostId) { mutableStateOf("") }
+    var pickupMinutes by rememberSaveable(foodPostId) {
+        mutableStateOf(30)
+    }
+
 
     val reserved = (result as? ReserveResult.Reserved)
         ?.takeIf { it.reservation.foodPostId == foodPostId }
@@ -608,6 +612,35 @@ fun ReservationReviewDialog(
                 }
             }
 
+            ActionCard {
+                Text(
+                    text = "Pick up within",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                listOf(
+                    15 to "15 minutes",
+                    30 to "30 minutes",
+                    60 to "1 hour",
+                    120 to "2 hours"
+                ).forEach { (minutes, label) ->
+                    FilterChip(
+                        selected = pickupMinutes == minutes,
+                        onClick = { pickupMinutes = minutes },
+                        enabled = !saving,
+                        label = { Text(label) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Text(
+                    text = "Time starts when your reservation is confirmed. " +
+                            "Choose a duration that fits the listing's pickup window " +
+                            "and food expiry.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
             OutlinedTextField(
                 value = note,
                 onValueChange = { if (it.length <= 2000) note = it },
@@ -643,7 +676,7 @@ fun ReservationReviewDialog(
                 text = if (saving) "Reserving…" else "Confirm reservation",
                 enabled = !saving,
                 loading = saving,
-                onClick = { onConfirm(note) }
+                onClick = { onConfirm(note, pickupMinutes) }
             )
         }
     }

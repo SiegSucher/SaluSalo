@@ -20,11 +20,26 @@ class ReservationRepository(
     private val postgrest = supabase.postgrest
     private val bucket = supabase.storage.from("food-images")
 
-    suspend fun createReservation(foodPostId: String, quantity: Int): Reservation {
-        require(quantity > 0) { "Choose a quantity greater than zero." }
-        return postgrest.rpc("create_reservation", buildJsonObject {
-            put("p_food_post_id", foodPostId); put("p_quantity", quantity)
-        }).decodeAs()
+    suspend fun createReservation(
+        foodPostId: String,
+        quantity: Int,
+        pickupMinutes: Int
+    ): Reservation {
+        require(quantity > 0) {
+            "Choose a quantity greater than zero."
+        }
+        require(pickupMinutes in setOf(15, 30, 60, 120)) {
+            "Choose a valid pickup duration."
+        }
+
+        return postgrest.rpc(
+            "create_reservation_with_pickup",
+            buildJsonObject {
+                put("p_food_post_id", foodPostId)
+                put("p_quantity", quantity)
+                put("p_pickup_minutes", pickupMinutes)
+            }
+        ).decodeAs()
     }
 
     suspend fun cancelReservation(reservationId: String): Reservation =
