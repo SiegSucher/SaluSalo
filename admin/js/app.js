@@ -37,6 +37,12 @@
   // Static icons in the HTML.
   document.querySelectorAll('[data-icon]').forEach((el) => el.replaceWith(icon(el.dataset.icon, 22)));
 
+  // The skip link moves focus without touching the address, which holds the page.
+  document.querySelector('.skip-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    main.focus();
+  });
+
   /* ---------- Navigation list ---------- */
   let activeKey = null;
   function renderNav() {
