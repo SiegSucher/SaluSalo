@@ -131,9 +131,9 @@ data class FoodPostDraft(
     val handover: ListingHandover?,
     val allergens: String,
     val storageNotes: String,
-    val pickupPin: GeoPin
+    val pickupPin: GeoPin,
+    val maxPerReceiver: Int? = null
 )
-
 /**
  * The fields update_my_food_post_with_pin() may change. Quantity, unit and
  * photos never change. [pickupPin] null keeps the stored pin (or its absence):

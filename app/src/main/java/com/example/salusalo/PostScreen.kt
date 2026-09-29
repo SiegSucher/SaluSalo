@@ -119,6 +119,7 @@ fun PostScreen(
     var category by rememberSaveable { mutableStateOf("") }
     var price by rememberSaveable { mutableStateOf("") }
     var quantity by rememberSaveable { mutableStateOf("") }
+    var maxPerReceiver by rememberSaveable { mutableStateOf("") }
     var unit by rememberSaveable { mutableStateOf("") }
     var location by rememberSaveable { mutableStateOf("") }
     var pickupPin by rememberSaveable(stateSaver = PinSaver) { mutableStateOf<GeoPin?>(null) }
@@ -202,6 +203,7 @@ fun PostScreen(
 
     fun validate(): String {
         val count = quantity.toIntOrNull()
+        val receiverLimit = maxPerReceiver.trim().toIntOrNull()
         val amount = price.toBigDecimalOrNull()
         val now = System.currentTimeMillis()
 
@@ -211,6 +213,12 @@ fun PostScreen(
             textLength(name) > 160 -> "The food name must be 160 characters or fewer."
             category.isBlank() -> "Select a category."
             count == null || count <= 0 -> "Enter a whole quantity greater than zero."
+            maxPerReceiver.isNotBlank() &&
+                    (receiverLimit == null || receiverLimit <= 0) ->
+                "Enter a whole maximum quantity greater than zero, or leave it blank."
+
+            receiverLimit != null && receiverLimit > count ->
+                "The maximum per receiver cannot exceed the listing quantity."
             unit.isBlank() -> "Select a unit."
             !donation && (
                     amount == null ||
@@ -396,6 +404,21 @@ fun PostScreen(
                         required = true
                     )
 
+                    PostField(
+                        label = "Maximum quantity per receiver",
+                        value = maxPerReceiver,
+                        onChange = { maxPerReceiver = it },
+                        example = "e.g., 3",
+                        keyboard = KeyboardType.Number
+                    )
+
+                    Text(
+                        text = "Optional. Leave blank for no limit. Uses the unit selected above. " +
+                                "This limit applies across each receiver's active reservations " +
+                                "and completed pickups for this listing.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
                     if (donation) {
                         InlineNotice(
                             text = "Free donation: recipients pay nothing.",
@@ -539,7 +562,8 @@ fun PostScreen(
                                     handover = ListingHandover.fromLabel(distribution),
                                     allergens = allergens,
                                     storageNotes = storage,
-                                    pickupPin = pin
+                                    pickupPin = pin,
+                                    maxPerReceiver = maxPerReceiver.trim().toIntOrNull()
                                 ),
                                 photos.map { Uri.parse(it) }
                             )
