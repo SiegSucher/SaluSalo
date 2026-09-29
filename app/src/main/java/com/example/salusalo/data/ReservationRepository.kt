@@ -20,10 +20,14 @@ class ReservationRepository(
     private val postgrest = supabase.postgrest
     private val bucket = supabase.storage.from("food-images")
 
-    suspend fun createReservation(foodPostId: String, quantity: Int): Reservation {
+    /**
+     * Reserves at [unitPrice], the price the recipient saw. The server refuses
+     * if the listing's price has changed since, and records its own price.
+     */
+    suspend fun createReservation(foodPostId: String, quantity: Int, unitPrice: Double): Reservation {
         require(quantity > 0) { "Choose a quantity greater than zero." }
-        return postgrest.rpc("create_reservation", buildJsonObject {
-            put("p_food_post_id", foodPostId); put("p_quantity", quantity)
+        return postgrest.rpc("create_reservation_at_price", buildJsonObject {
+            put("p_food_post_id", foodPostId); put("p_quantity", quantity); put("p_unit_price", unitPrice)
         }).decodeAs()
     }
 
@@ -32,6 +36,10 @@ class ReservationRepository(
 
     suspend fun claimReservation(reservationId: String): Reservation =
         postgrest.rpc("claim_reservation", buildJsonObject { put("p_reservation_id", reservationId) }).decodeAs()
+
+    /** The donor gives up an open reservation on their listing; the server checks who may. */
+    suspend fun releaseReservation(reservationId: String): Reservation =
+        postgrest.rpc("release_reservation", buildJsonObject { put("p_reservation_id", reservationId) }).decodeAs()
 
     suspend fun getMyReservations(): List<ReservationDisplay> = getReservationsForProfile(userRepository.getCurrentProfile().id)
 

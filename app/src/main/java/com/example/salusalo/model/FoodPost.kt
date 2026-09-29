@@ -169,6 +169,19 @@ fun isPickupStartAllowed(startMillis: Long, nowMillis: Long): Boolean =
 fun FoodPost.isExpired(now: java.time.Instant = java.time.Instant.now()): Boolean =
     parseTimestamp(expirationDate)?.let { !it.isAfter(now) } ?: false
 
+/**
+ * Why create_reservation would refuse this listing now, in its own words, or
+ * null when it can be reserved. The details page shows it instead of Reserve;
+ * the server still decides.
+ */
+fun FoodPost.reserveBlocker(now: java.time.Instant = java.time.Instant.now()): String? = when {
+    status == FoodPostStatus.REMOVED -> "The donor removed this listing."
+    isExpired(now) -> "This listing has expired."
+    parseTimestamp(pickupEnd)?.let { !it.isAfter(now) } == true -> "The pickup time for this listing has ended."
+    status != FoodPostStatus.AVAILABLE || quantity <= 0 -> "Fully reserved: nothing is left to reserve."
+    else -> null
+}
+
 /** Formats pesos with two decimals, e.g. 45.1 -> "₱45.10". */
 fun formatPeso(amount: BigDecimal): String =
     "₱" + amount.setScale(2, RoundingMode.HALF_UP).toPlainString()

@@ -27,6 +27,22 @@ sealed interface ReserveResult {
     data class Failed(val message: String) : ReserveResult
 }
 
+/** The outcome of a cancel, claim or release, for the Activity "Reservation" dialog. */
+sealed interface ReservationAction {
+    data object Cancelled : ReservationAction
+    data object Claimed : ReservationAction
+    data object Released : ReservationAction
+    data class Failed(val message: String) : ReservationAction
+}
+
+fun ReservationAction.text(): String = when (this) {
+    ReservationAction.Cancelled -> "Reservation cancelled. The quantity is available again."
+    // The button says "Mark as picked up", so its result does too.
+    ReservationAction.Claimed -> "Marked as picked up. You'll find it under Completed."
+    ReservationAction.Released -> "Reservation released. The quantity is available again, and the recipient was told."
+    is ReservationAction.Failed -> message
+}
+
 /** The outcome of sending a review, shown only on the Rate page. */
 sealed interface ReviewResult {
     /** [review].created tells whether it was new or changed. */
@@ -50,9 +66,9 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     /** True when the last load of either list failed. */
     private val _loadFailed = MutableStateFlow(false)
     val loadFailed = _loadFailed.asStateFlow()
-    /** Result of a cancel or claim, for the Activity "Reservation" dialog. */
-    private val _message = MutableStateFlow<String?>(null)
-    val message = _message.asStateFlow()
+    /** Result of a cancel, claim or release, for the Activity "Reservation" dialog. */
+    private val _actionResult = MutableStateFlow<ReservationAction?>(null)
+    val actionResult = _actionResult.asStateFlow()
     private val _reserveResult = MutableStateFlow<ReserveResult?>(null)
     val reserveResult = _reserveResult.asStateFlow()
     /** This account's own reviews, by reservation ID, for "Change your review". */
@@ -76,14 +92,15 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     /**
-     * Reserves [quantity] of a listing, then sends [note] (if not blank) in the
-     * reservation's chat. Returns false when ignored because another write has
-     * not finished yet.
+     * Reserves [quantity] of a listing at [unitPrice], the price shown (the
+     * server refuses if it has changed), then sends [note] (if not blank) in
+     * the reservation's chat. Returns false when ignored because another write
+     * has not finished yet.
      */
-    fun reserve(foodPostId: String, quantity: Int, note: String): Boolean = launchWrite {
+    fun reserve(foodPostId: String, quantity: Int, unitPrice: Double, note: String): Boolean = launchWrite {
         _reserveResult.value = null
         _reserveResult.value = try {
-            val reservation = repository.createReservation(foodPostId, quantity)
+            val reservation = repository.createReservation(foodPostId, quantity, unitPrice)
             refreshPending = true
             val text = note.trim()
             val noteSent = if (text.isEmpty()) null else try {
@@ -107,29 +124,49 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
 
     /** Returns false when ignored because another write has not finished yet. */
     fun cancel(reservationId: String): Boolean = launchWrite {
-        _message.value = try {
+        _actionResult.value = try {
             repository.cancelReservation(reservationId)
             refreshPending = true
-            "Reservation cancelled. The quantity is available again."
+            ReservationAction.Cancelled
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             refreshPending = true
-            shortErrorText(error, "Your reservation could not be cancelled. Check your internet connection and try again.")
+            ReservationAction.Failed(
+                shortErrorText(error, "Your reservation could not be cancelled. Check your internet connection and try again.")
+            )
         }
     }
 
     /** Returns false when ignored because another write has not finished yet. */
     fun claim(reservationId: String): Boolean = launchWrite {
-        _message.value = try {
+        _actionResult.value = try {
             repository.claimReservation(reservationId)
             refreshPending = true
-            "Reservation marked as claimed."
+            ReservationAction.Claimed
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             refreshPending = true
-            shortErrorText(error, "The reservation could not be marked as claimed. Check your internet connection and try again.")
+            ReservationAction.Failed(
+                shortErrorText(error, "The reservation could not be marked as claimed. Check your internet connection and try again.")
+            )
+        }
+    }
+
+    /** The donor releases an open reservation. Returns false when ignored because another write has not finished yet. */
+    fun release(reservationId: String): Boolean = launchWrite {
+        _actionResult.value = try {
+            repository.releaseReservation(reservationId)
+            refreshPending = true
+            ReservationAction.Released
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            refreshPending = true
+            ReservationAction.Failed(
+                shortErrorText(error, "The reservation could not be released. Check your internet connection and try again.")
+            )
         }
     }
 
@@ -159,13 +196,13 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
         _donorReservations.value = emptyList()
         _loaded.value = false
         _loadFailed.value = false
-        _message.value = null
+        _actionResult.value = null
         _reserveResult.value = null
         _myReviews.value = emptyMap()
         _reviewResult.value = null
     }
 
-    fun clearMessage() { _message.value = null }
+    fun clearActionResult() { _actionResult.value = null }
     fun clearReserveResult() { _reserveResult.value = null }
     fun clearReviewResult() { _reviewResult.value = null }
 

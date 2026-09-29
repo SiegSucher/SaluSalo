@@ -521,7 +521,10 @@ internal fun InlineNotice(
     text: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    tone: NoticeTone = NoticeTone.Info
+    tone: NoticeTone = NoticeTone.Info,
+    // An optional small button at the end, for example "Try again".
+    actionLabel: String? = null,
+    onAction: () -> Unit = {}
 ) {
     Row(
         modifier = modifier
@@ -534,6 +537,14 @@ internal fun InlineNotice(
         Icon(icon, contentDescription = null, tint = tone.iconTint, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Text(text, style = SaluText.Supporting, color = tone.content, modifier = Modifier.weight(1f))
+        if (actionLabel != null) {
+            TextButton(
+                onClick = onAction,
+                modifier = Modifier.align(Alignment.CenterVertically).heightIn(min = 48.dp)
+            ) {
+                Text(actionLabel, style = MaterialTheme.typography.labelLarge, color = tone.content)
+            }
+        }
     }
 }
 

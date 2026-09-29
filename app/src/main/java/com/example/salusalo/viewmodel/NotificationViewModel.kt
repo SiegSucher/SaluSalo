@@ -73,13 +73,18 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    suspend fun load() {
+    // Alerts that arrived live while the load ran stay (they are the newest), so
+    // a reload never drops or doubles one. With [quiet] a failure shows nothing.
+    suspend fun load(quiet: Boolean = false) {
         runCatching { repository.getNotifications() }
-            .onSuccess { _notifications.value = it }
-            .onFailure { if (it is CancellationException) throw it else _message.value = errorText(it) }
+            .onSuccess { loaded ->
+                _notifications.update { current -> current.filter { c -> loaded.none { it.id == c.id } } + loaded }
+            }
+            .onFailure { if (it is CancellationException) throw it else if (!quiet) _message.value = errorText(it) }
     }
 
-    fun refresh() { viewModelScope.launch { load() } }
+    /** Reloads the alerts, for example when the app comes back: Realtime misses alerts while it is in the background. */
+    fun refresh(quiet: Boolean = false) { viewModelScope.launch { load(quiet) } }
 
     fun markRead(ids: List<String>) {
         val unread = ids.filter { id -> _notifications.value.any { it.id == id && it.readAt == null } }
