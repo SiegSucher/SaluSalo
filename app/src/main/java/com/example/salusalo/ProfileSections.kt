@@ -739,8 +739,8 @@ fun ProfileSections(
                                         fontWeight = FontWeight.Bold)
                                     Text(
                                         "After a donor marks your pickup as claimed, you can rate " +
-                                                "them from the reservation in Activity \u2192 Purchases " +
-                                                "or Claims. Your name, stars and comment are shown to " +
+                                                "them from the reservation in Activity \u2192 History. " +
+                                                "Your name, stars and comment are shown to " +
                                                 "other users."
                                     )
                                 }

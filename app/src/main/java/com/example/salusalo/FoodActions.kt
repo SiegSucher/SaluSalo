@@ -674,11 +674,15 @@ internal fun DarkSystemBarIcons() {
     }
 }
 
-/** Full-screen page with a Back arrow and a title, shared by the pages above and ReviewsAndReports.kt. */
+/**
+ * Full-screen page with a Back arrow, a title and an optional line under it,
+ * shared by the pages above, ReviewsAndReports.kt and Activity's pages.
+ */
 @Composable
 internal fun ActionPage(
     heading: String,
     onBack: () -> Unit,
+    subtitle: String? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Dialog(
@@ -696,7 +700,7 @@ internal fun ActionPage(
                     .safeDrawingPadding()
                     .imePadding()
             ) {
-                SaluTopBar(title = heading, onBack = onBack)
+                SaluTopBar(title = heading, onBack = onBack, subtitle = subtitle)
 
                 Column(
                     modifier = Modifier
@@ -743,7 +747,7 @@ private fun ActionLine(label: String, value: String, emphasis: Boolean = false) 
     }
 }
 
-/** The page's main action: the shared yellow button. */
+/** The page's main action: the shared green button. */
 @Composable
 internal fun ActionButton(
     text: String,

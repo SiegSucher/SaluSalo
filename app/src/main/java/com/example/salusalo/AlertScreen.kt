@@ -84,7 +84,8 @@ private fun NotificationType.style(): AlertStyle = when (this) {
 fun AlertsScreen(
     notificationViewModel: NotificationViewModel,
     onOpenConversation: (String) -> Unit,
-    onOpenActivity: (String) -> Unit,
+    // A new or cancelled reservation on one of this account's listings.
+    onOpenListingReservation: (String?) -> Unit,
     onOpenClaimedReservation: (String?) -> Unit,
     onOpenRemovedReservation: (String?) -> Unit
 ) {
@@ -252,7 +253,7 @@ fun AlertsScreen(
                                 NotificationType.RESERVATION_REMOVED ->
                                     onOpenRemovedReservation(alert.reservationId)
                                 else ->
-                                    onOpenActivity("My Donations")
+                                    onOpenListingReservation(alert.reservationId)
                             }
                         }
                     )

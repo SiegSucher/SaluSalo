@@ -1647,21 +1647,21 @@ private fun HomeScreen(
                     "alerts" -> AlertsScreen(
                         notificationViewModel = notificationViewModel,
                         onOpenConversation = { id -> messageViewModel.openConversation(id) },
-                        onOpenActivity = { tab ->
-                            activityTab = tab
-                            activityFocus = null
+                        onOpenListingReservation = { reservationId ->
+                            // My Listings; Activity then opens that listing's Manage reservations.
+                            activityTab = "My Listings"
+                            activityFocus = reservationId
                             page = "activity"
                         },
                         onOpenClaimedReservation = { reservationId ->
-                            // Claims until the reservation loads; Activity then switches
-                            // to Purchases if it was priced.
-                            activityTab = "Claims"
+                            // History; Activity then opens the reservation, with Rate.
+                            activityTab = "History"
                             activityFocus = reservationId
                             page = "activity"
                         },
                         onOpenRemovedReservation = { reservationId ->
                             // A reservation cancelled because its listing was removed.
-                            activityTab = "My Reservations"
+                            activityTab = "History"
                             activityFocus = reservationId
                             page = "activity"
                         }

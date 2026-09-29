@@ -88,4 +88,58 @@ class UiTextTest {
         assertEquals("JD", initialsOf("juan dela cruz"))
         assertEquals("", initialsOf("   "))
     }
+
+    @Test
+    fun pickupWindowNamesTheDayAndBothTimes() {
+        // 4:00 PM – 6:00 PM today in Manila.
+        assertEquals(
+            "Today, 4:00 PM – 6:00 PM",
+            pickupWindowLabel(Instant.parse("2026-09-28T08:00:00Z"), Instant.parse("2026-09-28T10:00:00Z"), now, zone)
+        )
+        assertEquals(
+            "Tomorrow, 9:00 AM – 11:00 AM",
+            pickupWindowLabel(Instant.parse("2026-09-29T01:00:00Z"), Instant.parse("2026-09-29T03:00:00Z"), now, zone)
+        )
+        assertEquals(
+            "Oct 1, 9:00 AM – 11:00 AM",
+            pickupWindowLabel(Instant.parse("2026-10-01T01:00:00Z"), Instant.parse("2026-10-01T03:00:00Z"), now, zone)
+        )
+        // Across midnight: both days.
+        assertEquals(
+            "Today, 8:00 PM – Tomorrow, 9:00 AM",
+            pickupWindowLabel(Instant.parse("2026-09-28T12:00:00Z"), Instant.parse("2026-09-29T01:00:00Z"), now, zone)
+        )
+        assertNull(pickupWindowLabel(null, Instant.parse("2026-09-28T10:00:00Z"), now, zone))
+        assertNull(pickupWindowLabel(Instant.parse("2026-09-28T08:00:00Z"), null, now, zone))
+    }
+
+    @Test
+    fun pickupLineReadsAsASentence() {
+        assertEquals(
+            "Pickup today, 4:00 PM – 6:00 PM",
+            pickupLine(Instant.parse("2026-09-28T08:00:00Z"), Instant.parse("2026-09-28T10:00:00Z"), now, zone)
+        )
+        assertEquals(
+            "Pickup Oct 1, 9:00 AM – 11:00 AM",
+            pickupLine(Instant.parse("2026-10-01T01:00:00Z"), Instant.parse("2026-10-01T03:00:00Z"), now, zone)
+        )
+        assertNull(pickupLine(null, null, now, zone))
+    }
+
+    @Test
+    fun historyDayIsRelativeThenDated() {
+        assertEquals("Today", historyDayLabel(Instant.parse("2026-09-28T01:00:00Z"), now, zone))
+        assertEquals("Yesterday", historyDayLabel(Instant.parse("2026-09-27T09:00:00Z"), now, zone))
+        assertEquals("Sep 24", historyDayLabel(Instant.parse("2026-09-24T09:00:00Z"), now, zone))
+        assertEquals("Dec 31, 2025", historyDayLabel(Instant.parse("2025-12-31T09:00:00Z"), now, zone))
+        assertNull(historyDayLabel(null, now, zone))
+    }
+
+    @Test
+    fun momentHasTheDayAndTheTime() {
+        assertEquals("Today, 3:12 PM", momentLabel(Instant.parse("2026-09-28T07:12:00Z"), now, zone))
+        assertEquals("Tomorrow, 9:00 AM", momentLabel(Instant.parse("2026-09-29T01:00:00Z"), now, zone))
+        assertEquals("Sep 24, 9:05 AM", momentLabel(Instant.parse("2026-09-24T01:05:00Z"), now, zone))
+        assertNull(momentLabel(null, now, zone))
+    }
 }
