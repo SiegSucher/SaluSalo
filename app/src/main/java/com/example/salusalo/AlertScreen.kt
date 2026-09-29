@@ -51,18 +51,27 @@ private fun NotificationType.category() = when (this) {
     else -> "Reservations"
 }
 
-/** How each kind of alert looks: its icon, colours and a short label, so the list can be scanned. */
-private class AlertStyle(val icon: ImageVector, val tint: Color, val background: Color, val label: String)
+/**
+ * How each kind of alert looks: its icon, colours and a short label, so the list
+ * can be scanned. [labelColor] is the label's own colour, readable on the row.
+ */
+private class AlertStyle(
+    val icon: ImageVector,
+    val tint: Color,
+    val background: Color,
+    val label: String,
+    val labelColor: Color = tint
+)
 
 private fun NotificationType.style(): AlertStyle = when (this) {
     NotificationType.MESSAGE ->
         AlertStyle(Icons.Outlined.ChatBubbleOutline, SaluColors.Green, SaluColors.PaleGreen, "Message")
     NotificationType.RESERVATION_CREATED ->
-        AlertStyle(Icons.Outlined.BookmarkAdded, SaluColors.Orange, SaluColors.OrangeSoft, "New reservation")
+        AlertStyle(Icons.Outlined.BookmarkAdded, SaluColors.Orange, SaluColors.OrangeSoft, "New reservation", SaluColors.DarkGreen)
     NotificationType.RESERVATION_CANCELLED ->
         AlertStyle(Icons.Outlined.EventBusy, SaluColors.Error, SaluColors.ErrorSoft, "Cancelled")
     NotificationType.RESERVATION_CLAIMED ->
-        AlertStyle(Icons.Outlined.TaskAlt, Color.White, SaluColors.Green, "Claimed")
+        AlertStyle(Icons.Outlined.TaskAlt, Color.White, SaluColors.Green, "Claimed", SaluColors.Green)
     NotificationType.RESERVATION_REMOVED ->
         AlertStyle(Icons.Outlined.RemoveCircleOutline, SaluColors.Gray, SaluColors.Neutral, "Listing removed")
 }
@@ -408,7 +417,7 @@ private fun AlertRow(
                 Text(
                     style.label,
                     style = SaluText.Status,
-                    color = style.tint,
+                    color = style.labelColor,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
