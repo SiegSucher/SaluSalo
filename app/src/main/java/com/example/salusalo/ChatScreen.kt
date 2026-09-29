@@ -1,5 +1,6 @@
 package com.example.salusalo
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,34 +12,43 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Flag
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,6 +56,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,12 +74,46 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val CGreen = Color(0xFF47782E)
-private val CDark = Color(0xFF263C29)
-private val CCream = Color(0xFFFCFBF6)
-private val CGray = Color(0xFF666873)
-private val CLine = Color(0xFFE3E4E7)
-private val COrange = Color(0xFFEF7900)
+/** A line in the open chat: a day heading, or a message. */
+private sealed interface ChatEntry {
+    val key: String
+
+    class Day(val label: String) : ChatEntry {
+        override val key = "day-$label"
+    }
+
+    class Message(val message: ChatMessage) : ChatEntry {
+        override val key = message.id
+    }
+}
+
+/** Messages with a "Today" / "Yesterday" / date heading before each new day. */
+private fun chatEntries(messages: List<ChatMessage>): List<ChatEntry> {
+    val zone = ZoneId.systemDefault()
+    val today = LocalDate.now(zone)
+    var lastDay: LocalDate? = null
+    return buildList {
+        messages.forEach { message ->
+            val day = parseTimestamp(message.createdAt)?.atZone(zone)?.toLocalDate()
+            if (day != null && day != lastDay) {
+                lastDay = day
+                add(
+                    ChatEntry.Day(
+                        when (day) {
+                            today -> "Today"
+                            today.minusDays(1) -> "Yesterday"
+                            else -> DateTimeFormatter.ofPattern(
+                                if (day.year == today.year) "EEE, MMM d" else "MMM d, yyyy",
+                                Locale.ENGLISH
+                            ).format(day)
+                        }
+                    )
+                )
+            }
+            add(ChatEntry.Message(message))
+        }
+    }
+}
 
 /**
  * The open conversation, shown full screen over whatever opened it. New
@@ -90,9 +136,11 @@ fun ChatScreen(
     }
     // Reporting the other person in this chat (for example a recipient who didn't show up).
     var reporting by rememberSaveable(conversation?.id) { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val entries = remember(messages) { chatEntries(messages) }
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+        if (entries.isNotEmpty()) listState.animateScrollToItem(entries.lastIndex)
     }
 
     // Edge to edge, so the message box stays above the keyboard (imePadding).
@@ -104,81 +152,123 @@ fun ChatScreen(
         // Keep the newest message in view while the keyboard opens.
         val keyboardHeight = WindowInsets.ime.getBottom(LocalDensity.current)
         LaunchedEffect(keyboardHeight) {
-            if (keyboardHeight > 0 && messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex)
+            if (keyboardHeight > 0 && entries.isNotEmpty()) listState.scrollToItem(entries.lastIndex)
         }
-        Surface(modifier = Modifier.fillMaxSize(), color = CCream) {
+        Surface(modifier = Modifier.fillMaxSize(), color = SaluColors.Cream) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .navigationBarsPadding()
                     .imePadding()
             ) {
-                Surface(color = Color.White, shadowElevation = 2.dp) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = onClose) { Text("Back") }
-                        conversation?.let {
-                            ListingThumbnail(it, Modifier.size(40.dp))
-                            Spacer(Modifier.size(10.dp))
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                conversation?.otherName ?: "Messages",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = CDark,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            conversation?.let {
-                                Text(
-                                    (if (it.isDonor) "Asking about your listing: " else "About: ") + it.foodName,
-                                    fontSize = 12.sp,
-                                    color = CGray,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                        conversation?.let {
-                            IconButton(onClick = { reporting = true }) {
+                Surface(color = SaluColors.Cream) {
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 4.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = onClose) {
                                 Icon(
-                                    Icons.Outlined.Flag,
-                                    contentDescription = "Report ${it.otherName}",
-                                    tint = CGray
+                                    Icons.AutoMirrored.Outlined.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = SaluColors.DarkGreen
                                 )
                             }
+                            conversation?.let {
+                                ListingThumbnail(it, Modifier.size(44.dp))
+                                Spacer(Modifier.width(12.dp))
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    conversation?.otherName ?: "Messages",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = SaluColors.DarkGreen,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.semantics { heading() }
+                                )
+                                conversation?.let {
+                                    Text(
+                                        (if (it.isDonor) "Asking about your listing: " else "About: ") + it.foodName,
+                                        style = SaluText.Supporting,
+                                        color = SaluColors.Gray,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            conversation?.let {
+                                Box {
+                                    IconButton(onClick = { menuOpen = true }) {
+                                        Icon(
+                                            Icons.Outlined.MoreVert,
+                                            contentDescription = "More options",
+                                            tint = SaluColors.DarkGreen
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = menuOpen,
+                                        onDismissRequest = { menuOpen = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Report ${it.otherName}", color = SaluColors.Error) },
+                                            leadingIcon = {
+                                                Icon(Icons.Outlined.Flag, contentDescription = null, tint = SaluColors.Error)
+                                            },
+                                            onClick = {
+                                                menuOpen = false
+                                                reporting = true
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
+                        HorizontalDivider(color = SaluColors.Line)
                     }
                 }
 
-                Box(Modifier.weight(1f).fillMaxWidth()) {
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
                     when {
-                        opening -> CircularProgressIndicator(Modifier.align(Alignment.Center), color = CGreen)
-                        conversation == null -> Text(
-                            "This conversation could not be opened.",
-                            modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                            color = CGray
+                        opening -> CircularProgressIndicator(
+                            Modifier.align(Alignment.Center),
+                            color = SaluColors.Green
                         )
-                        messages.isEmpty() -> Text(
-                            "No messages yet. Say hello and ask about pickup, allergens or storage.",
-                            modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                            color = CGray,
-                            fontSize = 13.sp
+                        conversation == null -> EmptyState(
+                            icon = Icons.Outlined.ErrorOutline,
+                            title = "This conversation could not be opened.",
+                            message = "Go back and try again.",
+                            tint = SaluColors.Error,
+                            iconBackground = SaluColors.ErrorSoft,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                        messages.isEmpty() -> EmptyState(
+                            icon = Icons.Outlined.ChatBubbleOutline,
+                            title = "No messages yet",
+                            message = "Say hello and ask about pickup, allergens or storage.",
+                            modifier = Modifier.align(Alignment.Center)
                         )
                         else -> LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            items(messages, key = { it.id }) { message ->
-                                MessageBubble(message, mine = message.senderId == myProfileId)
+                            items(entries, key = { it.key }) { entry ->
+                                when (entry) {
+                                    is ChatEntry.Day -> DayHeading(entry.label)
+                                    is ChatEntry.Message -> MessageBubble(
+                                        entry.message,
+                                        mine = entry.message.senderId == myProfileId
+                                    )
+                                }
                             }
                         }
                     }
@@ -196,28 +286,52 @@ fun ChatScreen(
                 }
 
                 if (conversation != null) {
-                    Surface(color = Color.White, shadowElevation = 4.dp) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = draft,
-                                onValueChange = { if (it.length <= 2000) draft = it },
-                                modifier = Modifier.weight(1f),
-                                placeholder = { Text("Type a message…") },
-                                shape = RoundedCornerShape(18.dp),
-                                maxLines = 4
-                            )
-                            Button(
-                                enabled = draft.isNotBlank() && !sending,
-                                onClick = { messageViewModel.send(draft) { draft = "" } },
-                                colors = ButtonDefaults.buttonColors(containerColor = CGreen)
+                    Surface(color = Color.White) {
+                        Column {
+                            HorizontalDivider(color = SaluColors.Line)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(if (sending) "Sending" else "Send", fontSize = 13.sp)
+                                OutlinedTextField(
+                                    value = draft,
+                                    onValueChange = { if (it.length <= 2000) draft = it },
+                                    modifier = Modifier.weight(1f),
+                                    placeholder = { Text("Type a message…", style = SaluText.Body) },
+                                    textStyle = SaluText.Body.copy(fontSize = 15.sp),
+                                    shape = RoundedCornerShape(24.dp),
+                                    maxLines = 4,
+                                    colors = saluFieldColors(container = SaluColors.Cream)
+                                )
+                                FilledIconButton(
+                                    onClick = { messageViewModel.send(draft) { draft = "" } },
+                                    enabled = draft.isNotBlank() && !sending,
+                                    modifier = Modifier
+                                        .padding(bottom = 4.dp)
+                                        .size(48.dp),
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = SaluColors.Green,
+                                        contentColor = Color.White,
+                                        disabledContainerColor = SaluColors.PaleGreen,
+                                        disabledContentColor = SaluColors.Faint
+                                    )
+                                ) {
+                                    if (sending) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            color = Color.White,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.Send,
+                                            contentDescription = "Send message"
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -228,28 +342,51 @@ fun ChatScreen(
 }
 
 @Composable
+private fun DayHeading(label: String) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            style = SaluText.Meta,
+            color = SaluColors.Gray,
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(SaluColors.PaleGreen)
+                .padding(horizontal = 10.dp, vertical = 4.dp)
+                .semantics { heading() }
+        )
+    }
+}
+
+@Composable
 private fun MessageBubble(message: ChatMessage, mine: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start
     ) {
         Surface(
-            color = if (mine) CGreen else Color.White,
+            color = if (mine) SaluColors.Green else Color.White,
             shape = RoundedCornerShape(
-                topStart = 16.dp, topEnd = 16.dp,
-                bottomStart = if (mine) 16.dp else 4.dp,
-                bottomEnd = if (mine) 4.dp else 16.dp
+                topStart = 18.dp, topEnd = 18.dp,
+                bottomStart = if (mine) 18.dp else 4.dp,
+                bottomEnd = if (mine) 4.dp else 18.dp
             ),
-            shadowElevation = if (mine) 0.dp else 1.dp,
-            modifier = Modifier.widthIn(max = 290.dp)
+            border = if (mine) null else BorderStroke(1.dp, SaluColors.Line),
+            modifier = Modifier.widthIn(max = 300.dp)
         ) {
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(message.body, fontSize = 14.sp, lineHeight = 19.sp, color = if (mine) Color.White else CDark)
+            Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 9.dp, bottom = 7.dp)) {
+                Text(message.body, style = SaluText.Body.copy(fontSize = 15.sp, lineHeight = 21.sp), color = if (mine) Color.White else SaluColors.DarkGreen)
                 Text(
-                    formatChatTime(message.createdAt),
-                    fontSize = 10.sp,
-                    color = if (mine) Color.White.copy(alpha = 0.8f) else CGray,
-                    modifier = Modifier.align(Alignment.End)
+                    formatBubbleTime(message.createdAt),
+                    style = SaluText.Meta.copy(fontWeight = FontWeight.Normal),
+                    color = if (mine) Color.White.copy(alpha = 0.8f) else SaluColors.Gray,
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(top = 2.dp)
                 )
             }
         }
@@ -265,42 +402,45 @@ fun MessagesScreen(
     val conversations by messageViewModel.conversations.collectAsStateWithLifecycle()
     val loading by messageViewModel.conversationsLoading.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { messageViewModel.loadConversations() }
+    val unread = conversations.sumOf { it.unreadCount }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(CCream)
+            .background(SaluColors.Cream)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(onClick = onBack) { Text("Back") }
-            Text("Messages", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = CDark, modifier = Modifier.weight(1f))
-        }
-        HorizontalDivider(color = CLine)
+        SaluTopBar(
+            title = "Messages",
+            onBack = onBack,
+            backDescription = "Back to Home",
+            subtitle = if (unread > 0) "$unread unread" else null
+        )
 
         when {
-            loading && conversations.isEmpty() -> Box(Modifier.fillMaxSize()) {
-                CircularProgressIndicator(Modifier.align(Alignment.Center), color = CGreen)
+            loading && conversations.isEmpty() -> SkeletonGroup(
+                description = "Loading conversations",
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            ) {
+                repeat(5) { ListRowSkeleton(thumbnail = 56.dp) }
             }
-            conversations.isEmpty() -> Box(Modifier.fillMaxSize().padding(24.dp)) {
-                Text(
-                    "No conversations yet. Open a listing and tap \"Message Donor\" to ask a question.",
-                    modifier = Modifier.align(Alignment.Center),
-                    color = CGray,
-                    fontSize = 13.sp
-                )
-            }
+            conversations.isEmpty() -> EmptyState(
+                icon = Icons.Outlined.ChatBubbleOutline,
+                title = "No conversations yet",
+                message = "Open a listing and tap “Message” to ask the donor about pickup, allergens or storage.",
+                modifier = Modifier.padding(top = 48.dp)
+            )
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 96.dp)
+                contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 items(conversations, key = { it.id }) { conversation ->
-                    ConversationRow(conversation) { messageViewModel.openConversation(conversation.id) }
-                    HorizontalDivider(color = CLine)
+                    Column(Modifier.animateItem()) {
+                        ConversationRow(conversation) { messageViewModel.openConversation(conversation.id) }
+                        HorizontalDivider(
+                            color = SaluColors.Line,
+                            modifier = Modifier.padding(start = 90.dp)
+                        )
+                    }
                 }
             }
         }
@@ -313,62 +453,55 @@ private fun ConversationRow(conversation: ConversationSummary, onClick: () -> Un
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .background(if (unread) SaluColors.PaleGreen else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ListingThumbnail(conversation, Modifier.size(52.dp))
-        Spacer(Modifier.size(12.dp))
+        ListingThumbnail(conversation, Modifier.size(56.dp))
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     conversation.otherName,
-                    fontSize = 15.sp,
-                    fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold,
-                    color = CDark,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold
+                    ),
+                    color = SaluColors.DarkGreen,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                Spacer(Modifier.width(8.dp))
                 Text(
                     formatChatTime(conversation.lastMessageAt ?: conversation.createdAt),
-                    fontSize = 11.sp,
-                    color = CGray
+                    style = SaluText.Meta,
+                    color = if (unread) SaluColors.Green else SaluColors.Gray
                 )
             }
             Text(
-                (if (conversation.isDonor) "Your listing: " else "") + conversation.foodName,
-                fontSize = 12.sp,
-                color = CGreen,
+                (if (conversation.isDonor) "Your listing: " else "About: ") + conversation.foodName,
+                style = SaluText.Meta,
+                color = SaluColors.Green,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     conversation.lastMessage?.let { (if (conversation.lastMessageMine == true) "You: " else "") + it }
                         ?: "No messages yet",
-                    fontSize = 13.sp,
-                    color = if (unread) CDark else CGray,
-                    fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
+                    style = SaluText.Supporting.copy(
+                        fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal
+                    ),
+                    color = if (unread) SaluColors.DarkGreen else SaluColors.Gray,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
                 if (unread) {
-                    Box(
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .clip(CircleShape)
-                            .background(COrange)
-                            .padding(horizontal = 7.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            if (conversation.unreadCount > 99) "99+" else conversation.unreadCount.toString(),
-                            fontSize = 11.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Spacer(Modifier.width(8.dp))
+                    CountBadge(conversation.unreadCount)
                 }
             }
         }
@@ -382,7 +515,7 @@ private fun ListingThumbnail(conversation: ConversationSummary, modifier: Modifi
         imageUrl = conversation.displayImageUrl,
         hasPhoto = !conversation.foodImagePath.isNullOrBlank(),
         contentDescription = conversation.foodName,
-        modifier = modifier.clip(RoundedCornerShape(10.dp))
+        modifier = modifier.clip(SaluRadius.Small)
     )
 }
 
@@ -392,4 +525,10 @@ private fun formatChatTime(value: String?): String {
     val zone = ZoneId.systemDefault()
     val pattern = if (instant.atZone(zone).toLocalDate() == LocalDate.now(zone)) "h:mm a" else "MMM d"
     return DateTimeFormatter.ofPattern(pattern, Locale.ENGLISH).withZone(zone).format(instant)
+}
+
+/** "3:05 PM": the day is in the heading above the bubble. */
+private fun formatBubbleTime(value: String?): String {
+    val instant = parseTimestamp(value) ?: return ""
+    return DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH).withZone(ZoneId.systemDefault()).format(instant)
 }

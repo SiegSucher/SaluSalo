@@ -2,16 +2,23 @@ package com.example.salusalo
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.BookmarkAdded
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.DoneAll
+import androidx.compose.material.icons.outlined.EventBusy
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -19,7 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -32,16 +45,35 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val AlertsGreen = Color(0xFF397B24)
-private val AlertsCream = Color(0xFFFAF9F3)
-private val AlertsPale = Color(0xFFEDF4DF)
-private val AlertsDark = Color(0xFF17281B)
-private val AlertsGray = Color(0xFF646878)
-
 /** Filter chip label for each alert type. */
 private fun NotificationType.category() = when (this) {
     NotificationType.MESSAGE -> "Messages"
     else -> "Reservations"
+}
+
+/**
+ * How each kind of alert looks: its icon, colours and a short label, so the list
+ * can be scanned. [labelColor] is the label's own colour, readable on the row.
+ */
+private class AlertStyle(
+    val icon: ImageVector,
+    val tint: Color,
+    val background: Color,
+    val label: String,
+    val labelColor: Color = tint
+)
+
+private fun NotificationType.style(): AlertStyle = when (this) {
+    NotificationType.MESSAGE ->
+        AlertStyle(Icons.Outlined.ChatBubbleOutline, SaluColors.Green, SaluColors.IconGreen, "Message")
+    NotificationType.RESERVATION_CREATED ->
+        AlertStyle(Icons.Outlined.BookmarkAdded, SaluColors.Orange, SaluColors.OrangeSoft, "New reservation", SaluColors.DarkGreen)
+    NotificationType.RESERVATION_CANCELLED ->
+        AlertStyle(Icons.Outlined.EventBusy, SaluColors.Error, SaluColors.ErrorSoft, "Cancelled")
+    NotificationType.RESERVATION_CLAIMED ->
+        AlertStyle(Icons.Outlined.TaskAlt, Color.White, SaluColors.Green, "Claimed", SaluColors.Green)
+    NotificationType.RESERVATION_REMOVED ->
+        AlertStyle(Icons.Outlined.RemoveCircleOutline, SaluColors.Gray, SaluColors.Neutral, "Listing removed")
 }
 
 /**
@@ -52,7 +84,8 @@ private fun NotificationType.category() = when (this) {
 fun AlertsScreen(
     notificationViewModel: NotificationViewModel,
     onOpenConversation: (String) -> Unit,
-    onOpenActivity: (String) -> Unit,
+    // A new or cancelled reservation on one of this account's listings.
+    onOpenListingReservation: (String?) -> Unit,
     onOpenClaimedReservation: (String?) -> Unit,
     onOpenRemovedReservation: (String?) -> Unit
 ) {
@@ -73,6 +106,7 @@ fun AlertsScreen(
     val visibleAlerts = alerts.filter { alert ->
         filter == "All" || alert.type.category() == filter
     }
+    val unreadShown = visibleAlerts.count { it.readAt == null }
     val today = LocalDate.now(ZoneId.systemDefault())
     fun isToday(alert: AppNotification) =
         parseTimestamp(alert.createdAt)?.atZone(ZoneId.systemDefault())?.toLocalDate() == today
@@ -80,51 +114,29 @@ fun AlertsScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(AlertsCream),
+            .background(SaluColors.Cream),
         contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
             top = 16.dp,
             bottom = 24.dp
-        ),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        )
     ) {
-        item {
+        item(key = "header") {
             Row(
+                modifier = Modifier.padding(start = 20.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(CircleShape)
-                        .background(AlertsPale),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Outlined.Notifications,
-                        contentDescription = null,
-                        tint = AlertsDark,
-                        modifier = Modifier.size(27.dp)
-                    )
-                }
-
-                Spacer(Modifier.width(10.dp))
-
                 Column(Modifier.weight(1f)) {
                     Text(
                         "Alerts",
-                        fontSize = 19.sp,
-                        lineHeight = 23.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = AlertsDark
+                        style = SaluText.ScreenTitle,
+                        color = SaluColors.DarkGreen,
+                        modifier = Modifier.semantics { heading() }
                     )
-
-                    Spacer(Modifier.height(4.dp))
 
                     Text(
                         "Messages and updates on your reservations",
-                        fontSize = 11.sp,
-                        color = AlertsGray
+                        style = SaluText.Supporting,
+                        color = SaluColors.Gray
                     )
                 }
 
@@ -137,52 +149,48 @@ fun AlertsScreen(
                     Icon(
                         Icons.Outlined.Settings,
                         contentDescription = "Alert settings",
-                        tint = AlertsDark
+                        tint = SaluColors.DarkGreen
                     )
                 }
             }
         }
 
-        item {
+        item(key = "filters") {
+            LazyRow(
+                modifier = Modifier.padding(top = 16.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(
+                    listOf(
+                        "All" to null,
+                        "Messages" to Icons.Outlined.ChatBubbleOutline,
+                        "Reservations" to Icons.Outlined.BookmarkBorder
+                    ),
+                    key = { it.first }
+                ) { (label, icon) ->
+                    SaluFilterChip(
+                        label = label,
+                        selected = filter == label,
+                        onClick = { filter = label },
+                        icon = icon
+                    )
+                }
+            }
+        }
+
+        item(key = "unread") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                listOf(
-                    "All",
-                    "Messages",
-                    "Reservations"
-                ).forEach { label ->
-                    FilterChip(
-                        selected = filter == label,
-                        onClick = { filter = label },
-                        label = {
-                            Text(label, fontSize = 12.sp)
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = Color.White,
-                            labelColor = AlertsGreen,
-                            selectedContainerColor = AlertsGreen,
-                            selectedLabelColor = Color.White
-                        )
-                    )
-                }
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
+                    .padding(start = 20.dp, end = 8.dp, top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "${visibleAlerts.count { it.readAt == null }} unread",
+                    if (unreadShown == 0) "All caught up" else "$unreadShown unread",
                     modifier = Modifier.weight(1f),
-                    fontSize = 12.sp,
-                    color = AlertsGray
+                    style = SaluText.Meta,
+                    color = if (unreadShown == 0) SaluColors.Gray else SaluColors.Green
                 )
 
                 TextButton(
@@ -195,37 +203,21 @@ fun AlertsScreen(
                         }
                     }
                 ) {
-                    Text(
-                        "Mark shown as read",
-                        fontSize = 11.sp
-                    )
+                    Icon(Icons.Outlined.DoneAll, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Mark shown as read", style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
 
         if (visibleAlerts.isEmpty()) {
-            item {
-                Surface(
-                    color = Color.White,
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Column(Modifier.padding(20.dp)) {
-                        Text(
-                            "No alerts to show",
-                            fontWeight = FontWeight.Bold,
-                            color = AlertsDark
-                        )
-
-                        Spacer(Modifier.height(6.dp))
-
-                        Text(
-                            "You will be alerted here when someone messages you " +
-                                    "or a reservation on your listings changes.",
-                            fontSize = 13.sp,
-                            color = AlertsGray
-                        )
-                    }
-                }
+            item(key = "empty") {
+                EmptyState(
+                    icon = Icons.Outlined.NotificationsNone,
+                    title = if (filter == "All") "No alerts to show" else "No ${filter.lowercase(Locale.ENGLISH)} alerts",
+                    message = "You will be alerted here when someone messages you " +
+                            "or a reservation on your listings changes."
+                )
             }
         }
 
@@ -233,21 +225,24 @@ fun AlertsScreen(
             val group = visibleAlerts.filter { isToday(it) == todayGroup }
 
             if (group.isNotEmpty()) {
-                item {
-                    Text(
+                item(key = if (todayGroup) "group-today" else "group-earlier") {
+                    GroupLabel(
                         if (todayGroup) "Today" else "Earlier",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = AlertsDark
+                        Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp)
                     )
                 }
 
-                items(
+                itemsIndexed(
                     items = group,
-                    key = { it.id }
-                ) { alert ->
-                    AlertListingCard(
+                    key = { _, alert -> alert.id }
+                ) { index, alert ->
+                    AlertRow(
                         alert = alert,
+                        first = index == 0,
+                        last = index == group.lastIndex,
+                        modifier = Modifier
+                            .animateItem()
+                            .padding(horizontal = 20.dp),
                         onClick = {
                             notificationViewModel.markRead(listOf(alert.id))
                             when (alert.type) {
@@ -258,7 +253,7 @@ fun AlertsScreen(
                                 NotificationType.RESERVATION_REMOVED ->
                                     onOpenRemovedReservation(alert.reservationId)
                                 else ->
-                                    onOpenActivity("My Donations")
+                                    onOpenListingReservation(alert.reservationId)
                             }
                         }
                     )
@@ -281,13 +276,14 @@ fun AlertsScreen(
                         "Choose which events create alerts for your account. " +
                                 "These settings are saved to your account. " +
                                 "Messages still arrive in Messages when message alerts are off.",
-                        fontSize = 12.sp
+                        style = SaluText.Supporting,
+                        color = SaluColors.Gray
                     )
 
                     Spacer(Modifier.height(12.dp))
 
                     if (preferences == null) {
-                        Text("Loading your alert settings…", fontSize = 13.sp)
+                        Text("Loading your alert settings…", style = SaluText.Body)
                     } else {
                         AlertSettingRow(
                             title = "New messages",
@@ -339,102 +335,96 @@ fun AlertsScreen(
     }
 }
 
+/**
+ * One alert in a grouped list: its kind as an icon and label, the title, the
+ * text and the time. Unread alerts have a tinted row, a bold title and a dot,
+ * and say "Unread" to screen readers.
+ */
 @Composable
-private fun AlertListingCard(
+private fun AlertRow(
     alert: AppNotification,
+    first: Boolean,
+    last: Boolean,
+    modifier: Modifier,
     onClick: () -> Unit
 ) {
     val unread = alert.readAt == null
-    val symbol = when (alert.type) {
-        NotificationType.MESSAGE -> "💬"
-        NotificationType.RESERVATION_CREATED -> "🧺"
-        NotificationType.RESERVATION_CANCELLED -> "↩"
-        NotificationType.RESERVATION_CLAIMED -> "✓"
-        NotificationType.RESERVATION_REMOVED -> "✕"
-    }
+    val style = alert.type.style()
+    val shape = RoundedCornerShape(
+        topStart = if (first) 18.dp else 0.dp,
+        topEnd = if (first) 18.dp else 0.dp,
+        bottomStart = if (last) 18.dp else 0.dp,
+        bottomEnd = if (last) 18.dp else 0.dp
+    )
 
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        color = Color.White,
-        shape = RoundedCornerShape(18.dp),
-        shadowElevation = 2.dp
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .padding(11.dp)
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(AlertsPale),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    symbol,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = AlertsGreen
-                )
-            }
+    Column(modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(if (unread) SaluColors.PaleGreen else Color.White)
+                .clickable(onClick = onClick)
+                .semantics { stateDescription = if (unread) "Unread" else "Read" }
+                .padding(14.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            IconBubble(style.icon, tint = style.tint, background = style.background, size = 42.dp, iconSize = 22.dp)
+
+            Spacer(Modifier.width(12.dp))
 
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(top = 11.dp, bottom = 11.dp, end = 11.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp)
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Text(
+                        alert.title,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontSize = 15.sp,
+                            lineHeight = 20.sp,
+                            fontWeight = if (unread) FontWeight.Bold else FontWeight.Medium
+                        ),
+                        color = SaluColors.DarkGreen
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
                     Text(
                         formatAlertTime(alert.createdAt),
-                        modifier = Modifier.weight(1f),
-                        fontSize = 10.sp,
-                        color = AlertsGray
+                        style = SaluText.Meta,
+                        color = if (unread) SaluColors.Green else SaluColors.Gray
                     )
 
                     if (unread) {
                         Box(
                             Modifier
-                                .size(7.dp)
+                                .padding(start = 6.dp, top = 5.dp)
+                                .size(8.dp)
                                 .clip(CircleShape)
-                                .background(AlertsGreen)
+                                .background(SaluColors.Orange)
                         )
                     }
                 }
 
                 Text(
-                    alert.title,
-                    fontSize = 13.sp,
-                    lineHeight = 17.sp,
-                    fontWeight = if (unread) {
-                        FontWeight.Bold
-                    } else {
-                        FontWeight.Medium
-                    },
-                    color = AlertsDark
-                )
-
-                Text(
                     alert.body,
-                    fontSize = 11.sp,
-                    lineHeight = 15.sp,
-                    color = AlertsGray,
-                    maxLines = 3
+                    style = SaluText.Supporting,
+                    color = SaluColors.Gray,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Text(
-                    alert.type.category(),
-                    fontSize = 9.sp,
-                    color = AlertsGreen,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(7.dp))
-                        .background(AlertsPale)
-                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                    style.label,
+                    style = SaluText.Status,
+                    color = style.labelColor,
+                    modifier = Modifier.padding(top = 2.dp)
                 )
             }
         }
+
+        if (!last) HorizontalDivider(color = SaluColors.Line)
     }
 }
 
@@ -453,13 +443,16 @@ private fun AlertSettingRow(
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             title,
             modifier = Modifier.weight(1f),
-            fontSize = 13.sp
+            style = SaluText.Body,
+            color = SaluColors.DarkGreen
         )
 
         Switch(

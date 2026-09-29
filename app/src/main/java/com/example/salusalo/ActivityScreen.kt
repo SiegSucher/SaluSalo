@@ -1,88 +1,117 @@
 package com.example.salusalo
 
-import com.example.salusalo.model.isExpired
-import com.example.salusalo.model.hasPhoto
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostStatus
-import com.example.salusalo.model.GeoPin
-import com.example.salusalo.model.pickupPin
+import com.example.salusalo.model.ListingHandover
+import com.example.salusalo.model.MyReview
+import com.example.salusalo.model.PIN_MAP_ZOOM
+import com.example.salusalo.model.ReservationDisplay
 import com.example.salusalo.model.ReservationStatus
 import com.example.salusalo.model.formatPeso
+import com.example.salusalo.model.hasPhoto
+import com.example.salusalo.model.isExpired
+import com.example.salusalo.model.parseTimestamp
+import com.example.salusalo.model.pickupPin
 import com.example.salusalo.model.reservationTotal
 import com.example.salusalo.viewmodel.DeleteResult
 import com.example.salusalo.viewmodel.FoodViewModel
-import com.example.salusalo.viewmodel.text
-import com.example.salusalo.viewmodel.ReservationViewModel
 import com.example.salusalo.viewmodel.MessageViewModel
+import com.example.salusalo.viewmodel.ReservationViewModel
 import com.example.salusalo.viewmodel.ReviewResult
-import com.example.salusalo.model.MyReview
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.example.salusalo.viewmodel.text
+import java.time.Instant
 
-private val AGreen = Color(0xFF39792B)
-private val ADark = Color(0xFF1C2B22)
-private val AGray = Color(0xFF606875)
-private val ACream = Color(0xFFFCFBF6)
-private val APale = Color(0xFFF2F6E6)
-private val ALine = Color(0xFFDCE7C6)
-private val AOrange = Color(0xFFEF7900)
-private val ARed = Color(0xFFF04A27)
+/*
+ * ACTIVITY: three tabs, each with its own filters.
+ * - My Listings: this account's listings (Active or Closed), with their
+ *   reservations counted and managed per listing.
+ * - My Reservations: food this account reserved and hasn't picked up yet.
+ * - History: finished reservations from both sides, picked up or cancelled.
+ * Every record comes from Supabase; nothing here is invented.
+ */
 
-private data class ActivityRecord(
-    val id: String,
-    val tab: String,
-    val title: String,
-    val quantity: String,
-    val distance: String,
-    val posted: String,
-    val status: String,
-    val timeLabel: String,
-    val timeValue: String,
-    val uri: String? = null,
-    // The listing has a stored photo; with no uri it could not be signed ("Image unavailable").
-    val hasPhoto: Boolean = false,
-    val details: String = "",
-    val ownedPost: FoodPost? = null,
-    val reservationId: String? = null,
-    val donorCanClaim: Boolean = false,
-    // A claimed reservation this account received: its donor can be rated.
-    val canRate: Boolean = false,
-    // The listing's donor, for "Rate <name>"; null when unknown.
-    val donorName: String? = null,
-    val priced: Boolean = false,
-    // The listing's pickup pin, for "Directions" on a reservation this account made.
-    val pickupPin: GeoPin? = null
-)
+private const val TAB_LISTINGS = "My Listings"
+private const val TAB_RESERVATIONS = "My Reservations"
+private const val TAB_HISTORY = "History"
+private val ActivityTabs = listOf(TAB_LISTINGS, TAB_RESERVATIONS, TAB_HISTORY)
+
+private val ListingFilters = listOf("Active", "Closed")
+private val ReservationFilters = listOf("All", "Free food", "Purchases")
+private val HistoryFilters = listOf("All", "Completed", "Cancelled")
+private val ManageFilters = listOf("Active", "Completed", "Cancelled")
+
+/**
+ * The tab for a key from an alert or a saved state. Before this layout, the
+ * reservations on your listings, purchases and claims had tabs of their own.
+ */
+private fun activityTabFor(key: String): String = when (key) {
+    TAB_RESERVATIONS -> TAB_RESERVATIONS
+    TAB_HISTORY, "Purchases", "Claims" -> TAB_HISTORY
+    else -> TAB_LISTINGS
+}
+
+/** The Manage reservations filter a reservation is listed under. */
+private fun manageFilterFor(status: ReservationStatus): String = when (status) {
+    ReservationStatus.RESERVED -> "Active"
+    ReservationStatus.CLAIMED -> "Completed"
+    ReservationStatus.CANCELLED -> "Cancelled"
+}
+
+/** A reservation in Activity: one this account made ([mine]) or one on this account's listing. */
+private class ActivityReservation(val entry: ReservationDisplay, val mine: Boolean) {
+    val reservation get() = entry.reservation
+    val post get() = entry.foodPost
+    val id get() = entry.reservation.id
+    val key get() = (if (mine) "mine-" else "donor-") + entry.reservation.id
+    val status get() = entry.reservation.status
+
+    /** Priced when the reservation's unit_price, locked in by the database, is above 0. */
+    val priced get() = entry.reservation.unitPrice > 0
+    val total: String get() = formatPeso(reservationTotal(reservation.unitPrice, reservation.quantity))
+    val amount: String get() = "${reservation.quantity} ${post.unit}"
+
+    /** The other person: the donor for [mine], else the recipient (names only); null when unknown. */
+    val otherName: String?
+        get() = (if (mine) post.donorName else entry.recipientName)?.takeIf { it.isNotBlank() }
+
+    /** When it was picked up or cancelled (its last change), else when it was made. */
+    val lastChange: Instant? get() = parseTimestamp(reservation.updatedAt) ?: parseTimestamp(reservation.createdAt)
+}
 
 /** The review page that is open: which reservation, with what it showed when opened. */
 private data class RatingTarget(
@@ -94,8 +123,8 @@ private data class RatingTarget(
 )
 
 /** "Rate <name>", or "Rate the donor/seller" when the name is unknown. */
-private fun rateTitle(record: ActivityRecord): String =
-    "Rate " + (record.donorName ?: if (record.priced) "the seller" else "the donor")
+private fun rateTitle(item: ActivityReservation): String =
+    "Rate " + (item.otherName ?: if (item.priced) "the seller" else "the donor")
 
 @Composable
 fun ActivityScreen(
@@ -106,500 +135,373 @@ fun ActivityScreen(
     messageViewModel: MessageViewModel,
     unreadAlerts: Int = 0,
     initialTab: String = "My Listings",
-    // A reservation to open, from a "Reservation claimed" or "Listing removed" alert.
+    // A reservation to open, from an alert: one this account made (claimed, or
+    // cancelled because its listing was removed) or one on this account's listing.
     focusReservationId: String? = null,
     onFocusHandled: () -> Unit = {}
 ) {
     val myPosts by foodViewModel.myPosts.collectAsStateWithLifecycle()
     val myReservations by reservationViewModel.myReservations.collectAsStateWithLifecycle()
     val donorReservations by reservationViewModel.donorReservations.collectAsStateWithLifecycle()
-    var pendingDelete by remember { mutableStateOf<FoodPost?>(null) }
-    var editing by remember { mutableStateOf<FoodPost?>(null) }
-    var editNotice by remember { mutableStateOf("") }
     val foodSaving by foodViewModel.saving.collectAsStateWithLifecycle()
+    val foodLoading by foodViewModel.loading.collectAsStateWithLifecycle()
+    val reservationSaving by reservationViewModel.saving.collectAsStateWithLifecycle()
+    val reservationsBusy by reservationViewModel.loading.collectAsStateWithLifecycle()
+    val reservationsLoadFailed by reservationViewModel.loadFailed.collectAsStateWithLifecycle()
+    val reservationsLoaded by reservationViewModel.loaded.collectAsStateWithLifecycle()
+    // This account's own reviews, and the page to rate a claimed pickup's donor.
+    val myReviews by reservationViewModel.myReviews.collectAsStateWithLifecycle()
+    val reviewResult by reservationViewModel.reviewResult.collectAsStateWithLifecycle()
+    val reservationMessage by reservationViewModel.message.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         foodViewModel.loadMyPosts()
         reservationViewModel.refresh()
     }
 
-    // Show reservation results (cancel, claim, or a failed load) on this screen,
-    // then clear them so they do not reappear later in the food details dialog.
-    val reservationMessage by reservationViewModel.message.collectAsStateWithLifecycle()
-    val reservationSaving by reservationViewModel.saving.collectAsStateWithLifecycle()
-    // This account's own reviews, and the page to rate a claimed pickup's donor.
-    val myReviews by reservationViewModel.myReviews.collectAsStateWithLifecycle()
-    val reviewResult by reservationViewModel.reviewResult.collectAsStateWithLifecycle()
-    var rating by remember { mutableStateOf<RatingTarget?>(null) }
+    // My Listings shows skeleton cards, not "no listings", until its first load here has finished.
+    var listingsStarted by remember { mutableStateOf(false) }
+    var listingsSettled by remember { mutableStateOf(false) }
+    LaunchedEffect(foodLoading) {
+        if (foodLoading) listingsStarted = true else if (listingsStarted) listingsSettled = true
+    }
+
     // A new or changed review changes the donor's rating on Home, so reload the feed.
     LaunchedEffect(reviewResult) {
         if (reviewResult is ReviewResult.Saved) foodViewModel.loadAvailablePosts()
     }
-    val reservationsLoadFailed by reservationViewModel.loadFailed.collectAsStateWithLifecycle()
+
+    // Show reservation results (cancel, claim, or a failed load) on this screen,
+    // then clear them so they do not reappear later in the food details dialog.
     var reservationNotice by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(reservationMessage) {
         reservationMessage?.let {
-            reservationNotice = it
+            // The button says "Mark as picked up", so its result does too.
+            reservationNotice = if (it == "Reservation marked as claimed.") {
+                "Marked as picked up. You'll find it under Completed."
+            } else {
+                it
+            }
             reservationViewModel.clearMessage()
             // A cancel returns quantity to the listing, so refresh the Home feed.
             if (it.startsWith("Reservation cancelled")) foodViewModel.loadAvailablePosts()
         }
     }
 
-    var tab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    var activeOnly by rememberSaveable { mutableStateOf(false) }
-    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var tab by rememberSaveable(initialTab) { mutableStateOf(activityTabFor(initialTab)) }
+    var listingFilter by rememberSaveable { mutableStateOf(ListingFilters.first()) }
+    var reservationFilter by rememberSaveable { mutableStateOf(ReservationFilters.first()) }
+    var historyFilter by rememberSaveable { mutableStateOf(HistoryFilters.first()) }
+    var manageFilter by rememberSaveable { mutableStateOf(ManageFilters.first()) }
+    // Pages over the list, by the listing or reservation they show.
+    var managingPostId by rememberSaveable { mutableStateOf<String?>(null) }
+    var viewingPostId by rememberSaveable { mutableStateOf<String?>(null) }
+    var openReservationKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickupKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var confirmClaim by remember { mutableStateOf<ActivityReservation?>(null) }
+    var confirmCancel by remember { mutableStateOf<ActivityReservation?>(null) }
+    var pendingDelete by remember { mutableStateOf<FoodPost?>(null) }
+    var editing by remember { mutableStateOf<FoodPost?>(null) }
+    var editNotice by remember { mutableStateOf("") }
+    var rating by remember { mutableStateOf<RatingTarget?>(null) }
     var notice by rememberSaveable { mutableStateOf("") }
-    val context = LocalContext.current
-    // "No maps app…" under Directions, for the record that is open.
-    var directionsError by remember(selectedId) { mutableStateOf("") }
-    // Every record comes from Supabase: this account's listings (removed ones
-    // are left out by the repository) and its reservations as recipient and donor.
-    val myListingRecords = myPosts
-        .sortedByDescending { it.createdAt.orEmpty() }
-        .map { post ->
-            // Nothing on the server marks a listing EXPIRED; it is worked out
-            // from expiration_date, so Active Listings leaves it out.
-            val expired = post.isExpired()
-            ActivityRecord(
-                id = post.id,
-                tab = "My Listings",
-                title = post.name,
-                quantity = "${post.quantity} ${post.unit}",
-                distance = post.pickupLocation,
-                posted = post.createdAt?.let { "Posted ${formatActivityTimestamp(it)}" }
-                    ?: "Posted recently",
-                status = if (expired) "Expired" else post.status.name.lowercase()
-                    .replaceFirstChar { it.uppercase() },
-                timeLabel = if (expired) "Expired on" else "Expires",
-                timeValue = formatActivityTimestamp(post.expirationDate),
-                uri = post.displayImageUrl,
-                hasPhoto = post.hasPhoto,
-                details = buildString {
-                    append("Category: ${post.category}")
-                    post.description?.takeIf { it.isNotBlank() }?.let {
-                        append("\nDescription: $it")
-                    }
-                },
-                ownedPost = post
-            )
-        }
 
-    // Recipient-facing records: only reservations created by this signed-in user.
-    // Open and cancelled ones stay in My Reservations; once the donor marks one
-    // claimed it moves to Purchases (priced) or Claims (free). Prices come from
-    // the reservation's unit_price, locked in by the database when it was made.
-    val myReservationRecords = myReservations.map { entry ->
-        val reservation = entry.reservation
-        val post = entry.foodPost
-        val claimed = reservation.status == ReservationStatus.CLAIMED
-        val priced = reservation.unitPrice > 0
-        val total = formatPeso(reservationTotal(reservation.unitPrice, reservation.quantity))
-        ActivityRecord(
-            id = "my-reservation-${reservation.id}",
-            tab = when {
-                !claimed -> "My Reservations"
-                priced -> "Purchases"
-                else -> "Claims"
-            },
-            title = post.name,
-            quantity = "${reservation.quantity} ${post.unit} • ${if (priced) total else "Free"}",
-            distance = post.pickupLocation,
-            posted = reservation.createdAt?.let { "Reserved ${formatActivityTimestamp(it)}" } ?: "Reserved recently",
-            status = reservation.status.name.lowercase().replaceFirstChar { it.uppercase() },
-            timeLabel = if (claimed) "Picked up" else "Pickup",
-            timeValue = if (claimed) {
-                reservation.updatedAt?.let(::formatActivityTimestamp) ?: "Recently"
-            } else {
-                post.pickupLocation
-            },
-            uri = post.displayImageUrl,
-            hasPhoto = post.hasPhoto,
-            pickupPin = post.pickupPin,
-            details = when {
-                claimed && priced ->
-                    "Price: ${formatPeso(reservation.unitPrice)} per unit\nTotal: $total, paid at pickup."
-                claimed -> "Free food you picked up."
-                priced ->
-                    "Your reservation.\nPrice: ${formatPeso(reservation.unitPrice)} per unit\nPay $total at pickup."
-                else -> "Your reservation."
-            } + when {
-                reservation.cancelledByListingRemoval ->
-                    "\nListing: Removed by the donor\nCancelled because the donor removed this listing."
-                post.status == FoodPostStatus.REMOVED ->
-                    "\nListing: Removed by the donor\nThe donor has since removed this listing."
-                else -> ""
-            },
-            reservationId = reservation.id, donorCanClaim = false,
-            canRate = claimed,
-            donorName = post.donorName?.takeIf { it.isNotBlank() },
-            priced = priced
-        )
+    val now = remember(myPosts, myReservations, donorReservations) { Instant.now() }
+    // Only reservations this account made, and only reservations on its own listings.
+    val made = myReservations.map { ActivityReservation(it, mine = true) }
+    val received = donorReservations.map { ActivityReservation(it, mine = false) }
+    val everyReservation = made + received
+    val onListing = received.groupBy { it.reservation.foodPostId }
+
+    // Active: can still be reserved, or has reservations to hand over. Nothing on
+    // the server marks a listing EXPIRED; it is worked out from expiration_date.
+    fun isActive(post: FoodPost): Boolean =
+        onListing[post.id].orEmpty().any { it.status == ReservationStatus.RESERVED } ||
+            (post.status == FoodPostStatus.AVAILABLE && !post.isExpired(now))
+
+    // Removed listings are left out by the repository.
+    val listings = myPosts.sortedByDescending { parseTimestamp(it.createdAt) ?: Instant.EPOCH }
+    val shownListings = listings.filter { isActive(it) == (listingFilter == "Active") }
+
+    // Open reservations only; once picked up or cancelled they move to History.
+    val openMade = made.filter { it.status == ReservationStatus.RESERVED }
+    val shownReservations = when (reservationFilter) {
+        "Free food" -> openMade.filter { !it.priced }
+        "Purchases" -> openMade.filter { it.priced }
+        else -> openMade
     }
 
-    // Donor-facing records: only reservations made on this user's food posts.
-    val donorReservationRecords = donorReservations.map { entry ->
-        val reservation = entry.reservation
-        val post = entry.foodPost
-        val priced = reservation.unitPrice > 0
-        val total = formatPeso(reservationTotal(reservation.unitPrice, reservation.quantity))
-        ActivityRecord(
-            id = "donor-reservation-${reservation.id}", tab = "My Donations",
-            title = post.name,
-            quantity = "${reservation.quantity} ${post.unit} • ${if (priced) total else "Free"}",
-            distance = post.pickupLocation,
-            posted = reservation.createdAt?.let { "Reserved ${formatActivityTimestamp(it)}" } ?: "Reserved recently",
-            status = reservation.status.name.lowercase().replaceFirstChar { it.uppercase() },
-            timeLabel = "Pickup", timeValue = post.pickupLocation,
-            uri = post.displayImageUrl,
-            hasPhoto = post.hasPhoto,
-            details = "Recipient: ${entry.recipientName ?: "Unknown"}\nReservation for your listing." +
-                (if (priced) "\nPrice: ${formatPeso(reservation.unitPrice)} per unit\nCollect $total at pickup." else "") +
-                if (post.status == FoodPostStatus.REMOVED) "\nListing: Removed by you\nYou removed this listing." else "",
-            reservationId = reservation.id, donorCanClaim = true
-        )
+    val history = everyReservation
+        .filter { it.status != ReservationStatus.RESERVED }
+        .sortedByDescending { it.lastChange ?: Instant.EPOCH }
+    val shownHistory = when (historyFilter) {
+        "Completed" -> history.filter { it.status == ReservationStatus.CLAIMED }
+        "Cancelled" -> history.filter { it.status == ReservationStatus.CANCELLED }
+        else -> history
     }
-
-    // Keep live listings and recipient/donor reservation destinations separate.
-    val allRecords = myListingRecords + myReservationRecords + donorReservationRecords
-    val filtered = if (activeOnly) {
-        myListingRecords.filter { it.status == "Available" }
-    } else {
-        allRecords.filter { it.tab == tab }
-    }
-
-    val displayed = if (expanded || activeOnly) filtered else filtered.take(5)
-    val selected = allRecords.firstOrNull { it.id == selectedId }
 
     // Totals from this account's own claimed reservations, as recipient and as donor.
-    val claimedReservations = (myReservations + donorReservations)
-        .map { it.reservation }
-        .filter { it.status == ReservationStatus.CLAIMED }
-    val completedCount = claimedReservations.size
-    val itemsRescued = claimedReservations.sumOf { it.quantity }
+    val claimed = everyReservation.filter { it.status == ReservationStatus.CLAIMED }
+    val completedCount = claimed.size
+    val itemsRescued = claimed.sumOf { it.reservation.quantity }
 
-    // A "Reservation claimed" alert opens that reservation in Purchases or
-    // Claims, once the reloaded list shows it as claimed. A "Listing removed"
-    // alert opens the cancelled reservation in My Reservations.
-    LaunchedEffect(focusReservationId, myReservations) {
+    // Skeletons until the list shown has loaded once; a failed load says so instead.
+    val showSkeleton = if (tab == TAB_LISTINGS) {
+        myPosts.isEmpty() && !listingsSettled
+    } else {
+        !reservationsLoaded && !reservationsLoadFailed
+    }
+
+    // An alert opens its reservation once this screen's reload has finished, so
+    // the page shows the current status: one this account made opens its details
+    // (in History once picked up or cancelled); one on this account's listing
+    // opens that listing's Manage reservations.
+    LaunchedEffect(focusReservationId, myReservations, donorReservations, myPosts, reservationsBusy, foodLoading) {
         val id = focusReservationId ?: return@LaunchedEffect
-        val entry = myReservations.firstOrNull {
-            it.reservation.id == id && (
-                it.reservation.status == ReservationStatus.CLAIMED ||
-                    it.reservation.cancelledByListingRemoval
-                )
-        } ?: return@LaunchedEffect
-        tab = when {
-            entry.reservation.status != ReservationStatus.CLAIMED -> "My Reservations"
-            entry.reservation.unitPrice > 0 -> "Purchases"
-            else -> "Claims"
+        if (reservationViewModel.loading.value) return@LaunchedEffect
+        val mine = made.firstOrNull { it.id == id }
+        val theirs = received.firstOrNull { it.id == id }
+        when {
+            mine != null -> {
+                tab = if (mine.status == ReservationStatus.RESERVED) TAB_RESERVATIONS else TAB_HISTORY
+                reservationFilter = ReservationFilters.first()
+                historyFilter = HistoryFilters.first()
+                openReservationKey = mine.key
+            }
+            theirs != null -> {
+                if (foodViewModel.loading.value) return@LaunchedEffect
+                val post = myPosts.firstOrNull { it.id == theirs.reservation.foodPostId }
+                if (post != null) {
+                    tab = TAB_LISTINGS
+                    listingFilter = if (isActive(post)) "Active" else "Closed"
+                    manageFilter = manageFilterFor(theirs.status)
+                    managingPostId = post.id
+                } else {
+                    // A removed listing: its reservations are only in History.
+                    tab = TAB_HISTORY
+                    historyFilter = HistoryFilters.first()
+                    openReservationKey = theirs.key
+                }
+            }
+            else -> return@LaunchedEffect
         }
-        activeOnly = false
-        selectedId = "my-reservation-$id"
         onFocusHandled()
     }
 
-    BackHandler(enabled = expanded || activeOnly) {
-        expanded = false
-        activeOnly = false
+    // A deleted or removed listing closes its pages.
+    LaunchedEffect(myPosts) {
+        if (managingPostId != null && myPosts.none { it.id == managingPostId }) managingPostId = null
+        if (viewingPostId != null && myPosts.none { it.id == viewingPostId }) viewingPostId = null
+    }
+
+    fun selectTab(key: String) {
+        tab = key
+        // Reservations can change on another device while this screen is open,
+        // so reload them when a tab is tapped; they also give My Listings its counts.
+        reservationViewModel.refresh()
+    }
+
+    fun openManage(post: FoodPost) {
+        manageFilter = ManageFilters.first()
+        managingPostId = post.id
+    }
+
+    fun startRating(item: ActivityReservation) {
+        val existing = myReviews[item.id]
+        val title = if (existing != null) "Change your review" else rateTitle(item)
+        reservationViewModel.clearReviewResult()
+        rating = RatingTarget(
+            reservationId = item.id,
+            title = title,
+            listingName = item.post.name,
+            summaryLine = "${item.amount} • ${if (item.priced) item.total else "Free"}",
+            existing = existing
+        )
     }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = ACream
+        color = SaluColors.Cream
     ) {
         LazyColumn(
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 20.dp,
-                bottom = 16.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(9.dp)
+            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
         ) {
-            item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    LeafBadge(46.dp)
-                    Spacer(Modifier.width(12.dp))
-
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "My Activity",
-                            fontSize = 23.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = ADark
-                        )
-                        Text(
-                            "Track your listings, reservations, purchases & claims",
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp,
-                            color = AGray
-                        )
-                    }
-
-                    IconButton(onClick = onAlerts) {
-                        Box {
-                            Icon(
-                                Icons.Outlined.Notifications,
-                                contentDescription = "Open alerts",
-                                tint = ADark,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            if (unreadAlerts > 0) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .size(9.dp)
-                                        .clip(CircleShape)
-                                        .background(AOrange)
-                                )
-                            }
-                        }
-                    }
-                }
+            item(key = "header") {
+                ActivityHeader(unreadAlerts = unreadAlerts, onAlerts = onAlerts)
             }
 
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = APale,
-                    shape = RoundedCornerShape(15.dp),
-                    border = BorderStroke(1.dp, ALine),
-                    shadowElevation = 1.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(
-                            horizontal = 10.dp,
-                            vertical = 16.dp
-                        ),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        LeafBadge(35.dp)
-                        Spacer(Modifier.width(9.dp))
-
-                        ActivityMetric(
-                            "Completed", completedCount.toString(), "transactions",
-                            Modifier.weight(1f)
-                        ) {
-                            notice = "$completedCount completed: your reservations that donors " +
-                                    "marked claimed, plus claimed reservations on your listings."
-                        }
-
-                        MetricDivider()
-
-                        ActivityMetric(
-                            "Items Rescued", itemsRescued.toString(), "items",
-                            Modifier.weight(1f)
-                        ) {
-                            notice = "$itemsRescued items rescued: the total quantity of those " +
-                                    "completed reservations, counting each unit (pack, piece, kg) as one."
-                        }
-
-                        MetricDivider()
-
-                        Row(
-                            modifier = Modifier
-                                .weight(1.2f)
-                                .clickable {
-                                    tab = "My Listings"
-                                    activeOnly = true
-                                    expanded = true
-                                },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            ActivityMetric(
-                                "Active Listings", myListingRecords.count { it.status == "Available" }.toString(), "listings",
-                                Modifier.weight(1f)
-                            ) {
-                                tab = "My Listings"
-                                activeOnly = true
-                                expanded = true
-                            }
-
-                            Icon(
-                                Icons.Outlined.ChevronRight,
-                                contentDescription = "View active listings",
-                                tint = AGreen,
-                                modifier = Modifier.size(21.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(7.dp))
-            }
-
-            item {
-                val tabs = listOf(
-                    "My Listings" to Icons.AutoMirrored.Outlined.FormatListBulleted,
-                    "My Reservations" to Icons.Outlined.BookmarkBorder,
-                    "My Donations" to Icons.Outlined.VolunteerActivism,
-                    "Purchases" to Icons.Outlined.ShoppingBag,
-                    "Claims" to Icons.Outlined.Spa
+            item(key = "tabs") {
+                ActivityTabRow(
+                    selected = tab,
+                    onSelect = { selectTab(it) },
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
                 )
+            }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(7.dp)
-                ) {
-                    tabs.forEach { (label, icon) ->
-                        val chosen = tab == label
-
-                        Surface(
-                            modifier = Modifier.clickable {
-                                tab = label
-                                activeOnly = false
-                                expanded = false
-                                // Reservations can change on another device while this
-                                // screen is open, so reload them when their tab is tapped.
-                                if (label != "My Listings") {
-                                    reservationViewModel.refresh()
-                                }
-                            },
-                            shape = RoundedCornerShape(15.dp),
-                            color = Color.Transparent,
-                            border = if (chosen) null else BorderStroke(1.dp, ALine)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .background(
-                                        if (chosen) {
-                                            Brush.horizontalGradient(
-                                                listOf(
-                                                    Color(0xFF367025),
-                                                    Color(0xFF4B842E)
-                                                )
-                                            )
-                                        } else {
-                                            Brush.horizontalGradient(
-                                                listOf(Color.White, Color.White)
-                                            )
-                                        }
-                                    )
-                                    .padding(horizontal = 11.dp, vertical = 13.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    icon,
-                                    contentDescription = null,
-                                    tint = if (chosen) Color.White else AGreen,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    label,
-                                    fontSize = 11.sp,
-                                    color = if (chosen) Color.White else AGreen
-                                )
-                            }
-                        }
-                    }
+            item(key = "section-$tab") {
+                when (tab) {
+                    TAB_LISTINGS -> ActivitySection("Food you posted", role = "Donor / seller", spokenRole = "As donor or seller")
+                    TAB_RESERVATIONS -> ActivitySection("Food you reserved", role = "Recipient / buyer", spokenRole = "As recipient or buyer")
+                    else -> ActivitySection("Your past transactions")
                 }
             }
 
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        if (activeOnly) "Active Listings" else tab,
-                        modifier = Modifier.weight(1f),
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ADark
+            if (tab == TAB_HISTORY) {
+                item(key = "totals") {
+                    HistoryTotals(
+                        completed = completedCount,
+                        items = itemsRescued,
+                        onExplain = { notice = it },
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp)
                     )
+                }
+            }
 
-                    TextButton(
-                        onClick = {
-                            if (activeOnly) {
-                                activeOnly = false
-                                expanded = true
+            item(key = "filters-$tab") {
+                val modifier = Modifier.padding(top = 12.dp)
+                when (tab) {
+                    TAB_LISTINGS -> ActivityFilterRow(ListingFilters, listingFilter, { listingFilter = it }, modifier)
+                    TAB_RESERVATIONS -> ActivityFilterRow(ReservationFilters, reservationFilter, { reservationFilter = it }, modifier)
+                    else -> ActivityFilterRow(HistoryFilters, historyFilter, { historyFilter = it }, modifier)
+                }
+            }
+
+            if (reservationsLoadFailed) {
+                item(key = "load-failed") {
+                    InlineNotice(
+                        text = ReservationViewModel.LOAD_FAILED,
+                        icon = Icons.Outlined.CloudOff,
+                        tone = NoticeTone.Error,
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp)
+                    )
+                }
+            }
+
+            val cardModifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp)
+            when {
+                showSkeleton -> item(key = "skeleton-$tab") {
+                    ActivitySkeleton(cardModifier)
+                }
+
+                tab == TAB_LISTINGS -> {
+                    if (shownListings.isEmpty()) {
+                        item(key = "empty-listings-$listingFilter") {
+                            if (listingFilter == "Active") {
+                                EmptyState(
+                                    icon = Icons.Outlined.Inventory2,
+                                    title = "No active listings",
+                                    message = "Listings that can still be reserved, or that have reservations to hand over, appear here."
+                                )
                             } else {
-                                expanded = !expanded
+                                EmptyState(
+                                    icon = Icons.Outlined.Inventory2,
+                                    title = "No closed listings",
+                                    message = "Listings that have expired, or have nothing left to reserve or hand over, appear here."
+                                )
                             }
                         }
-                    ) {
-                        Text(
-                            when {
-                                activeOnly -> "All listings"
-                                expanded -> "Show less"
-                                else -> "See all"
-                            },
-                            color = AGreen,
-                            fontSize = 12.sp
+                    }
+                    items(shownListings, key = { "listing-${it.id}" }) { post ->
+                        val reservationsHere = onListing[post.id].orEmpty()
+                        ActivityListingCard(
+                            post = post,
+                            reservations = reservationsHere,
+                            now = now,
+                            onManage = { openManage(post) },
+                            onView = { viewingPostId = post.id },
+                            onEdit = if (post.isExpired(now)) null else ({ editing = post }),
+                            onDelete = { pendingDelete = post },
+                            modifier = Modifier
+                                .animateItem()
+                                .then(cardModifier)
+                        )
+                    }
+                    item(key = "create-listing") {
+                        SaluSecondaryButton(
+                            text = "Create listing",
+                            icon = Icons.Outlined.Add,
+                            onClick = onPost,
+                            modifier = Modifier
+                                .padding(start = 20.dp, end = 20.dp, top = 16.dp)
+                                .fillMaxWidth()
                         )
                     }
                 }
-            }
 
-            if (reservationsLoadFailed && tab != "My Listings") {
-                item {
-                    Text(
-                        ReservationViewModel.LOAD_FAILED,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-
-            items(displayed, key = { it.id }) { record ->
-                ReferenceActivityCard(record) {
-                    selectedId = record.id
-                }
-            }
-
-            item {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            notice = "Share surplus food by creating a listing."
-                        },
-                    color = APale,
-                    border = BorderStroke(1.dp, ALine),
-                    shape = RoundedCornerShape(15.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Outlined.Spa,
-                            contentDescription = null,
-                            tint = AGreen,
-                            modifier = Modifier.size(32.dp)
+                tab == TAB_RESERVATIONS -> {
+                    if (shownReservations.isEmpty()) {
+                        item(key = "empty-reservations-$reservationFilter") {
+                            when (reservationFilter) {
+                                "Free food" -> EmptyState(
+                                    icon = Icons.Outlined.Redeem,
+                                    title = "No free food reserved",
+                                    message = "Free food you reserve appears here until you pick it up."
+                                )
+                                "Purchases" -> EmptyState(
+                                    icon = Icons.Outlined.ShoppingBag,
+                                    title = "No purchases to pick up",
+                                    message = "Food you buy appears here until you pick it up. You pay at pickup."
+                                )
+                                else -> EmptyState(
+                                    icon = Icons.Outlined.BookmarkBorder,
+                                    title = "No reservations",
+                                    message = "Reserve food from Home and it appears here until you pick it up. Past pickups and cancellations are in History."
+                                )
+                            }
+                        }
+                    }
+                    items(shownReservations, key = { it.key }) { item ->
+                        ActivityReservationCard(
+                            item = item,
+                            now = now,
+                            onView = { openReservationKey = item.key },
+                            onMessage = { messageViewModel.openForReservation(item.id) },
+                            onCancel = { confirmCancel = item },
+                            modifier = Modifier
+                                .animateItem()
+                                .then(cardModifier)
                         )
-                        Spacer(Modifier.width(10.dp))
-
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Thanks for making a difference!",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = ADark
-                            )
-                            Text(
-                                "Every item you share helps reduce food waste " +
-                                        "and support your community.",
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp,
-                                color = AGreen
+                    }
+                    if (shownReservations.isNotEmpty()) {
+                        item(key = "reservations-hint") {
+                            HintLine(
+                                "Open a reservation for pickup details or to message the provider.",
+                                Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)
                             )
                         }
+                    }
+                }
 
-                        Icon(
-                            Icons.Outlined.ChevronRight,
-                            contentDescription = "Learn more",
-                            tint = AGreen,
-                            modifier = Modifier.size(21.dp)
+                else -> {
+                    if (shownHistory.isEmpty()) {
+                        item(key = "empty-history-$historyFilter") {
+                            when (historyFilter) {
+                                "Completed" -> EmptyState(
+                                    icon = Icons.Outlined.TaskAlt,
+                                    title = "Nothing completed yet",
+                                    message = "A reservation is completed when the provider marks it as picked up."
+                                )
+                                "Cancelled" -> EmptyState(
+                                    icon = Icons.Outlined.EventBusy,
+                                    title = "No cancellations",
+                                    message = "Cancelled reservations, yours and those on your listings, appear here."
+                                )
+                                else -> EmptyState(
+                                    icon = Icons.Outlined.History,
+                                    title = "No past transactions yet",
+                                    message = "Pickups and cancellations appear here, for food you shared and food you reserved."
+                                )
+                            }
+                        }
+                    }
+                    items(shownHistory, key = { it.key }) { item ->
+                        ActivityHistoryRow(
+                            item = item,
+                            now = now,
+                            onClick = { openReservationKey = item.key },
+                            modifier = Modifier
+                                .animateItem()
+                                .then(cardModifier)
                         )
                     }
                 }
@@ -607,87 +509,56 @@ fun ActivityScreen(
         }
     }
 
-    selected?.let { record ->
-        AlertDialog(
-            onDismissRequest = { selectedId = null },
-            title = { Text(record.title) },
-            text = {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    RecordPhoto(record, Modifier.size(100.dp))
-                    Text(record.quantity)
-                    Text("Status: ${record.status}")
-                    Text(record.distance)
-                    Text(record.posted)
-                    Text("${record.timeLabel}: ${record.timeValue}")
-                    if (record.details.isNotBlank()) Text(record.details, fontSize = 12.sp)
-                    record.ownedPost?.takeIf { !it.isExpired() }?.let { post ->
-                        OutlinedButton(onClick = {
-                            editing = post
-                            selectedId = null
-                        }) {
-                            Text("Edit listing")
-                        }
-                    }
-                    record.reservationId?.let { reservationId ->
-                        OutlinedButton(onClick = {
-                            messageViewModel.openForReservation(reservationId)
-                            selectedId = null
-                        }) {
-                            Text(if (record.donorCanClaim) "Message recipient" else "Message donor")
-                        }
-                    }
-                    // Directions to the pickup pin while this account's reservation is open;
-                    // the same link and fallbacks as the Pickup location page.
-                    record.pickupPin?.takeIf {
-                        record.reservationId != null && !record.donorCanClaim && record.status == "Reserved"
-                    }?.let { pin ->
-                        OutlinedButton(onClick = {
-                            directionsError = if (openDirections(context, pin)) "" else "No maps app is available on this device."
-                        }) {
-                            Text("Directions")
-                        }
-                        if (directionsError.isNotBlank()) {
-                            Text(directionsError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                        }
-                    }
-                    // Only a claimed pickup this account received can be rated.
-                    record.reservationId?.takeIf { record.canRate }?.let { reservationId ->
-                        val existing = myReviews[reservationId]
-                        OutlinedButton(onClick = {
-                            reservationViewModel.clearReviewResult()
-                            rating = RatingTarget(
-                                reservationId = reservationId,
-                                title = if (existing != null) "Change your review" else rateTitle(record),
-                                listingName = record.title,
-                                summaryLine = record.quantity,
-                                existing = existing
-                            )
-                            selectedId = null
-                        }) {
-                            Text(if (existing != null) "Change your review" else rateTitle(record))
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                when {
-                    record.ownedPost != null -> TextButton(onClick = { pendingDelete = record.ownedPost }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-                    record.reservationId != null && record.status == "Reserved" && record.donorCanClaim ->
-                        TextButton(enabled = !reservationSaving, onClick = {
-                            if (reservationViewModel.claim(record.reservationId)) selectedId = null
-                        }) { Text("Mark claimed") }
-                    record.reservationId != null && record.status == "Reserved" ->
-                        TextButton(enabled = !reservationSaving, onClick = {
-                            if (reservationViewModel.cancel(record.reservationId)) selectedId = null
-                        }) { Text("Cancel", color = MaterialTheme.colorScheme.error) }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { selectedId = null }) { Text("Close") }
-            }
+    // The pages find their listing or reservation in the current lists, so they
+    // show fresh data after a reload.
+    myPosts.firstOrNull { it.id == viewingPostId }?.let { post ->
+        val reservationsHere = onListing[post.id].orEmpty()
+        ListingDetailsPage(
+            post = post,
+            reservations = reservationsHere,
+            now = now,
+            onManage = if (reservationsHere.isEmpty()) null else ({ openManage(post) }),
+            onEdit = if (post.isExpired(now)) null else ({ editing = post }),
+            onDelete = { pendingDelete = post },
+            onBack = { viewingPostId = null }
+        )
+    }
+
+    myPosts.firstOrNull { it.id == managingPostId }?.let { post ->
+        ManageReservationsPage(
+            post = post,
+            reservations = onListing[post.id].orEmpty(),
+            now = now,
+            filter = manageFilter,
+            onFilter = { manageFilter = it },
+            saving = reservationSaving,
+            onMessage = { messageViewModel.openForReservation(it.id) },
+            onMarkPickedUp = { confirmClaim = it },
+            onBack = { managingPostId = null }
+        )
+    }
+
+    everyReservation.firstOrNull { it.key == openReservationKey }?.let { item ->
+        ReservationDetailsPage(
+            item = item,
+            now = now,
+            review = myReviews[item.id],
+            saving = reservationSaving,
+            onPickup = { pickupKey = item.key },
+            onMessage = { messageViewModel.openForReservation(item.id) },
+            onCancel = { confirmCancel = item },
+            onRate = { startRating(item) },
+            onMarkPickedUp = { confirmClaim = item },
+            onBack = { openReservationKey = null }
+        )
+    }
+
+    everyReservation.firstOrNull { it.key == pickupKey }?.let { item ->
+        PickupDetailsPage(
+            item = item,
+            now = now,
+            onMessage = { messageViewModel.openForReservation(item.id) },
+            onBack = { pickupKey = null }
         )
     }
 
@@ -710,6 +581,47 @@ fun ActivityScreen(
         )
     }
 
+    confirmClaim?.let { item ->
+        val name = item.otherName ?: "the recipient"
+        AlertDialog(
+            onDismissRequest = { confirmClaim = null },
+            title = { Text("Mark as picked up?") },
+            text = {
+                Text("Do this only after you've handed ${item.amount} of ${item.post.name} to $name. It can't be undone.")
+            },
+            confirmButton = {
+                TextButton(enabled = !reservationSaving, onClick = {
+                    if (reservationViewModel.claim(item.id)) confirmClaim = null
+                }) { Text("Mark as picked up") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClaim = null }) { Text("Not yet") }
+            }
+        )
+    }
+
+    confirmCancel?.let { item ->
+        AlertDialog(
+            onDismissRequest = { confirmCancel = null },
+            title = { Text("Cancel this reservation?") },
+            text = {
+                Text("Your ${item.amount} of ${item.post.name} will be available for others to reserve again.")
+            },
+            confirmButton = {
+                TextButton(enabled = !reservationSaving, onClick = {
+                    if (reservationViewModel.cancel(item.id)) {
+                        confirmCancel = null
+                        openReservationKey = null
+                        pickupKey = null
+                    }
+                }) { Text("Cancel reservation", color = SaluColors.Error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmCancel = null }) { Text("Keep it") }
+            }
+        )
+    }
+
     pendingDelete?.let { post ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
@@ -719,8 +631,9 @@ fun ActivityScreen(
                 TextButton(enabled = !foodSaving, onClick = {
                     foodViewModel.deletePost(post)
                     pendingDelete = null
-                    selectedId = null
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    viewingPostId = null
+                    managingPostId = null
+                }) { Text("Delete", color = SaluColors.Error) }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
         )
@@ -751,23 +664,9 @@ fun ActivityScreen(
     if (notice.isNotBlank()) {
         AlertDialog(
             onDismissRequest = { notice = "" },
-            title = { Text("My Activity") },
+            title = { Text("Activity") },
             text = { Text(notice) },
-            confirmButton = {
-                TextButton(onClick = { notice = "" }) {
-                    Text("Close")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        notice = ""
-                        onPost()
-                    }
-                ) {
-                    Text("Post Food")
-                }
-            }
+            confirmButton = { TextButton(onClick = { notice = "" }) { Text("OK") } }
         )
     }
     if (reservationNotice.isNotBlank()) {
@@ -784,193 +683,199 @@ fun ActivityScreen(
     }
 }
 
+/* LIST PIECES */
+
 @Composable
-private fun ReferenceActivityCard(
-    record: ActivityRecord,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = Color.White,
-        border = BorderStroke(1.dp, Color(0xFFF0EFE9)),
-        shadowElevation = 1.dp
+private fun ActivityHeader(unreadAlerts: Int, onAlerts: () -> Unit) {
+    Row(
+        modifier = Modifier.padding(start = 20.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            RecordPhoto(
-                record,
-                Modifier
-                    .width(66.dp)
-                    .height(82.dp)
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Activity",
+                style = SaluText.ScreenTitle,
+                color = SaluColors.DarkGreen,
+                modifier = Modifier.semantics { heading() }
             )
+            Text(
+                "Your food-sharing journey",
+                style = SaluText.Supporting,
+                color = SaluColors.Gray
+            )
+        }
 
-            Spacer(Modifier.width(9.dp))
-
-            Column(
-                modifier = Modifier.weight(1.55f),
-                verticalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                Text(
-                    record.title,
-                    fontSize = 12.sp,
-                    lineHeight = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = ADark
+        IconButton(
+            onClick = onAlerts,
+            modifier = Modifier.semantics {
+                contentDescription = if (unreadAlerts > 0) "Open alerts, $unreadAlerts unread" else "Open alerts"
+            }
+        ) {
+            Box {
+                Icon(
+                    Icons.Outlined.Notifications,
+                    contentDescription = null,
+                    tint = SaluColors.DarkGreen,
+                    modifier = Modifier.size(26.dp)
                 )
-
-                Text(record.quantity, fontSize = 10.sp, color = AGray)
-
-                // Donor records keep the recipient's display name visible without
-                // loading or exposing any additional profile fields.
-                if (record.donorCanClaim && record.details.startsWith("Recipient:")) {
-                    Text(
-                        record.details.substringBefore('\n'),
-                        fontSize = 10.sp,
-                        color = AGreen,
-                        maxLines = 1
+                if (unreadAlerts > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(SaluColors.Orange)
                     )
                 }
-
-                SmallActivityLine(
-                    Icons.Outlined.LocationOn,
-                    record.distance
-                )
-                SmallActivityLine(
-                    Icons.Outlined.CalendarMonth,
-                    record.posted
-                )
             }
-
-            Spacer(Modifier.width(7.dp))
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                ActivityStatus(record.status)
-
-                Text(
-                    record.timeLabel,
-                    fontSize = 9.sp,
-                    color = AGray
-                )
-                Text(
-                    record.timeValue,
-                    fontSize = 10.sp,
-                    lineHeight = 13.sp,
-                    color = AGray
-                )
-            }
-
-            Icon(
-                Icons.Outlined.ChevronRight,
-                contentDescription = "View ${record.title}",
-                tint = AGray,
-                modifier = Modifier.size(17.dp)
-            )
         }
     }
 }
 
+/** The three tabs as one segmented control; the chosen one is filled green. */
 @Composable
-private fun ActivityStatus(status: String) {
-    val color = when (status) {
-        "Expired", "Cancelled" -> ARed
-        else -> AGray
-    }
-
-    val icon = when (status) {
-        "Expired" -> Icons.Outlined.Schedule
-        "Cancelled" -> Icons.Outlined.Cancel
-        else -> Icons.Outlined.CheckCircle
-    }
-
-    Surface(
-        color = color.copy(alpha = 0.08f),
-        shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(0.5.dp, color.copy(alpha = 0.1f))
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = color,
-                modifier = Modifier.size(12.dp)
-            )
-            Spacer(Modifier.width(3.dp))
-            Text(
-                status,
-                fontSize = 9.sp,
-                lineHeight = 11.sp,
-                color = color
-            )
-        }
-    }
-}
-
-@Composable
-private fun SmallActivityLine(icon: ImageVector, text: String) {
-    Row(verticalAlignment = Alignment.Top) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = AGray,
-            modifier = Modifier.size(11.dp)
-        )
-        Spacer(Modifier.width(3.dp))
-        Text(
-            text,
-            fontSize = 9.sp,
-            lineHeight = 12.sp,
-            color = AGray
-        )
-    }
-}
-
-@Composable
-private fun RecordPhoto(
-    record: ActivityRecord,
-    modifier: Modifier
+private fun ActivityTabRow(
+    selected: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    ListingPhoto(
-        imageUrl = record.uri?.takeIf { it.isNotBlank() },
-        hasPhoto = record.hasPhoto,
-        contentDescription = record.title,
-        modifier = modifier.clip(RoundedCornerShape(10.dp)),
-        textSize = 9.sp
-    )
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(SaluRadius.Pill)
+            .background(Color.White)
+            .border(1.dp, SaluColors.Line, SaluRadius.Pill)
+            .padding(4.dp)
+            .selectableGroup(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ActivityTabs.forEach { label ->
+            val isSelected = label == selected
+            val container by animateColorAsState(
+                if (isSelected) SaluColors.Green else Color.Transparent,
+                tween(SaluMotion.MEDIUM),
+                label = "activityTabContainer"
+            )
+            val content by animateColorAsState(
+                if (isSelected) Color.White else SaluColors.DarkGreen,
+                tween(SaluMotion.MEDIUM),
+                label = "activityTabContent"
+            )
+            Box(
+                modifier = Modifier
+                    // Wider for a longer name, so "My Reservations" fits on one line.
+                    .weight(label.length + 4f)
+                    .heightIn(min = 48.dp)
+                    .clip(SaluRadius.Pill)
+                    .background(container)
+                    .selectable(selected = isSelected, onClick = { onSelect(label) }, role = Role.Tab)
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    label,
+                    style = SaluText.Meta.copy(
+                        fontSize = 14.sp,
+                        lineHeight = 18.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+                    ),
+                    color = content,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2
+                )
+            }
+        }
+    }
+}
+
+/** A tab's heading, with the part you play in it on the right ("Donor / seller"). */
+@Composable
+private fun ActivitySection(title: String, role: String? = null, spokenRole: String? = null) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, top = 20.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            title,
+            style = SaluText.SectionTitle,
+            color = SaluColors.DarkGreen,
+            modifier = Modifier
+                .weight(1f)
+                .semantics { heading() }
+        )
+        if (role != null) {
+            Row(
+                modifier = Modifier.clearAndSetSemantics { contentDescription = spokenRole ?: role },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Outlined.PersonOutline,
+                    contentDescription = null,
+                    tint = SaluColors.Gray,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(role, style = SaluText.Meta, color = SaluColors.Gray)
+            }
+        }
+    }
 }
 
 @Composable
-private fun LeafBadge(size: androidx.compose.ui.unit.Dp) {
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        Color(0xFFF4F7E7),
-                        Color(0xFFDFEBC4)
-                    )
-                )
-            ),
-        contentAlignment = Alignment.Center
+private fun ActivityFilterRow(
+    options: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    label: (String) -> String = { it }
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Icon(
-            Icons.Outlined.Spa,
-            contentDescription = null,
-            tint = AGreen,
-            modifier = Modifier.fillMaxSize(0.68f)
-        )
+        options.forEach { option ->
+            SaluFilterChip(
+                label = label(option),
+                selected = option == selected,
+                onClick = { onSelect(option) }
+            )
+        }
+    }
+}
+
+/** History's totals: completed reservations and the items they rescued. Each explains itself when tapped. */
+@Composable
+private fun HistoryTotals(
+    completed: Int,
+    items: Int,
+    onExplain: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    SaluCard(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .height(IntrinsicSize.Min)
+                .padding(vertical = 4.dp)
+        ) {
+            ActivityMetric("Completed", completed.toString(), "transactions", Modifier.weight(1f)) {
+                onExplain(
+                    "$completed completed: your reservations that providers marked as picked up, " +
+                        "plus reservations on your listings that you marked as picked up."
+                )
+            }
+            MetricDivider()
+            ActivityMetric("Items rescued", items.toString(), "items", Modifier.weight(1f)) {
+                onExplain(
+                    "$items items rescued: the total quantity of those completed reservations, " +
+                        "counting each unit (pack, piece, kg) as one."
+                )
+            }
+        }
     }
 }
 
@@ -978,10 +883,10 @@ private fun LeafBadge(size: androidx.compose.ui.unit.Dp) {
 private fun MetricDivider() {
     Box(
         modifier = Modifier
-            .padding(horizontal = 6.dp)
-            .height(42.dp)
+            .fillMaxHeight()
+            .padding(vertical = 10.dp)
             .width(1.dp)
-            .background(Color(0xFFCDDBAF))
+            .background(SaluColors.Line)
     )
 }
 
@@ -993,31 +898,970 @@ private fun ActivityMetric(
     modifier: Modifier,
     onClick: () -> Unit
 ) {
-    Column(modifier.clickable(onClick = onClick)) {
-        Text(
-            title,
-            fontSize = 9.sp,
-            lineHeight = 12.sp,
-            color = ADark
+    Column(
+        modifier = modifier
+            .clip(SaluRadius.Small)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(title, style = SaluText.Meta, color = SaluColors.Gray, maxLines = 2)
+        Text(value, style = MaterialTheme.typography.headlineSmall, color = SaluColors.DarkGreen)
+        Text(caption, style = SaluText.Meta, color = SaluColors.Gray)
+    }
+}
+
+@Composable
+private fun ActivitySkeleton(modifier: Modifier = Modifier) {
+    SkeletonGroup(description = "Loading your activity", modifier = modifier) {
+        repeat(3) {
+            SaluCard(Modifier.fillMaxWidth()) {
+                ListRowSkeleton(Modifier.padding(horizontal = 12.dp), thumbnail = 72.dp)
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+/** "Donation · Free" or "For sale · ₱20.00 / bunch". */
+private fun listingOffer(post: FoodPost): String =
+    if (post.price > 0) "For sale · ${formatPeso(post.price)} / ${unitSingular(post.unit)}" else "Donation · Free"
+
+/** "8 pcs available", or that none is left to reserve. */
+private fun listingStock(post: FoodPost): String =
+    if (post.quantity > 0) "${post.quantity} ${post.unit} available" else "None left to reserve"
+
+/** A badge for a listing that can't simply be reserved (Expired, Reserved, Claimed); null otherwise. */
+private fun listingStatus(post: FoodPost, now: Instant): SaluStatus? = when {
+    post.isExpired(now) -> SaluStatus.Expired
+    post.status == FoodPostStatus.AVAILABLE -> null
+    else -> SaluStatus.fromLabel(post.status.name)
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ActivityListingCard(
+    post: FoodPost,
+    reservations: List<ActivityReservation>,
+    now: Instant,
+    onManage: () -> Unit,
+    onView: () -> Unit,
+    onEdit: (() -> Unit)?,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val open = reservations.count { it.status == ReservationStatus.RESERVED }
+    SaluCard(modifier = modifier.fillMaxWidth()) {
+        Box {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.Top) {
+                    ActivityPhoto(post, Modifier.size(96.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            post.name,
+                            style = SaluText.FoodTitle,
+                            color = SaluColors.DarkGreen,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            // Clear of the ⋮ button in the card's corner.
+                            modifier = Modifier.padding(top = 2.dp, end = 40.dp)
+                        )
+                        Text(listingOffer(post), style = SaluText.Supporting, color = SaluColors.Gray)
+                        Text(listingStock(post), style = SaluText.Supporting, color = SaluColors.Gray)
+                        Spacer(Modifier.height(4.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            ReservationCountChip(open = open, any = reservations.isNotEmpty())
+                            listingStatus(post, now)?.let { StatusBadge(it) }
+                        }
+                    }
+                }
+
+                if (reservations.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SaluPrimaryButton(
+                            text = "Manage reservations",
+                            onClick = onManage,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        TextButton(
+                            onClick = onView,
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Text("View listing", style = MaterialTheme.typography.labelLarge, color = SaluColors.Green)
+                        }
+                    }
+                } else {
+                    SaluSecondaryButton(text = "View listing", onClick = onView)
+                }
+            }
+
+            MoreMenu(
+                title = post.name,
+                actions = buildList {
+                    add(MenuAction("View listing", Icons.Outlined.Visibility, onView))
+                    if (onEdit != null) add(MenuAction("Edit listing", Icons.Outlined.Edit, onEdit))
+                    add(MenuAction("Delete listing", Icons.Outlined.DeleteOutline, onDelete, destructive = true))
+                },
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
+    }
+}
+
+/** "2 active reservations" in green, or a grey "No reservations yet". */
+@Composable
+private fun ReservationCountChip(open: Int, any: Boolean) {
+    val active = open > 0
+    val text = when {
+        open == 1 -> "1 active reservation"
+        active -> "$open active reservations"
+        any -> "No active reservations"
+        else -> "No reservations yet"
+    }
+    val content = if (active) SaluColors.Green else SaluColors.Gray
+    Row(
+        modifier = Modifier
+            .clip(SaluRadius.Pill)
+            .background(if (active) SaluColors.PaleGreen else SaluColors.Neutral)
+            .padding(start = 8.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            if (active) Icons.Outlined.People else Icons.Outlined.Info,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(15.dp)
         )
+        Spacer(Modifier.width(5.dp))
         Text(
-            value,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = ADark
-        )
-        Text(
-            caption,
-            fontSize = 9.sp,
-            color = AGreen
+            text,
+            style = SaluText.Meta.copy(fontWeight = FontWeight.SemiBold),
+            color = content,
+            maxLines = 1
         )
     }
 }
 
-private fun formatActivityTimestamp(value: String): String =
-    runCatching { java.time.Instant.parse(value) }
-        .map { java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy • h:mm a", Locale.ENGLISH).withZone(java.time.ZoneId.systemDefault()).format(it) }
-        .getOrElse { value }
+@Composable
+private fun ActivityReservationCard(
+    item: ActivityReservation,
+    now: Instant,
+    onView: () -> Unit,
+    onMessage: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val post = item.post
+    SaluCard(modifier = modifier.fillMaxWidth()) {
+        Box {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.Top) {
+                    ActivityPhoto(post, Modifier.size(96.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            post.name,
+                            style = SaluText.FoodTitle,
+                            color = SaluColors.DarkGreen,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            // Clear of the ⋮ button in the card's corner.
+                            modifier = Modifier.padding(top = 2.dp, end = 40.dp)
+                        )
+                        item.otherName?.let {
+                            Text(
+                                "From $it",
+                                style = SaluText.Supporting,
+                                color = SaluColors.Gray,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Text(
+                            item.amount + " · " + if (item.priced) "${item.total} total" else "Free",
+                            style = SaluText.Supporting,
+                            color = SaluColors.Gray
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        ReservationStatusBadge(item.status)
+                        Spacer(Modifier.height(2.dp))
+                        if (item.priced) IconLine(Icons.Outlined.Payments, "Pay at pickup")
+                        val window = pickupLine(parseTimestamp(post.pickupStart), parseTimestamp(post.pickupEnd), now)
+                        if (window != null) {
+                            IconLine(Icons.Outlined.CalendarMonth, window)
+                        } else {
+                            IconLine(Icons.Outlined.LocationOn, post.pickupLocation)
+                        }
+                    }
+                }
+                SaluSecondaryButton(text = "View reservation", onClick = onView)
+            }
+
+            MoreMenu(
+                title = post.name,
+                actions = listOf(
+                    MenuAction("View reservation", Icons.Outlined.Visibility, onView),
+                    MenuAction("Message provider", Icons.Outlined.ChatBubbleOutline, onMessage),
+                    MenuAction("Cancel reservation", Icons.Outlined.EventBusy, onCancel, destructive = true)
+                ),
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
+    }
+}
+
+/** What a finished transaction was, with the other person when known: "Donation to Mika", "Purchase from Lina · ₱60.00". */
+private fun historyKind(item: ActivityReservation): String {
+    val name = item.otherName
+    return when {
+        item.mine && item.priced -> (if (name != null) "Purchase from $name" else "Purchase") + " · ${item.total}"
+        item.mine -> if (name != null) "Donation from $name" else "Free food"
+        item.priced -> (if (name != null) "Sale to $name" else "Sale") + " · ${item.total}"
+        else -> if (name != null) "Donation to $name" else "Donation"
+    }
+}
+
+@Composable
+private fun ActivityHistoryRow(
+    item: ActivityReservation,
+    now: Instant,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    SaluCard(modifier = modifier.fillMaxWidth(), onClick = onClick) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ActivityPhoto(item.post, Modifier.size(72.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Text(
+                        item.post.name,
+                        style = SaluText.FoodTitle,
+                        color = SaluColors.DarkGreen,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    )
+                    ReservationStatusBadge(item.status)
+                }
+                Text(
+                    historyKind(item),
+                    style = SaluText.Supporting,
+                    color = SaluColors.DarkGreen,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    listOfNotNull(item.amount, historyDayLabel(item.lastChange, now)).joinToString(" · "),
+                    style = SaluText.Meta,
+                    color = SaluColors.Gray
+                )
+            }
+            Icon(
+                Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = SaluColors.Gray,
+                modifier = Modifier
+                    .padding(start = 4.dp)
+                    .size(22.dp)
+            )
+        }
+    }
+}
+
+/** A reservation's status: Reserved, Completed (marked picked up) or Cancelled, each with its icon. */
+@Composable
+private fun ReservationStatusBadge(status: ReservationStatus, modifier: Modifier = Modifier) {
+    when (status) {
+        ReservationStatus.RESERVED -> StatusBadge(SaluStatus.Reserved, modifier)
+        ReservationStatus.CLAIMED -> StatusBadge(SaluStatus.Claimed, modifier, label = "Completed")
+        ReservationStatus.CANCELLED -> StatusBadge(SaluStatus.Cancelled, modifier)
+    }
+}
+
+@Composable
+private fun ActivityPhoto(post: FoodPost, modifier: Modifier) {
+    ListingPhoto(
+        imageUrl = post.displayImageUrl?.takeIf { it.isNotBlank() },
+        hasPhoto = post.hasPhoto,
+        contentDescription = post.name,
+        modifier = modifier.clip(SaluRadius.Small),
+        textSize = 9.sp
+    )
+}
+
+/** A small grey line with its icon, under a card's title. */
+@Composable
+private fun IconLine(icon: ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = SaluColors.Gray,
+            modifier = Modifier
+                .padding(top = 1.dp)
+                .size(15.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text,
+            style = SaluText.Meta,
+            color = SaluColors.Gray,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** A quiet hint with an info icon, under a list or at the end of a page. */
+@Composable
+private fun HintLine(text: String, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Icon(
+            Icons.Outlined.Info,
+            contentDescription = null,
+            tint = SaluColors.Gray,
+            modifier = Modifier
+                .padding(top = 1.dp)
+                .size(16.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = SaluText.Supporting, color = SaluColors.Gray)
+    }
+}
+
+private class MenuAction(
+    val label: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit,
+    val destructive: Boolean = false
+)
+
+/** A card's ⋮ menu. */
+@Composable
+private fun MoreMenu(title: String, actions: List<MenuAction>, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier) {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.Outlined.MoreVert, contentDescription = "More options for $title", tint = SaluColors.Gray)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            actions.forEach { action ->
+                val color = if (action.destructive) SaluColors.Error else SaluColors.DarkGreen
+                DropdownMenuItem(
+                    text = { Text(action.label, color = color) },
+                    leadingIcon = {
+                        Icon(
+                            action.icon,
+                            contentDescription = null,
+                            tint = if (action.destructive) SaluColors.Error else SaluColors.Green
+                        )
+                    },
+                    onClick = {
+                        open = false
+                        action.onClick()
+                    }
+                )
+            }
+        }
+    }
+}
+
+/* PAGES */
+
+/** The food at the top of a reservation page: photo, name, who it's from or for, and the status. */
+@Composable
+private fun PageFoodCard(post: FoodPost, line: String?, status: ReservationStatus) {
+    SaluCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ActivityPhoto(post, Modifier.size(96.dp))
+            Spacer(Modifier.width(14.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    post.name,
+                    style = SaluText.SectionTitle,
+                    color = SaluColors.DarkGreen,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                line?.let {
+                    Text(it, style = SaluText.Supporting, color = SaluColors.Gray, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                ReservationStatusBadge(status)
+            }
+        }
+    }
+}
+
+/** Facts as rows of icon, label and value, in one card. */
+@Composable
+private fun DetailCard(content: @Composable ColumnScope.() -> Unit) {
+    SaluCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun DetailRow(icon: ImageVector, label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {}
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = SaluColors.Green,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            label,
+            style = SaluText.Supporting,
+            color = SaluColors.Gray,
+            modifier = Modifier
+                .weight(0.4f)
+                .padding(top = 1.dp)
+        )
+        Text(
+            value,
+            style = SaluText.Body.copy(fontWeight = FontWeight.Medium),
+            color = SaluColors.DarkGreen,
+            modifier = Modifier.weight(0.6f)
+        )
+    }
+}
+
+/** A red text button for a page's destructive action, under its other buttons. */
+@Composable
+private fun DestructiveTextButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge, color = if (enabled) SaluColors.Error else SaluColors.Faint)
+    }
+}
+
+/**
+ * A donor's page for one listing's reservations: who reserved how much, with
+ * Message, and Mark as picked up while a reservation is open.
+ */
+@Composable
+private fun ManageReservationsPage(
+    post: FoodPost,
+    reservations: List<ActivityReservation>,
+    now: Instant,
+    filter: String,
+    onFilter: (String) -> Unit,
+    saving: Boolean,
+    onMessage: (ActivityReservation) -> Unit,
+    onMarkPickedUp: (ActivityReservation) -> Unit,
+    onBack: () -> Unit
+) {
+    val byFilter = reservations.groupBy { manageFilterFor(it.status) }
+    val open = byFilter["Active"].orEmpty()
+    val shown = byFilter[filter].orEmpty().sortedByDescending { it.lastChange ?: Instant.EPOCH }
+
+    ActionPage(
+        heading = "Manage reservations",
+        subtitle = "People reserving your food.",
+        onBack = onBack
+    ) {
+        SaluCard(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ActivityPhoto(post, Modifier.size(88.dp))
+                Spacer(Modifier.width(14.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        post.name,
+                        style = SaluText.SectionTitle,
+                        color = SaluColors.DarkGreen,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(listingOffer(post), style = SaluText.Supporting, color = SaluColors.Gray)
+                    Text(
+                        "${post.quantity} ${post.unit} available · ${open.sumOf { it.reservation.quantity }} reserved",
+                        style = SaluText.Supporting,
+                        color = SaluColors.Gray
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ManageFilters.forEach { option ->
+                val count = byFilter[option].orEmpty().size
+                SaluFilterChip(
+                    label = if (count > 0) "$option ($count)" else option,
+                    selected = option == filter,
+                    onClick = { onFilter(option) }
+                )
+            }
+        }
+
+        if (shown.isEmpty()) {
+            when (filter) {
+                "Completed" -> EmptyState(
+                    icon = Icons.Outlined.TaskAlt,
+                    title = "No completed pickups yet",
+                    message = "Reservations you mark as picked up appear here."
+                )
+                "Cancelled" -> EmptyState(
+                    icon = Icons.Outlined.EventBusy,
+                    title = "No cancellations",
+                    message = "Reservations the recipient cancelled appear here."
+                )
+                else -> EmptyState(
+                    icon = Icons.Outlined.People,
+                    title = "No active reservations",
+                    message = "When someone reserves this food, they appear here until you mark it as picked up."
+                )
+            }
+        } else {
+            shown.forEach { item ->
+                key(item.key) {
+                    ManagedReservationCard(
+                        item = item,
+                        now = now,
+                        saving = saving,
+                        onMessage = { onMessage(item) },
+                        onMarkPickedUp = { onMarkPickedUp(item) }
+                    )
+                }
+            }
+        }
+
+        if (open.isNotEmpty()) {
+            HintLine("Confirm only after handing over the food.")
+        }
+    }
+}
+
+@Composable
+private fun ManagedReservationCard(
+    item: ActivityReservation,
+    now: Instant,
+    saving: Boolean,
+    onMessage: () -> Unit,
+    onMarkPickedUp: () -> Unit
+) {
+    // Donors see the recipient's name only, so the avatar is their initial.
+    val name = item.otherName ?: "Recipient"
+    val moment = when (item.status) {
+        ReservationStatus.RESERVED -> momentLabel(parseTimestamp(item.reservation.createdAt), now)?.let { "Reserved $it" }
+        ReservationStatus.CLAIMED -> momentLabel(item.lastChange, now)?.let { "Picked up $it" }
+        ReservationStatus.CANCELLED -> momentLabel(item.lastChange, now)?.let { "Cancelled $it" }
+    }
+    SaluCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.Top) {
+                Avatar(photoUrl = null, name = name, size = 52.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        name,
+                        style = SaluText.FoodTitle,
+                        color = SaluColors.DarkGreen,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        item.amount + if (item.priced) " · ${item.total} at pickup" else "",
+                        style = SaluText.Supporting,
+                        color = SaluColors.Gray
+                    )
+                    moment?.let { Text(it, style = SaluText.Meta, color = SaluColors.Gray) }
+                    Spacer(Modifier.height(2.dp))
+                    ReservationStatusBadge(item.status)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SaluSecondaryButton(
+                    text = "Message",
+                    icon = Icons.Outlined.ChatBubbleOutline,
+                    onClick = onMessage,
+                    modifier = Modifier.weight(0.85f)
+                )
+                if (item.status == ReservationStatus.RESERVED) {
+                    SaluPrimaryButton(
+                        text = "Mark as picked up",
+                        onClick = onMarkPickedUp,
+                        enabled = !saving,
+                        modifier = Modifier.weight(1.15f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** What a reservation page says about where things stand. */
+private fun reservationNote(item: ActivityReservation): String {
+    val removedLater = item.post.status == FoodPostStatus.REMOVED
+    return when (item.status) {
+        ReservationStatus.RESERVED -> if (item.mine) {
+            "Your reservation is recorded. Message the provider to coordinate pickup." +
+                if (item.priced) " Pay ${item.total} at pickup." else ""
+        } else {
+            "Hand over the food, then mark it as picked up." +
+                if (item.priced) " Collect ${item.total} at pickup." else ""
+        }
+        ReservationStatus.CLAIMED -> if (item.mine) {
+            "The provider marked this as picked up." +
+                if (removedLater) " The donor has since removed this listing." else ""
+        } else {
+            "You marked this as picked up." +
+                if (removedLater) " You have since removed this listing." else ""
+        }
+        ReservationStatus.CANCELLED -> when {
+            item.mine && item.reservation.cancelledByListingRemoval ->
+                "Cancelled because the donor removed this listing."
+            item.mine -> "You cancelled this reservation." +
+                if (removedLater) " The donor has since removed this listing." else ""
+            removedLater -> "This reservation was cancelled. You have since removed this listing."
+            else -> (item.otherName ?: "The recipient") + " cancelled this reservation."
+        }
+    }
+}
+
+/**
+ * One reservation, for the person who made it or the listing's donor: its
+ * facts and what can be done with it (pickup details, message, cancel, rate,
+ * mark as picked up).
+ */
+@Composable
+private fun ReservationDetailsPage(
+    item: ActivityReservation,
+    now: Instant,
+    review: MyReview?,
+    saving: Boolean,
+    onPickup: () -> Unit,
+    onMessage: () -> Unit,
+    onCancel: () -> Unit,
+    onRate: () -> Unit,
+    onMarkPickedUp: () -> Unit,
+    onBack: () -> Unit
+) {
+    val post = item.post
+    val open = item.status == ReservationStatus.RESERVED
+    ActionPage(
+        heading = "Reservation details",
+        subtitle = if (item.mine) "Food you reserved." else "A reservation on your listing.",
+        onBack = onBack
+    ) {
+        PageFoodCard(
+            post = post,
+            line = item.otherName?.let { if (item.mine) "From $it" else "Reserved by $it" },
+            status = item.status
+        )
+
+        DetailCard {
+            DetailRow(Icons.Outlined.Inventory2, "Quantity", item.amount)
+            DetailRow(Icons.Outlined.Sell, if (item.priced) "Total" else "Cost", if (item.priced) item.total else "Free")
+            when (item.status) {
+                ReservationStatus.RESERVED -> DetailRow(
+                    Icons.Outlined.CalendarMonth,
+                    "Pickup",
+                    pickupWindowLabel(parseTimestamp(post.pickupStart), parseTimestamp(post.pickupEnd), now)
+                        ?: "Not set — ask in the chat"
+                )
+                ReservationStatus.CLAIMED -> DetailRow(
+                    Icons.Outlined.TaskAlt,
+                    "Picked up",
+                    momentLabel(item.lastChange, now) ?: "—"
+                )
+                ReservationStatus.CANCELLED -> DetailRow(
+                    Icons.Outlined.EventBusy,
+                    "Cancelled",
+                    momentLabel(item.lastChange, now) ?: "—"
+                )
+            }
+            DetailRow(
+                Icons.Outlined.Schedule,
+                "Reserved",
+                momentLabel(parseTimestamp(item.reservation.createdAt), now) ?: "—"
+            )
+        }
+
+        InlineNotice(text = reservationNote(item), icon = Icons.Outlined.Info)
+
+        val messageLabel = if (item.mine) "Message provider" else "Message recipient"
+        when {
+            item.mine && open -> {
+                ActionButton(text = "View pickup details", icon = Icons.Outlined.LocationOn, onClick = onPickup)
+                SaluSecondaryButton(text = messageLabel, icon = Icons.Outlined.ChatBubbleOutline, onClick = onMessage)
+                DestructiveTextButton(text = "Cancel reservation", enabled = !saving, onClick = onCancel)
+            }
+            // Only a picked-up reservation this account made can be rated.
+            item.mine && item.status == ReservationStatus.CLAIMED -> {
+                ActionButton(
+                    text = if (review != null) "Change your review" else rateTitle(item),
+                    icon = Icons.Outlined.StarOutline,
+                    onClick = onRate
+                )
+                SaluSecondaryButton(text = messageLabel, icon = Icons.Outlined.ChatBubbleOutline, onClick = onMessage)
+            }
+            !item.mine && open -> {
+                ActionButton(text = "Mark as picked up", enabled = !saving, onClick = onMarkPickedUp)
+                SaluSecondaryButton(text = messageLabel, icon = Icons.Outlined.ChatBubbleOutline, onClick = onMessage)
+            }
+            else -> SaluSecondaryButton(text = messageLabel, icon = Icons.Outlined.ChatBubbleOutline, onClick = onMessage)
+        }
+    }
+}
+
+/**
+ * Where and when to collect a reservation this account made: the window, the
+ * place, the handover, the pin on a map with directions, and what to pay.
+ */
+@Composable
+private fun PickupDetailsPage(
+    item: ActivityReservation,
+    now: Instant,
+    onMessage: () -> Unit,
+    onBack: () -> Unit
+) {
+    val post = item.post
+    val context = LocalContext.current
+    val pin = post.pickupPin
+    var directionsError by remember { mutableStateOf("") }
+
+    ActionPage(heading = "Pickup details", onBack = onBack) {
+        PageFoodCard(post = post, line = item.otherName?.let { "From $it" }, status = item.status)
+
+        DetailCard {
+            DetailRow(Icons.Outlined.Inventory2, "Quantity", item.amount)
+            DetailRow(Icons.Outlined.Sell, "Total", if (item.priced) item.total else "Free")
+            DetailRow(Icons.Outlined.Payments, "Payment", if (item.priced) "Pay at pickup" else "Nothing to pay")
+        }
+
+        SaluCard(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(
+                        Icons.Outlined.LocationOn,
+                        contentDescription = null,
+                        tint = SaluColors.Green,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            "Pickup",
+                            style = SaluText.FoodTitle,
+                            color = SaluColors.DarkGreen,
+                            modifier = Modifier.semantics { heading() }
+                        )
+                        Text(
+                            pickupWindowLabel(parseTimestamp(post.pickupStart), parseTimestamp(post.pickupEnd), now)
+                                ?: "Pickup window not set — ask in the chat",
+                            style = SaluText.Body,
+                            color = SaluColors.DarkGreen
+                        )
+                        Text(post.pickupLocation, style = SaluText.Body, color = SaluColors.DarkGreen)
+                        ListingHandover.fromCode(post.handover)?.let {
+                            Text(it.label, style = SaluText.Supporting, color = SaluColors.Gray)
+                        }
+                    }
+                }
+
+                if (pin != null) {
+                    PickupMap(
+                        pin = pin,
+                        start = pin,
+                        startZoom = PIN_MAP_ZOOM,
+                        description = "Map of the pickup pin for ${post.name}",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(SaluRadius.Photo)
+                    )
+                } else {
+                    Text(
+                        "This listing has no map pin. Ask the provider for directions in the chat.",
+                        style = SaluText.Supporting,
+                        color = SaluColors.Gray
+                    )
+                }
+            }
+        }
+
+        if (pin != null) {
+            ActionButton(
+                text = "Open directions",
+                icon = Icons.Outlined.Directions,
+                onClick = {
+                    directionsError = if (openDirections(context, pin)) "" else "No maps app is available on this device."
+                }
+            )
+            if (directionsError.isNotBlank()) {
+                Text(directionsError, color = MaterialTheme.colorScheme.error, style = SaluText.Supporting)
+            }
+        }
+        SaluSecondaryButton(text = "Message provider", icon = Icons.Outlined.ChatBubbleOutline, onClick = onMessage)
+        HintLine("The provider marks this as picked up after handover.")
+    }
+}
+
+/** A donor's own listing: what it offers, its reservations, pickup and details, with Edit and Delete. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ListingDetailsPage(
+    post: FoodPost,
+    reservations: List<ActivityReservation>,
+    now: Instant,
+    onManage: (() -> Unit)?,
+    onEdit: (() -> Unit)?,
+    onDelete: () -> Unit,
+    onBack: () -> Unit
+) {
+    val open = reservations.filter { it.status == ReservationStatus.RESERVED }
+    val expired = post.isExpired(now)
+
+    ActionPage(heading = "Your listing", onBack = onBack) {
+        SaluCard(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ActivityPhoto(
+                    post,
+                    Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                )
+                Text(post.name, style = MaterialTheme.typography.titleLarge, color = SaluColors.DarkGreen)
+                Text(listingOffer(post), style = SaluText.Supporting, color = SaluColors.Gray)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    StatusBadge(listingStatus(post, now) ?: SaluStatus.Available)
+                    ReservationCountChip(open = open.size, any = reservations.isNotEmpty())
+                }
+            }
+        }
+
+        DetailCard {
+            DetailRow(Icons.Outlined.Inventory2, "Available", "${post.quantity} ${post.unit}")
+            DetailRow(
+                Icons.Outlined.People,
+                "Reserved",
+                "${open.sumOf { it.reservation.quantity }} ${post.unit}" +
+                    if (open.isNotEmpty()) " (${open.size} open)" else ""
+            )
+            DetailRow(
+                Icons.Outlined.Sell,
+                "Price",
+                if (post.price > 0) "${formatPeso(post.price)} / ${unitSingular(post.unit)}" else "Free"
+            )
+            DetailRow(
+                Icons.Outlined.HourglassBottom,
+                if (expired) "Expired" else "Expires",
+                momentLabel(parseTimestamp(post.expirationDate), now) ?: "—"
+            )
+            DetailRow(Icons.Outlined.Schedule, "Posted", momentLabel(parseTimestamp(post.createdAt), now) ?: "—")
+        }
+
+        DetailCard {
+            DetailRow(
+                Icons.Outlined.CalendarMonth,
+                "Pickup",
+                pickupWindowLabel(parseTimestamp(post.pickupStart), parseTimestamp(post.pickupEnd), now) ?: "Not set"
+            )
+            DetailRow(Icons.Outlined.LocationOn, "Location", post.pickupLocation)
+            DetailRow(Icons.Outlined.Handshake, "Handover", ListingHandover.fromCode(post.handover)?.label ?: "Not set")
+        }
+
+        SaluCard(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    "About this food",
+                    style = SaluText.FoodTitle,
+                    color = SaluColors.DarkGreen,
+                    modifier = Modifier.semantics { heading() }
+                )
+                Text("Category: ${post.category}", style = SaluText.Body, color = SaluColors.DarkGreen)
+                post.description?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = SaluText.Body, color = SaluColors.DarkGreen)
+                }
+                post.allergens?.takeIf { it.isNotBlank() }?.let {
+                    Text("Allergens: $it", style = SaluText.Supporting, color = SaluColors.Gray)
+                }
+                post.storageNotes?.takeIf { it.isNotBlank() }?.let {
+                    Text("Storage: $it", style = SaluText.Supporting, color = SaluColors.Gray)
+                }
+            }
+        }
+
+        onManage?.let { ActionButton(text = "Manage reservations", icon = Icons.Outlined.People, onClick = it) }
+        onEdit?.let { SaluSecondaryButton(text = "Edit listing", icon = Icons.Outlined.Edit, onClick = it) }
+        DestructiveTextButton(text = "Delete listing", onClick = onDelete)
+    }
+}
 
 const val DELETE_LISTING_TEXT =
     "If nobody has ever reserved this listing, it is deleted with its photos. If it has reservations, it is removed from Home and your listings instead: open reservations are cancelled and their recipients are told, and past reservations, photos and chats are kept."
