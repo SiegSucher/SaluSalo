@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Salu-Salo Admin</title>
+  <meta name="description" content="Salu-Salo admin dashboard. Shows sample data until it is connected to Salu-Salo's server.">
+  <meta name="theme-color" content="#fcfbf6">
+  <link rel="icon" type="image/webp" href="assets/salusalo-logo.webp">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&amp;display=swap">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar" aria-label="Admin navigation">
+      <div class="sidebar__brand">
+        <span class="logo"><img src="assets/salusalo-logo.webp" alt="" width="40" height="40"></span>
+        <span class="brand-text"><span class="wordmark">Salu-Salo</span><span class="brand-tag">Admin dashboard</span></span>
+      </div>
+      <nav class="nav" aria-label="Main">
+        <ul class="nav__list" id="nav-list"></ul>
+      </nav>
+      <div class="sidebar__foot">
+        <button class="btn btn--ghost collapse-btn" id="collapse-btn" type="button" aria-controls="sidebar">
+          <span data-icon="keyboardDoubleArrowLeft"></span><span class="collapse-btn__label">Collapse menu</span>
+        </button>
+        <a class="profile" id="profile-link" href="#/settings">
+          <span class="avatar" id="profile-avatar" aria-hidden="true">SA</span>
+          <span class="profile__text"><span class="profile__name" id="profile-name">Salu-Salo Admin</span><span class="profile__role">Administrator</span></span>
+        </a>
+      </div>
+    </aside>
+
+    <div class="main-col">
+      <header class="topbar">
+        <button class="icon-btn topbar__menu" id="menu-btn" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false"><span data-icon="menu"></span></button>
+        <p class="topbar__title" id="topbar-title">Overview</p>
+        <span class="topbar__spacer"></span>
+        <div class="topbar__actions">
+          <button class="sample-chip" id="sample-chip" type="button" aria-label="Sample data: what this means"><span data-icon="info"></span><span class="sample-chip__label">Sample data</span></button>
+          <a class="icon-btn bell" id="bell" href="#/notifications/alerts" aria-label="Your alerts"><span data-icon="notifications"></span><span class="bell__dot" id="bell-dot" hidden></span></a>
+        </div>
+      </header>
+      <main class="content" id="main" tabindex="-1">
+        <noscript><p>The Salu-Salo admin dashboard needs JavaScript.</p></noscript>
+      </main>
+    </div>
+  </div>
+
+  <div id="panel-root"></div>
+  <div id="dialog-root"></div>
+  <div class="toasts"><div id="toast-root" role="status" aria-live="polite"></div><div id="toast-alerts" role="alert" aria-live="assertive"></div></div>
+
+  <script src="js/icons.js"></script>
+  <script src="js/sample-data.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/list-view.js"></script>
+  <script src="js/pages/overview.js"></script>
+  <script src="js/pages/users.js"></script>
+  <script src="js/pages/listings.js"></script>
+  <script src="js/pages/reservations.js"></script>
+  <script src="js/pages/reports.js"></script>
+  <script src="js/pages/analytics.js"></script>
+  <script src="js/pages/notifications.js"></script>
+  <script src="js/pages/audit.js"></script>
+  <script src="js/pages/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
