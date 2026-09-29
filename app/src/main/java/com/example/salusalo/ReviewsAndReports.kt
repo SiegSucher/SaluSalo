@@ -57,10 +57,9 @@ import com.example.salusalo.viewmodel.ReviewResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** Dark amber for ratings ("★ 4.7 (12)"), readable on white. */
-internal val RatingAmber = SaluColors.AmberInk
-/** The stars themselves: a deep gold, so filled and empty stars stand out on white (3:1). */
-private val StarGold = Color(0xFFBF8207)
+/** Ratings ("★ 4.7 (12)") in the original amber, and the stars in the original gold. */
+internal val RatingAmber = SaluColors.RatingAmber
+private val StarGold = SaluColors.StarGold
 
 /** Shown where someone has no reviews: only donors and sellers are rated. */
 internal const val NO_RATING_LINE =
@@ -94,8 +93,8 @@ fun RateDonorPage(
     // A review that is being sent is never dropped; Back waits until it has finished.
     ActionPage(heading = title, onBack = { if (!saving) onClose() }) {
         ActionCard {
-            Text(listingName, style = SaluText.FoodTitle, color = SaluColors.Ink)
-            Text(summaryLine, style = SaluText.Supporting, color = SaluColors.InkMuted)
+            Text(listingName, style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
+            Text(summaryLine, style = SaluText.Supporting, color = SaluColors.Gray)
         }
 
         if (saved != null) {
@@ -103,8 +102,8 @@ fun RateDonorPage(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconBubble(
                         Icons.Outlined.CheckCircle,
-                        tint = SaluColors.GreenInk,
-                        background = SaluColors.GreenSoft,
+                        tint = SaluColors.Green,
+                        background = SaluColors.PaleGreen,
                         size = 44.dp,
                         iconSize = 24.dp
                     )
@@ -112,7 +111,7 @@ fun RateDonorPage(
                     Text(
                         if (saved.review.created == false) "Your review was updated." else "Thanks! Your review was sent.",
                         style = SaluText.FoodTitle,
-                        color = SaluColors.Ink
+                        color = SaluColors.DarkGreen
                     )
                 }
                 Text(
@@ -121,12 +120,12 @@ fun RateDonorPage(
                     fontSize = 22.sp,
                     modifier = Modifier.semantics { contentDescription = "${saved.review.rating} of 5 stars" }
                 )
-                saved.review.comment?.let { Text(it, style = SaluText.Body, color = SaluColors.Ink) }
+                saved.review.comment?.let { Text(it, style = SaluText.Body, color = SaluColors.DarkGreen) }
             }
             ActionButton(text = "Done", onClick = onClose)
         } else {
             ActionCard {
-                Text("How was the pickup?", style = SaluText.FoodTitle, color = SaluColors.Ink)
+                Text("How was the pickup?", style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
                 Row(
                     modifier = Modifier.selectableGroup(),
                     verticalAlignment = Alignment.CenterVertically
@@ -148,7 +147,7 @@ fun RateDonorPage(
                             Icon(
                                 if (filled) Icons.Filled.Star else Icons.Outlined.StarBorder,
                                 contentDescription = if (n == 1) "1 star" else "$n stars",
-                                tint = if (filled) StarGold else SaluColors.InkMuted,
+                                tint = if (filled) StarGold else SaluColors.Gray,
                                 modifier = Modifier
                                     .size(36.dp)
                                     .graphicsLayer {
@@ -162,7 +161,7 @@ fun RateDonorPage(
                 Text(
                     if (stars == 0) "Tap a star to rate." else "$stars of 5 stars",
                     style = SaluText.Supporting,
-                    color = SaluColors.InkMuted
+                    color = SaluColors.Gray
                 )
             }
 
@@ -242,8 +241,8 @@ fun ReportPage(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconBubble(
                         Icons.Outlined.CheckCircle,
-                        tint = SaluColors.GreenInk,
-                        background = SaluColors.GreenSoft,
+                        tint = SaluColors.Green,
+                        background = SaluColors.PaleGreen,
                         size = 44.dp,
                         iconSize = 24.dp
                     )
@@ -251,7 +250,7 @@ fun ReportPage(
                     Text(
                         "Report sent. The Salu-Salo team will review it.",
                         style = SaluText.FoodTitle,
-                        color = SaluColors.Ink
+                        color = SaluColors.DarkGreen
                     )
                 }
             }
@@ -260,7 +259,7 @@ fun ReportPage(
         }
 
         ActionCard {
-            Text(prompt, style = SaluText.FoodTitle, color = SaluColors.Ink)
+            Text(prompt, style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
             Column(Modifier.selectableGroup()) {
                 reasons.forEach { option ->
                     Row(
@@ -283,7 +282,7 @@ fun ReportPage(
                             option.label,
                             modifier = Modifier.padding(start = 8.dp),
                             style = SaluText.Body,
-                            color = SaluColors.Ink
+                            color = SaluColors.DarkGreen
                         )
                     }
                 }
@@ -359,10 +358,10 @@ fun ReviewRow(item: ReviewItem) {
                 Text(
                     item.reviewerName,
                     style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp),
-                    color = SaluColors.Ink,
+                    color = SaluColors.DarkGreen,
                     modifier = Modifier.weight(1f)
                 )
-                item.dateText()?.let { Text(it, style = SaluText.Meta, color = SaluColors.InkMuted) }
+                item.dateText()?.let { Text(it, style = SaluText.Meta, color = SaluColors.Gray) }
             }
             Text(
                 starsText(item.rating),
@@ -372,7 +371,7 @@ fun ReviewRow(item: ReviewItem) {
                 modifier = Modifier.semantics { contentDescription = "${item.rating} of 5 stars" }
             )
             item.comment?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = SaluText.Body, color = SaluColors.Ink)
+                Text(it, style = SaluText.Body, color = SaluColors.DarkGreen)
             }
         }
     }

@@ -399,7 +399,7 @@ internal fun PickupPinPicker(
         Text(
             if (editing) "Pickup pin" else "Pickup pin *",
             style = SaluText.Meta,
-            color = SaluColors.InkMuted
+            color = SaluColors.Gray
         )
         InlineNotice(text = PIN_NOTE, icon = Icons.Outlined.Info)
 

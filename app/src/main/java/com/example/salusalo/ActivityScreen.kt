@@ -340,7 +340,7 @@ fun ActivityScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = SaluColors.Background
+        color = SaluColors.Cream
     ) {
         LazyColumn(
             contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
@@ -354,13 +354,13 @@ fun ActivityScreen(
                         Text(
                             "My Activity",
                             style = SaluText.ScreenTitle,
-                            color = SaluColors.Ink,
+                            color = SaluColors.DarkGreen,
                             modifier = Modifier.semantics { heading() }
                         )
                         Text(
                             "Track your listings, reservations, purchases & claims",
                             style = SaluText.Supporting,
-                            color = SaluColors.InkMuted
+                            color = SaluColors.Gray
                         )
                     }
 
@@ -374,7 +374,7 @@ fun ActivityScreen(
                             Icon(
                                 Icons.Outlined.Notifications,
                                 contentDescription = null,
-                                tint = SaluColors.Ink,
+                                tint = SaluColors.DarkGreen,
                                 modifier = Modifier.size(26.dp)
                             )
                             if (unreadAlerts > 0) {
@@ -383,7 +383,7 @@ fun ActivityScreen(
                                         .align(Alignment.TopEnd)
                                         .size(9.dp)
                                         .clip(CircleShape)
-                                        .background(SaluColors.Pink)
+                                        .background(SaluColors.Orange)
                                 )
                             }
                         }
@@ -476,7 +476,7 @@ fun ActivityScreen(
                         Text(
                             if (activeOnly) "Active Listings" else tab,
                             style = SaluText.SectionTitle,
-                            color = SaluColors.Ink,
+                            color = SaluColors.DarkGreen,
                             modifier = Modifier.semantics { heading() }
                         )
                         Text(
@@ -486,7 +486,7 @@ fun ActivityScreen(
                                 ActivityTabs.firstOrNull { it.label == tab }?.explanation.orEmpty()
                             },
                             style = SaluText.Supporting,
-                            color = SaluColors.InkMuted
+                            color = SaluColors.Gray
                         )
                     }
 
@@ -507,7 +507,7 @@ fun ActivityScreen(
                                 else -> "See all (${filtered.size})"
                             },
                             style = MaterialTheme.typography.labelLarge,
-                            color = SaluColors.GreenInk
+                            color = SaluColors.Green
                         )
                     }
                 }
@@ -565,7 +565,7 @@ fun ActivityScreen(
                     modifier = Modifier
                         .padding(start = 20.dp, end = 20.dp, top = 20.dp)
                         .fillMaxWidth(),
-                    color = SaluColors.GreenSoft,
+                    color = SaluColors.PaleGreen,
                     border = false,
                     onClick = {
                         notice = "Share surplus food by creating a listing."
@@ -577,7 +577,7 @@ fun ActivityScreen(
                     ) {
                         IconBubble(
                             Icons.Outlined.Spa,
-                            tint = SaluColors.GreenInk,
+                            tint = SaluColors.Green,
                             background = Color.White,
                             size = 40.dp,
                             iconSize = 22.dp
@@ -588,20 +588,20 @@ fun ActivityScreen(
                             Text(
                                 "Thanks for making a difference!",
                                 style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp),
-                                color = SaluColors.Ink
+                                color = SaluColors.DarkGreen
                             )
                             Text(
                                 "Every item you share helps reduce food waste " +
                                         "and support your community.",
                                 style = SaluText.Supporting,
-                                color = SaluColors.GreenInk
+                                color = SaluColors.Green
                             )
                         }
 
                         Icon(
                             Icons.Outlined.ChevronRight,
                             contentDescription = "Learn more",
-                            tint = SaluColors.GreenInk,
+                            tint = SaluColors.Green,
                             modifier = Modifier.size(21.dp)
                         )
                     }
@@ -633,9 +633,9 @@ fun ActivityScreen(
                     RecordLine("Amount", record.quantity)
                     RecordLine("Pickup location", record.distance)
                     RecordLine(record.timeLabel, record.timeValue)
-                    Text(record.posted, style = SaluText.Meta, color = SaluColors.InkMuted)
+                    Text(record.posted, style = SaluText.Meta, color = SaluColors.Gray)
                     if (record.details.isNotBlank()) {
-                        Text(record.details, style = SaluText.Supporting, color = SaluColors.Ink)
+                        Text(record.details, style = SaluText.Supporting, color = SaluColors.DarkGreen)
                     }
                     record.ownedPost?.takeIf { !it.isExpired() }?.let { post ->
                         SaluSecondaryButton(
@@ -696,7 +696,7 @@ fun ActivityScreen(
             },
             confirmButton = {
                 when {
-                    record.ownedPost != null -> TextButton(onClick = { pendingDelete = record.ownedPost }) { Text("Delete", color = SaluColors.PinkInk) }
+                    record.ownedPost != null -> TextButton(onClick = { pendingDelete = record.ownedPost }) { Text("Delete", color = SaluColors.Error) }
                     record.reservationId != null && record.status == "Reserved" && record.donorCanClaim ->
                         TextButton(enabled = !reservationSaving, onClick = {
                             if (reservationViewModel.claim(record.reservationId)) selectedId = null
@@ -704,7 +704,7 @@ fun ActivityScreen(
                     record.reservationId != null && record.status == "Reserved" ->
                         TextButton(enabled = !reservationSaving, onClick = {
                             if (reservationViewModel.cancel(record.reservationId)) selectedId = null
-                        }) { Text("Cancel", color = SaluColors.PinkInk) }
+                        }) { Text("Cancel", color = SaluColors.Error) }
                 }
             },
             dismissButton = {
@@ -742,7 +742,7 @@ fun ActivityScreen(
                     foodViewModel.deletePost(post)
                     pendingDelete = null
                     selectedId = null
-                }) { Text("Delete", color = SaluColors.PinkInk) }
+                }) { Text("Delete", color = SaluColors.Error) }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
         )
@@ -817,8 +817,8 @@ private fun ActivityTabChip(
     Row(
         modifier = Modifier
             .clip(SaluRadius.Pill)
-            .background(if (selected) SaluColors.Ink else Color.White)
-            .border(1.dp, if (selected) Color.Transparent else SaluColors.Line, SaluRadius.Pill)
+            .background(if (selected) SaluColors.Green else SaluColors.Cream)
+            .border(1.dp, if (selected) Color.Transparent else SaluColors.Green.copy(alpha = 0.3f), SaluRadius.Pill)
             .selectable(selected = selected, onClick = onClick, role = Role.Tab)
             .semantics { contentDescription = "${tab.label}, $count" }
             .heightIn(min = 48.dp)
@@ -828,23 +828,23 @@ private fun ActivityTabChip(
         Icon(
             tab.icon,
             contentDescription = null,
-            tint = if (selected) Color.White else SaluColors.InkMuted,
+            tint = if (selected) Color.White else SaluColors.Green,
             modifier = Modifier.size(18.dp)
         )
         Spacer(Modifier.width(8.dp))
         Text(
             tab.label,
             style = SaluText.Meta.copy(fontSize = 13.sp),
-            color = if (selected) Color.White else SaluColors.Ink
+            color = if (selected) Color.White else SaluColors.Green
         )
         Spacer(Modifier.width(8.dp))
         Text(
             count.toString(),
             style = SaluText.Status,
-            color = if (selected) SaluColors.Ink else SaluColors.InkMuted,
+            color = if (selected) SaluColors.Green else SaluColors.DarkGreen,
             modifier = Modifier
                 .clip(SaluRadius.Pill)
-                .background(if (selected) SaluColors.Yellow else SaluColors.Cream)
+                .background(if (selected) Color.White else SaluColors.IconGreen)
                 .padding(horizontal = 7.dp, vertical = 2.dp)
         )
     }
@@ -870,8 +870,8 @@ private fun ActivityEmptyState(tab: String, onPost: () -> Unit) {
             icon = Icons.Outlined.VolunteerActivism,
             title = "No reservations on your listings yet",
             message = "When someone reserves your food, you'll see it here.",
-            tint = SaluColors.GreenInk,
-            iconBackground = SaluColors.GreenSoft
+            tint = SaluColors.Green,
+            iconBackground = SaluColors.PaleGreen
         )
         "Purchases" -> EmptyState(
             icon = Icons.Outlined.ShoppingBag,
@@ -882,8 +882,8 @@ private fun ActivityEmptyState(tab: String, onPost: () -> Unit) {
             icon = Icons.Outlined.Redeem,
             title = "No claims yet",
             message = "Free food appears here after the donor marks your pickup as claimed.",
-            tint = SaluColors.GreenInk,
-            iconBackground = SaluColors.GreenSoft
+            tint = SaluColors.Green,
+            iconBackground = SaluColors.PaleGreen
         )
         else -> EmptyState(
             icon = Icons.Outlined.Inventory2,
@@ -926,7 +926,7 @@ private fun ActivityRecordCard(
                             .weight(1f)
                             .padding(end = 8.dp),
                         style = SaluText.FoodTitle,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -938,7 +938,7 @@ private fun ActivityRecordCard(
                 Text(
                     record.quantity,
                     style = SaluText.Supporting,
-                    color = SaluColors.Ink
+                    color = SaluColors.DarkGreen
                 )
 
                 SmallActivityLine(
@@ -962,7 +962,7 @@ private fun RecordStatus(status: String) {
     if (known != null) {
         StatusBadge(known)
     } else {
-        Text(status, style = SaluText.Status, color = SaluColors.InkMuted)
+        Text(status, style = SaluText.Status, color = SaluColors.Gray)
     }
 }
 
@@ -970,17 +970,17 @@ private fun RecordStatus(status: String) {
 @Composable
 private fun RecordRole(record: ActivityRecord) {
     val (icon, text, color) = when (record.tab) {
-        "My Listings" -> Triple(Icons.Outlined.Storefront, "Your listing", SaluColors.AmberInk)
-        "My Reservations" -> Triple(Icons.Outlined.BookmarkBorder, "You reserved", SaluColors.AmberInk)
+        "My Listings" -> Triple(Icons.Outlined.Storefront, "Your listing", SaluColors.Green)
+        "My Reservations" -> Triple(Icons.Outlined.BookmarkBorder, "You reserved", SaluColors.Green)
         // Donor records keep the recipient's display name visible without
         // loading or exposing any additional profile fields.
         "My Donations" -> Triple(
             Icons.Outlined.VolunteerActivism,
             "Reserved by " + record.details.substringBefore('\n').removePrefix("Recipient: "),
-            SaluColors.GreenInk
+            SaluColors.Green
         )
-        "Purchases" -> Triple(Icons.Outlined.ShoppingBag, "You bought", SaluColors.Ink)
-        else -> Triple(Icons.Outlined.Redeem, "You claimed", SaluColors.GreenInk)
+        "Purchases" -> Triple(Icons.Outlined.ShoppingBag, "You bought", SaluColors.DarkGreen)
+        else -> Triple(Icons.Outlined.Redeem, "You claimed", SaluColors.Green)
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(15.dp))
@@ -998,8 +998,8 @@ private fun RecordRole(record: ActivityRecord) {
 @Composable
 private fun RecordLine(label: String, value: String) {
     Column {
-        Text(label, style = SaluText.Meta, color = SaluColors.InkMuted)
-        Text(value, style = SaluText.Body, color = SaluColors.Ink)
+        Text(label, style = SaluText.Meta, color = SaluColors.Gray)
+        Text(value, style = SaluText.Body, color = SaluColors.DarkGreen)
     }
 }
 
@@ -1009,14 +1009,14 @@ private fun SmallActivityLine(icon: ImageVector, text: String) {
         Icon(
             icon,
             contentDescription = null,
-            tint = SaluColors.InkMuted,
+            tint = SaluColors.Gray,
             modifier = Modifier.size(14.dp)
         )
         Spacer(Modifier.width(4.dp))
         Text(
             text,
             style = SaluText.Meta,
-            color = SaluColors.InkMuted,
+            color = SaluColors.Gray,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -1066,20 +1066,20 @@ private fun ActivityMetric(
         Text(
             title,
             style = SaluText.Meta,
-            color = SaluColors.InkMuted,
+            color = SaluColors.Gray,
             maxLines = 2
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 value,
                 style = MaterialTheme.typography.headlineSmall,
-                color = SaluColors.Ink
+                color = SaluColors.DarkGreen
             )
             if (showChevron) {
                 Icon(
                     Icons.Outlined.ChevronRight,
                     contentDescription = "View active listings",
-                    tint = SaluColors.GreenInk,
+                    tint = SaluColors.Green,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -1087,7 +1087,7 @@ private fun ActivityMetric(
         Text(
             caption,
             style = SaluText.Meta,
-            color = SaluColors.InkMuted
+            color = SaluColors.Gray
         )
     }
 }

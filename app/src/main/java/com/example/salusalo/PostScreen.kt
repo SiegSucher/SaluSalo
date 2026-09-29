@@ -259,7 +259,7 @@ fun PostScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SaluColors.Background)
+            .background(SaluColors.Cream)
     ) {
         // Post is a main tab: the bottom bar and Back lead away from it.
         Column(
@@ -270,13 +270,13 @@ fun PostScreen(
             Text(
                 "Create listing",
                 style = SaluText.ScreenTitle,
-                color = SaluColors.Ink,
+                color = SaluColors.DarkGreen,
                 modifier = Modifier.semantics { heading() }
             )
             Text(
                 "Post surplus food to help others",
                 style = SaluText.Supporting,
-                color = SaluColors.InkMuted
+                color = SaluColors.Gray
             )
         }
 
@@ -296,30 +296,30 @@ fun PostScreen(
                     ) {
                         IconBubble(
                             Icons.Outlined.CheckCircle,
-                            tint = SaluColors.GreenInk,
-                            background = SaluColors.GreenSoft,
+                            tint = SaluColors.Green,
+                            background = SaluColors.PaleGreen,
                             size = 52.dp,
                             iconSize = 28.dp
                         )
                         Text(
                             "Listing published",
                             style = MaterialTheme.typography.titleLarge,
-                            color = SaluColors.GreenInk,
+                            color = SaluColors.Green,
                             modifier = Modifier.semantics { heading() }
                         )
-                        Text(name, style = SaluText.FoodTitle, color = SaluColors.Ink)
+                        Text(name, style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
                         Text(
                             "$quantity $unit • ${if (donation) "Free" else "₱$price per unit"}",
                             style = SaluText.Body,
-                            color = SaluColors.Ink
+                            color = SaluColors.DarkGreen
                         )
-                        Text("Pickup: $location", style = SaluText.Body, color = SaluColors.Ink)
-                        Text("Photos: ${photos.size}", style = SaluText.Supporting, color = SaluColors.InkMuted)
-                        Text("Reference: ${savedId.take(8)}", style = SaluText.Supporting, color = SaluColors.InkMuted)
+                        Text("Pickup: $location", style = SaluText.Body, color = SaluColors.DarkGreen)
+                        Text("Photos: ${photos.size}", style = SaluText.Supporting, color = SaluColors.Gray)
+                        Text("Reference: ${savedId.take(8)}", style = SaluText.Supporting, color = SaluColors.Gray)
                         Text(
                             "Your listing is now published to the community feed.",
                             style = SaluText.Supporting,
-                            color = SaluColors.InkMuted
+                            color = SaluColors.Gray
                         )
                         Spacer(Modifier.height(4.dp))
                         SaluPrimaryButton(text = "Back to home", onClick = onBack)
@@ -334,7 +334,7 @@ fun PostScreen(
                 Text(
                     "Fields marked * are required.",
                     style = SaluText.Meta,
-                    color = SaluColors.InkMuted
+                    color = SaluColors.Gray
                 )
 
                 FormSection(
@@ -431,7 +431,7 @@ fun PostScreen(
                         onPinChange = { pickupPin = it },
                         savedPin = null,
                         editing = false,
-                        accent = SaluColors.GreenInk
+                        accent = SaluColors.Green
                     )
 
                     PostDateButton("Pickup starts", pickupStart, required = true, onNow = { pickupStart = currentMinute() }) {
@@ -475,7 +475,7 @@ fun PostScreen(
 
                 SaluCard(
                     modifier = Modifier.fillMaxWidth(),
-                    color = SaluColors.YellowSoft.copy(alpha = 0.6f),
+                    color = SaluColors.PaleGreen,
                     border = false
                 ) {
                     Column(Modifier.padding(16.dp)) {
@@ -491,12 +491,12 @@ fun PostScreen(
                                 Text(
                                     "Check your listing",
                                     style = SaluText.FoodTitle,
-                                    color = SaluColors.Ink
+                                    color = SaluColors.DarkGreen
                                 )
                                 Text(
                                     "See the price, pickup window and missing details before you post.",
                                     style = SaluText.Supporting,
-                                    color = SaluColors.InkMuted
+                                    color = SaluColors.Gray
                                 )
                             }
                         }
@@ -550,7 +550,7 @@ fun PostScreen(
                 Text(
                     "Review the food details and pickup arrangements before posting.",
                     style = SaluText.Meta,
-                    color = SaluColors.InkMuted,
+                    color = SaluColors.Gray,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -567,18 +567,18 @@ fun PostScreen(
                         .heightIn(min = 32.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Outlined.Inventory2, contentDescription = null, tint = SaluColors.AmberInk)
+                    Icon(Icons.Outlined.Inventory2, contentDescription = null, tint = SaluColors.Green)
                     Spacer(Modifier.width(12.dp))
                     Text(
                         "My posts (${myPosts.size})",
                         style = SaluText.FoodTitle,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         modifier = Modifier.weight(1f)
                     )
                     Icon(
                         if (showLocal) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
                         contentDescription = if (showLocal) "Hide my posts" else "Show my posts",
-                        tint = SaluColors.InkMuted
+                        tint = SaluColors.Gray
                     )
                 }
             }
@@ -589,7 +589,7 @@ fun PostScreen(
                         Text(
                             "You have no food posts yet.",
                             style = SaluText.Body,
-                            color = SaluColors.InkMuted
+                            color = SaluColors.Gray
                         )
                     }
 
@@ -617,7 +617,7 @@ fun PostScreen(
             Text(
                 "Based on the details you've entered so far. Nothing is posted until you tap Post listing.",
                 style = SaluText.Body,
-                color = SaluColors.InkMuted
+                color = SaluColors.Gray
             )
 
             CheckSection(
@@ -695,7 +695,7 @@ fun PostScreen(
             Text(
                 "These are form checks and calculations, not AI predictions or a food-safety assessment.",
                 style = SaluText.Meta,
-                color = SaluColors.InkMuted
+                color = SaluColors.Gray
             )
         }
     }
@@ -709,7 +709,7 @@ fun PostScreen(
                 TextButton(enabled = !backendSaving, onClick = {
                     foodViewModel.deletePost(post)
                     pendingDelete = null
-                }) { Text("Delete", color = SaluColors.PinkInk) }
+                }) { Text("Delete", color = SaluColors.Error) }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
         )
@@ -759,7 +759,7 @@ private fun MyPostCard(
                 Text(
                     post.name,
                     style = SaluText.FoodTitle,
-                    color = SaluColors.Ink,
+                    color = SaluColors.DarkGreen,
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = 8.dp)
@@ -770,20 +770,20 @@ private fun MyPostCard(
             Text(
                 "${post.quantity} ${post.unit} • ${post.category}",
                 style = SaluText.Supporting,
-                color = SaluColors.InkMuted
+                color = SaluColors.Gray
             )
-            Text(post.pickupLocation, style = SaluText.Meta, color = SaluColors.InkMuted)
+            Text(post.pickupLocation, style = SaluText.Meta, color = SaluColors.Gray)
             Text(
                 "Expires: ${epochMillis(post.expirationDate).takeIf { it != 0L }?.let(::postTime) ?: "—"}",
                 style = SaluText.Meta,
-                color = SaluColors.InkMuted
+                color = SaluColors.Gray
             )
             Row {
-                TextButton(onClick = onDetails) { Text("View details", color = SaluColors.GreenInk) }
+                TextButton(onClick = onDetails) { Text("View details", color = SaluColors.Green) }
                 if (!expired) {
-                    TextButton(onClick = onEdit) { Text("Edit", color = SaluColors.GreenInk) }
+                    TextButton(onClick = onEdit) { Text("Edit", color = SaluColors.Green) }
                 }
-                TextButton(onClick = onDelete) { Text("Delete", color = SaluColors.PinkInk) }
+                TextButton(onClick = onDelete) { Text("Delete", color = SaluColors.Error) }
             }
         }
     }
@@ -912,7 +912,7 @@ fun EditListingDialog(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(SaluColors.Background)
+                .background(SaluColors.Cream)
                 .safeDrawingPadding()
         ) {
             SaluTopBar(
@@ -983,7 +983,7 @@ fun EditListingDialog(
                         onPinChange = { pickupPin = it },
                         savedPin = post.pickupPin,
                         editing = true,
-                        accent = SaluColors.GreenInk
+                        accent = SaluColors.Green
                     )
                     PostDateButton("Pickup starts", pickupStart, onNow = { pickupStart = currentMinute() }) {
                         chooseDateTime(pickupStart) { pickupStart = it }
@@ -993,7 +993,7 @@ fun EditListingDialog(
                     }
                     if (pickupStart != 0L || pickupEnd != 0L) {
                         TextButton(onClick = { pickupStart = 0L; pickupEnd = 0L }) {
-                            Text("Clear pickup times", color = SaluColors.GreenInk)
+                            Text("Clear pickup times", color = SaluColors.Green)
                         }
                     }
                     PostChoice(
@@ -1096,7 +1096,7 @@ private fun ListingTypeSwitch(donation: Boolean, onChange: (Boolean) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(SaluRadius.Control)
-            .background(SaluColors.Cream)
+            .background(SaluColors.PaleGreen)
             .padding(4.dp)
             .selectableGroup()
     ) {
@@ -1140,7 +1140,7 @@ private fun ListingTypeOption(
         Icon(
             icon,
             contentDescription = null,
-            tint = if (selected) SaluColors.GreenInk else SaluColors.InkMuted,
+            tint = if (selected) SaluColors.Green else SaluColors.Gray,
             modifier = Modifier.size(22.dp)
         )
         Spacer(Modifier.width(8.dp))
@@ -1148,9 +1148,9 @@ private fun ListingTypeOption(
             Text(
                 title,
                 style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp),
-                color = if (selected) SaluColors.Ink else SaluColors.InkMuted
+                color = if (selected) SaluColors.DarkGreen else SaluColors.Gray
             )
-            Text(subtitle, style = SaluText.Meta, color = SaluColors.InkMuted)
+            Text(subtitle, style = SaluText.Meta, color = SaluColors.Gray)
         }
     }
 }
@@ -1177,11 +1177,11 @@ private fun FormSection(
                     Text(
                         title,
                         style = SaluText.SectionTitle,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         modifier = Modifier.semantics { heading() }
                     )
                     if (subtitle != null) {
-                        Text(subtitle, style = SaluText.Supporting, color = SaluColors.InkMuted)
+                        Text(subtitle, style = SaluText.Supporting, color = SaluColors.Gray)
                     }
                 }
             }
@@ -1202,15 +1202,15 @@ private fun PhotoPicker(
             Text(
                 "Food photos *",
                 style = SaluText.Meta,
-                color = SaluColors.InkMuted,
+                color = SaluColors.Gray,
                 modifier = Modifier.weight(1f)
             )
-            Text("${photos.size} of 4", style = SaluText.Meta, color = SaluColors.InkMuted)
+            Text("${photos.size} of 4", style = SaluText.Meta, color = SaluColors.Gray)
         }
         Text(
             "Add up to four clear photos of the food. The first one is the cover.",
             style = SaluText.Supporting,
-            color = SaluColors.InkMuted
+            color = SaluColors.Gray
         )
         Spacer(Modifier.height(10.dp))
         Row(
@@ -1236,7 +1236,7 @@ private fun PhotoPicker(
                             Icon(
                                 Icons.Outlined.Close,
                                 contentDescription = "Remove photo ${index + 1}",
-                                tint = SaluColors.Ink,
+                                tint = SaluColors.DarkGreen,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -1249,15 +1249,15 @@ private fun PhotoPicker(
                     modifier = Modifier
                         .size(100.dp)
                         .clip(SaluRadius.Photo)
-                        .background(SaluColors.Cream)
-                        .border(1.dp, SaluColors.Outline.copy(alpha = 0.45f), SaluRadius.Photo)
+                        .background(SaluColors.PaleGreen)
+                        .border(1.dp, SaluColors.Gray.copy(alpha = 0.45f), SaluRadius.Photo)
                         .clickable(onClickLabel = "Add photos", role = Role.Button, onClick = onAdd),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(Icons.Outlined.AddAPhoto, contentDescription = null, tint = SaluColors.Ink)
+                    Icon(Icons.Outlined.AddAPhoto, contentDescription = null, tint = SaluColors.DarkGreen)
                     Spacer(Modifier.height(6.dp))
-                    Text("Add photo", style = SaluText.Meta, color = SaluColors.Ink)
+                    Text("Add photo", style = SaluText.Meta, color = SaluColors.DarkGreen)
                 }
             }
         }
@@ -1295,12 +1295,12 @@ private fun PostDateButton(
             Text(
                 if (required) "$label *" else label,
                 style = SaluText.Meta,
-                color = SaluColors.InkMuted,
+                color = SaluColors.Gray,
                 modifier = Modifier.weight(1f)
             )
             if (onNow != null) {
                 TextButton(onClick = onNow) {
-                    Text("Start now", style = MaterialTheme.typography.labelLarge, color = SaluColors.GreenInk)
+                    Text("Start now", style = MaterialTheme.typography.labelLarge, color = SaluColors.Green)
                 }
             }
         }
@@ -1314,24 +1314,24 @@ private fun PostDateButton(
                     contentDescription = if (value == 0L) "$label: not chosen. Choose date and time" else "$label: $shown. Change date and time"
                 },
             shape = SaluRadius.Control,
-            border = BorderStroke(1.dp, SaluColors.Outline.copy(alpha = 0.6f)),
+            border = BorderStroke(1.dp, SaluColors.Gray.copy(alpha = 0.6f)),
             colors = ButtonDefaults.outlinedButtonColors(
                 containerColor = Color.White,
-                contentColor = SaluColors.Ink
+                contentColor = SaluColors.DarkGreen
             ),
             contentPadding = PaddingValues(horizontal = 16.dp)
         ) {
             Icon(
                 Icons.Outlined.CalendarMonth,
                 contentDescription = null,
-                tint = SaluColors.InkMuted,
+                tint = SaluColors.Gray,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(Modifier.width(10.dp))
             Text(
                 shown,
                 style = SaluText.Body,
-                color = if (value == 0L) SaluColors.InkMuted else SaluColors.Ink,
+                color = if (value == 0L) SaluColors.Gray else SaluColors.DarkGreen,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -1342,8 +1342,8 @@ private fun PostDateButton(
 @Composable
 private fun CheckSection(title: String, lines: List<String>) {
     ActionCard {
-        Text(title, style = SaluText.Meta.copy(fontWeight = FontWeight.Bold), color = SaluColors.GreenInk)
-        lines.forEach { Text(it, style = SaluText.Body, color = SaluColors.Ink) }
+        Text(title, style = SaluText.Meta.copy(fontWeight = FontWeight.Bold), color = SaluColors.Green)
+        lines.forEach { Text(it, style = SaluText.Body, color = SaluColors.DarkGreen) }
     }
 }
 
@@ -1391,7 +1391,7 @@ private fun PostChoice(
         Text(
             if (required) "$label *" else label,
             style = SaluText.Meta,
-            color = SaluColors.InkMuted
+            color = SaluColors.Gray
         )
         Spacer(Modifier.height(4.dp))
         FlowRow(
@@ -1451,7 +1451,7 @@ fun PostPhoto(uri: String, cover: Boolean = false) {
         modifier = Modifier
             .size(100.dp)
             .clip(SaluRadius.Photo)
-            .background(SaluColors.Cream),
+            .background(SaluColors.PaleGreen),
         contentAlignment = Alignment.Center
     ) {
         val image = bitmap
@@ -1463,19 +1463,19 @@ fun PostPhoto(uri: String, cover: Boolean = false) {
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Text("Photo preview", style = SaluText.Meta, color = SaluColors.InkMuted)
+            Text("Photo preview", style = SaluText.Meta, color = SaluColors.Gray)
         }
 
         if (cover) {
             Text(
                 "Cover",
                 style = SaluText.Status,
-                color = SaluColors.Ink,
+                color = Color.White,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(6.dp)
                     .clip(SaluRadius.Small)
-                    .background(SaluColors.Yellow)
+                    .background(SaluColors.Green)
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             )
         }

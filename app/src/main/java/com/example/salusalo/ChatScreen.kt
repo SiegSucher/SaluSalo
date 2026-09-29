@@ -154,14 +154,14 @@ fun ChatScreen(
         LaunchedEffect(keyboardHeight) {
             if (keyboardHeight > 0 && entries.isNotEmpty()) listState.scrollToItem(entries.lastIndex)
         }
-        Surface(modifier = Modifier.fillMaxSize(), color = SaluColors.Background) {
+        Surface(modifier = Modifier.fillMaxSize(), color = SaluColors.Cream) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .navigationBarsPadding()
                     .imePadding()
             ) {
-                Surface(color = SaluColors.Background) {
+                Surface(color = SaluColors.Cream) {
                     Column {
                         Row(
                             modifier = Modifier
@@ -174,7 +174,7 @@ fun ChatScreen(
                                 Icon(
                                     Icons.AutoMirrored.Outlined.ArrowBack,
                                     contentDescription = "Back",
-                                    tint = SaluColors.Ink
+                                    tint = SaluColors.DarkGreen
                                 )
                             }
                             conversation?.let {
@@ -185,7 +185,7 @@ fun ChatScreen(
                                 Text(
                                     conversation?.otherName ?: "Messages",
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = SaluColors.Ink,
+                                    color = SaluColors.DarkGreen,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.semantics { heading() }
@@ -194,7 +194,7 @@ fun ChatScreen(
                                     Text(
                                         (if (it.isDonor) "Asking about your listing: " else "About: ") + it.foodName,
                                         style = SaluText.Supporting,
-                                        color = SaluColors.InkMuted,
+                                        color = SaluColors.Gray,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -206,7 +206,7 @@ fun ChatScreen(
                                         Icon(
                                             Icons.Outlined.MoreVert,
                                             contentDescription = "More options",
-                                            tint = SaluColors.Ink
+                                            tint = SaluColors.DarkGreen
                                         )
                                     }
                                     DropdownMenu(
@@ -214,9 +214,9 @@ fun ChatScreen(
                                         onDismissRequest = { menuOpen = false }
                                     ) {
                                         DropdownMenuItem(
-                                            text = { Text("Report ${it.otherName}", color = SaluColors.PinkInk) },
+                                            text = { Text("Report ${it.otherName}", color = SaluColors.Error) },
                                             leadingIcon = {
-                                                Icon(Icons.Outlined.Flag, contentDescription = null, tint = SaluColors.PinkInk)
+                                                Icon(Icons.Outlined.Flag, contentDescription = null, tint = SaluColors.Error)
                                             },
                                             onClick = {
                                                 menuOpen = false
@@ -239,14 +239,14 @@ fun ChatScreen(
                     when {
                         opening -> CircularProgressIndicator(
                             Modifier.align(Alignment.Center),
-                            color = SaluColors.GreenInk
+                            color = SaluColors.Green
                         )
                         conversation == null -> EmptyState(
                             icon = Icons.Outlined.ErrorOutline,
                             title = "This conversation could not be opened.",
                             message = "Go back and try again.",
-                            tint = SaluColors.PinkInk,
-                            iconBackground = SaluColors.PinkSoft,
+                            tint = SaluColors.Error,
+                            iconBackground = SaluColors.ErrorSoft,
                             modifier = Modifier.align(Alignment.Center)
                         )
                         messages.isEmpty() -> EmptyState(
@@ -304,7 +304,7 @@ fun ChatScreen(
                                     textStyle = SaluText.Body.copy(fontSize = 15.sp),
                                     shape = RoundedCornerShape(24.dp),
                                     maxLines = 4,
-                                    colors = saluFieldColors(container = SaluColors.Background)
+                                    colors = saluFieldColors(container = SaluColors.Cream)
                                 )
                                 FilledIconButton(
                                     onClick = { messageViewModel.send(draft) { draft = "" } },
@@ -313,16 +313,16 @@ fun ChatScreen(
                                         .padding(bottom = 4.dp)
                                         .size(48.dp),
                                     colors = IconButtonDefaults.filledIconButtonColors(
-                                        containerColor = SaluColors.Yellow,
-                                        contentColor = SaluColors.Ink,
-                                        disabledContainerColor = SaluColors.Cream,
-                                        disabledContentColor = SaluColors.InkFaint
+                                        containerColor = SaluColors.Green,
+                                        contentColor = Color.White,
+                                        disabledContainerColor = SaluColors.PaleGreen,
+                                        disabledContentColor = SaluColors.Faint
                                     )
                                 ) {
                                     if (sending) {
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(20.dp),
-                                            color = SaluColors.Ink,
+                                            color = Color.White,
                                             strokeWidth = 2.dp
                                         )
                                     } else {
@@ -352,10 +352,10 @@ private fun DayHeading(label: String) {
         Text(
             label,
             style = SaluText.Meta,
-            color = SaluColors.InkMuted,
+            color = SaluColors.Gray,
             modifier = Modifier
                 .clip(RoundedCornerShape(10.dp))
-                .background(SaluColors.Cream)
+                .background(SaluColors.PaleGreen)
                 .padding(horizontal = 10.dp, vertical = 4.dp)
                 .semantics { heading() }
         )
@@ -369,7 +369,7 @@ private fun MessageBubble(message: ChatMessage, mine: Boolean) {
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start
     ) {
         Surface(
-            color = if (mine) SaluColors.Yellow else Color.White,
+            color = if (mine) SaluColors.Green else Color.White,
             shape = RoundedCornerShape(
                 topStart = 18.dp, topEnd = 18.dp,
                 bottomStart = if (mine) 18.dp else 4.dp,
@@ -379,11 +379,11 @@ private fun MessageBubble(message: ChatMessage, mine: Boolean) {
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
             Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 9.dp, bottom = 7.dp)) {
-                Text(message.body, style = SaluText.Body.copy(fontSize = 15.sp, lineHeight = 21.sp), color = SaluColors.Ink)
+                Text(message.body, style = SaluText.Body.copy(fontSize = 15.sp, lineHeight = 21.sp), color = if (mine) Color.White else SaluColors.DarkGreen)
                 Text(
                     formatBubbleTime(message.createdAt),
                     style = SaluText.Meta.copy(fontWeight = FontWeight.Normal),
-                    color = if (mine) SaluColors.Ink.copy(alpha = 0.8f) else SaluColors.InkMuted,
+                    color = if (mine) Color.White.copy(alpha = 0.8f) else SaluColors.Gray,
                     modifier = Modifier
                         .align(Alignment.End)
                         .padding(top = 2.dp)
@@ -407,7 +407,7 @@ fun MessagesScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SaluColors.Background)
+            .background(SaluColors.Cream)
     ) {
         SaluTopBar(
             title = "Messages",
@@ -453,7 +453,7 @@ private fun ConversationRow(conversation: ConversationSummary, onClick: () -> Un
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (unread) SaluColors.YellowSoft.copy(alpha = 0.45f) else Color.Transparent)
+            .background(if (unread) SaluColors.PaleGreen else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -467,7 +467,7 @@ private fun ConversationRow(conversation: ConversationSummary, onClick: () -> Un
                     style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold
                     ),
-                    color = SaluColors.Ink,
+                    color = SaluColors.DarkGreen,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
@@ -476,13 +476,13 @@ private fun ConversationRow(conversation: ConversationSummary, onClick: () -> Un
                 Text(
                     formatChatTime(conversation.lastMessageAt ?: conversation.createdAt),
                     style = SaluText.Meta,
-                    color = if (unread) SaluColors.PinkInk else SaluColors.InkMuted
+                    color = if (unread) SaluColors.Green else SaluColors.Gray
                 )
             }
             Text(
                 (if (conversation.isDonor) "Your listing: " else "About: ") + conversation.foodName,
                 style = SaluText.Meta,
-                color = SaluColors.AmberInk,
+                color = SaluColors.Green,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -494,7 +494,7 @@ private fun ConversationRow(conversation: ConversationSummary, onClick: () -> Un
                     style = SaluText.Supporting.copy(
                         fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal
                     ),
-                    color = if (unread) SaluColors.Ink else SaluColors.InkMuted,
+                    color = if (unread) SaluColors.DarkGreen else SaluColors.Gray,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)

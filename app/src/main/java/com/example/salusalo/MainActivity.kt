@@ -90,7 +90,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Sort
-import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
@@ -322,7 +321,7 @@ private fun SaluSaloApp() {
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = SaluColors.Background
+        color = SaluColors.Cream
     ) {
         // Under Home's white bottom bar, the system navigation area is white too.
         Box(
@@ -334,7 +333,7 @@ private fun SaluSaloApp() {
                 Modifier
                     .fillMaxWidth()
                     .windowInsetsBottomHeight(WindowInsets.navigationBars)
-                    .background(if (shownScreen == "home") Color.White else SaluColors.Background)
+                    .background(if (shownScreen == "home") Color.White else SaluColors.Cream)
             )
         }
 
@@ -348,7 +347,7 @@ private fun SaluSaloApp() {
                 targetState = shownScreen,
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(SaluColors.Background),
+                    .background(SaluColors.Cream),
                 transitionSpec = {
                     when {
                         initialState == "welcome" && targetState == "signup" ->
@@ -607,39 +606,49 @@ private val welcomePages = listOf(
     )
 )
 
-/** The loading screen while a signed-in account is set up: the mark, the name and a thin progress bar. */
+/**
+ * The loading screen while a signed-in account is set up: the original Salu-Salo
+ * logo and name on the app's cream, with a thin green progress bar. The logo
+ * settles in once, then breathes gently while the account loads.
+ */
 @Composable
 private fun StartupScreen() {
+    val entrance = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        entrance.animateTo(1f, tween(SaluMotion.LONG + 180, easing = SaluMotion.Emphasized))
+    }
     val transition = rememberInfiniteTransition(label = "startup")
     val breathe by transition.animateFloat(
-        initialValue = 0.97f,
-        targetValue = 1.03f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        initialValue = 0.98f,
+        targetValue = 1.02f,
+        animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Reverse),
         label = "startupBreathe"
     )
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SaluColors.Background)
+            .background(SaluColors.Cream)
             .padding(horizontal = 32.dp)
             .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        BrandMark(
-            size = 88.dp,
+        SaluLogo(
+            size = 104.dp,
             modifier = Modifier.graphicsLayer {
-                scaleX = breathe
-                scaleY = breathe
+                val grow = (0.92f + 0.08f * entrance.value) * breathe
+                scaleX = grow
+                scaleY = grow
+                alpha = entrance.value
             }
         )
         Spacer(Modifier.height(20.dp))
-        BrandWordmark()
+        BrandWordmark(style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(6.dp))
         Text(
             "Good food. Less waste. Stronger community.",
             style = SaluText.Supporting,
-            color = SaluColors.InkMuted,
+            color = SaluColors.Gray,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(32.dp))
@@ -647,11 +656,11 @@ private fun StartupScreen() {
             modifier = Modifier
                 .width(140.dp)
                 .clip(SaluRadius.Pill),
-            color = SaluColors.Yellow,
-            trackColor = SaluColors.Cream
+            color = SaluColors.Green,
+            trackColor = SaluColors.IconGreen
         )
         Spacer(Modifier.height(12.dp))
-        Text("Getting things ready…", style = SaluText.Meta, color = SaluColors.InkMuted)
+        Text("Getting things ready…", style = SaluText.Meta, color = SaluColors.Gray)
     }
 }
 
@@ -667,7 +676,7 @@ private fun WelcomeScreen(
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .background(SaluColors.Background)
+            .background(SaluColors.Cream)
     ) {
         val imageHeight = maxHeight * 0.34f
 
@@ -678,9 +687,9 @@ private fun WelcomeScreen(
                     .padding(start = 20.dp, end = 20.dp, top = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                BrandMark(34.dp)
+                SaluLogo(36.dp)
                 Spacer(Modifier.width(10.dp))
-                BrandWordmark(style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold))
+                BrandWordmark(style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
             }
 
             // Swipeable welcome pages
@@ -715,7 +724,7 @@ private fun WelcomeScreen(
                     Text(
                         text = page.title,
                         style = MaterialTheme.typography.headlineMedium,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         modifier = Modifier.semantics { heading() }
                     )
 
@@ -724,7 +733,7 @@ private fun WelcomeScreen(
                     Text(
                         text = page.body,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = SaluColors.InkMuted
+                        color = SaluColors.Gray
                     )
 
                     Spacer(Modifier.height(20.dp))
@@ -796,7 +805,7 @@ private fun WelcomeScreen(
                     Text(
                         "Already have an account? Sign in",
                         style = MaterialTheme.typography.labelLarge,
-                        color = SaluColors.GreenInk
+                        color = SaluColors.Green
                     )
                 }
             }
@@ -814,7 +823,8 @@ private fun FeatureCard(
     icon: ImageVector,
     modifier: Modifier
 ) {
-    SaluCard(modifier = modifier.heightIn(min = 120.dp)) {
+    // Pale green with a green icon circle, as the original welcome cards.
+    SaluCard(modifier = modifier.heightIn(min = 120.dp), color = SaluColors.PaleGreen, border = false) {
         Column(Modifier.padding(14.dp)) {
             IconBubble(icon, size = 36.dp, iconSize = 20.dp)
 
@@ -823,7 +833,7 @@ private fun FeatureCard(
             Text(
                 title,
                 style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, lineHeight = 19.sp),
-                color = SaluColors.Ink
+                color = SaluColors.DarkGreen
             )
 
             Spacer(Modifier.height(4.dp))
@@ -831,7 +841,7 @@ private fun FeatureCard(
             Text(
                 description,
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
-                color = SaluColors.InkMuted
+                color = SaluColors.Gray
             )
         }
     }
@@ -869,7 +879,7 @@ private fun SignInScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SaluColors.Background)
+            .background(SaluColors.Cream)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -880,9 +890,9 @@ private fun SignInScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            BrandMark(34.dp)
+            SaluLogo(36.dp)
             Spacer(Modifier.width(10.dp))
-            BrandWordmark(style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold))
+            BrandWordmark(style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
         }
 
         Spacer(Modifier.height(16.dp))
@@ -908,7 +918,7 @@ private fun SignInScreen(
                     Text(
                         "Reset password",
                         style = SaluText.ScreenTitle,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         modifier = Modifier.semantics { heading() }
                     )
 
@@ -917,7 +927,7 @@ private fun SignInScreen(
                     Text(
                         "Enter the email address linked to your account.",
                         style = SaluText.Body,
-                        color = SaluColors.InkMuted
+                        color = SaluColors.Gray
                     )
                 } else {
                     AuthModeSwitch(
@@ -996,8 +1006,8 @@ private fun SignInScreen(
                                     checked = keepSignedIn,
                                     onCheckedChange = null,
                                     colors = CheckboxDefaults.colors(
-                                        checkedColor = SaluColors.GreenInk,
-                                        uncheckedColor = SaluColors.Outline
+                                        checkedColor = SaluColors.Green,
+                                        uncheckedColor = SaluColors.Gray
                                     )
                                 )
 
@@ -1006,7 +1016,7 @@ private fun SignInScreen(
                                 Text(
                                     "Keep me signed in",
                                     style = SaluText.Supporting,
-                                    color = SaluColors.Ink
+                                    color = SaluColors.DarkGreen
                                 )
                             }
 
@@ -1017,7 +1027,7 @@ private fun SignInScreen(
                                 Text(
                                     "Forgot password?",
                                     style = SaluText.Supporting.copy(fontWeight = FontWeight.SemiBold),
-                                    color = SaluColors.GreenInk
+                                    color = SaluColors.Green
                                 )
                             }
                         }
@@ -1045,7 +1055,7 @@ private fun SignInScreen(
                             .align(Alignment.CenterHorizontally)
                             .heightIn(min = 48.dp)
                     ) {
-                        Text("Back to sign in", style = MaterialTheme.typography.labelLarge, color = SaluColors.GreenInk)
+                        Text("Back to sign in", style = MaterialTheme.typography.labelLarge, color = SaluColors.Green)
                     }
                 } else {
                     Spacer(Modifier.height(20.dp))
@@ -1062,7 +1072,7 @@ private fun SignInScreen(
                             "or continue with",
                             modifier = Modifier.padding(horizontal = 12.dp),
                             style = SaluText.Meta,
-                            color = SaluColors.InkMuted
+                            color = SaluColors.Gray
                         )
 
                         HorizontalDivider(
@@ -1096,7 +1106,7 @@ private fun SignInScreen(
             Icon(
                 Icons.Outlined.VerifiedUser,
                 contentDescription = null,
-                tint = SaluColors.GreenInk,
+                tint = SaluColors.Green,
                 modifier = Modifier.size(20.dp)
             )
 
@@ -1106,13 +1116,13 @@ private fun SignInScreen(
                 Text(
                     "Your safety matters",
                     style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp),
-                    color = SaluColors.Ink
+                    color = SaluColors.DarkGreen
                 )
 
                 Text(
                     "Agree on pickup details in the chat and check the food before you take it.",
                     style = SaluText.Supporting,
-                    color = SaluColors.InkMuted
+                    color = SaluColors.Gray
                 )
             }
         }
@@ -1132,7 +1142,7 @@ private fun AuthModeSwitch(
         modifier = Modifier
             .fillMaxWidth()
             .clip(SaluRadius.Control)
-            .background(SaluColors.Cream)
+            .background(SaluColors.PaleGreen)
             .padding(4.dp)
             .selectableGroup()
     ) {
@@ -1160,7 +1170,7 @@ private fun AuthModeSegment(
         Text(
             title,
             style = MaterialTheme.typography.labelLarge,
-            color = if (selected) SaluColors.Ink else SaluColors.InkMuted,
+            color = if (selected) SaluColors.Green else SaluColors.Gray,
             textAlign = TextAlign.Center
         )
     }
@@ -1212,7 +1222,7 @@ private fun InputField(
                             "Show password"
                         },
                         modifier = Modifier.size(21.dp),
-                        tint = SaluColors.InkMuted
+                        tint = SaluColors.Gray
                     )
                 }
             }
@@ -1242,13 +1252,12 @@ private fun CommunityCard() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(SaluRadius.Control)
-            .background(SaluColors.YellowSoft)
+            .background(SaluColors.PaleGreen)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconBubble(
             Icons.Outlined.Groups,
-            background = Color.White,
             size = 40.dp,
             iconSize = 22.dp
         )
@@ -1259,7 +1268,7 @@ private fun CommunityCard() {
             Text(
                 "One account for all your good deeds",
                 style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, lineHeight = 19.sp),
-                color = SaluColors.Ink
+                color = SaluColors.DarkGreen
             )
 
             Spacer(Modifier.height(2.dp))
@@ -1267,7 +1276,7 @@ private fun CommunityCard() {
             Text(
                 "Donate, sell, buy, and claim food — all from one simple account.",
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
-                color = SaluColors.InkMuted
+                color = SaluColors.Gray
             )
         }
     }
@@ -1289,10 +1298,10 @@ private fun GoogleButton(
             .heightIn(min = 52.dp)
             .pressScale(interaction),
         shape = SaluRadius.Control,
-        border = BorderStroke(1.dp, SaluColors.Outline.copy(alpha = 0.55f)),
+        border = BorderStroke(1.dp, SaluColors.Gray.copy(alpha = 0.55f)),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = Color.White,
-            contentColor = SaluColors.Ink
+            contentColor = SaluColors.DarkGreen
         ),
         interactionSource = interaction
     ) {
@@ -1620,7 +1629,7 @@ private fun HomeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SaluColors.Background)
+            .background(SaluColors.Cream)
     ) {
         Box(
             Modifier
@@ -1862,7 +1871,7 @@ private fun HomeScreen(
     if (filterHelp) {
         AlertDialog(
             onDismissRequest = { filterHelp = false },
-            icon = { Icon(Icons.Outlined.Tune, contentDescription = null, tint = SaluColors.AmberInk) },
+            icon = { Icon(Icons.Outlined.Tune, contentDescription = null, tint = SaluColors.Green) },
             title = { Text("About the filters") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1873,7 +1882,7 @@ private fun HomeScreen(
                     Text(
                         "Tap a filter to show only those listings. Sort puts the nearest or newest first.",
                         style = SaluText.Supporting,
-                        color = SaluColors.InkMuted
+                        color = SaluColors.Gray
                     )
                 }
             },
@@ -2016,7 +2025,7 @@ private class NavTab(val page: String, val label: String, val selectedIcon: Imag
 
 private val NavTabs = listOf(
     NavTab("home", "Home", Icons.Filled.Home, Icons.Outlined.Home),
-    NavTab("post", "Post", Icons.Filled.AddCircle, Icons.Outlined.AddCircleOutline),
+    NavTab("post", "Post", Icons.Outlined.Add, Icons.Outlined.Add),
     NavTab("alerts", "Alerts", Icons.Filled.Notifications, Icons.Outlined.Notifications),
     NavTab("activity", "Activity", Icons.Rounded.Timeline, Icons.Outlined.Timeline),
     NavTab("profile", "Profile", Icons.Filled.Person, Icons.Outlined.Person)
@@ -2028,9 +2037,13 @@ private fun MainNavigationBar(
     unreadAlerts: Int,
     onSelect: (String) -> Unit
 ) {
-    Surface(color = Color.White) {
+    // The original bar: white, rounded on top and lifted by a soft shadow.
+    Surface(
+        color = Color.White,
+        shadowElevation = 8.dp,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
         Column {
-            HorizontalDivider(color = SaluColors.Line)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2040,6 +2053,7 @@ private fun MainNavigationBar(
             ) {
                 NavTabs.forEach { tab ->
                     val isSelected = tab.page == selected
+                    val isPost = tab.page == "post"
                     val badge = if (tab.page == "alerts") unreadAlerts else 0
                     val interaction = remember { MutableInteractionSource() }
                     val indicatorAlpha by animateFloatAsState(
@@ -2075,28 +2089,42 @@ private fun MainNavigationBar(
                                 .clearAndSetSemantics { },
                             contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                Modifier
-                                    .size(width = indicatorWidth, height = 32.dp)
-                                    .graphicsLayer { alpha = indicatorAlpha }
-                                    .clip(SaluRadius.Pill)
-                                    .background(SaluColors.YellowSoft)
-                            )
-                            Box {
-                                Icon(
-                                    if (isSelected) tab.selectedIcon else tab.icon,
-                                    contentDescription = null,
-                                    tint = if (isSelected) SaluColors.Ink else SaluColors.InkMuted,
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .pressScale(interaction, pressedScale = 0.88f)
-                                )
-                                CountBadge(
-                                    badge,
+                            if (isPost) {
+                                // Post keeps the original green button with a white plus.
+                                Box(
                                     Modifier
-                                        .align(Alignment.TopEnd)
-                                        .offset(x = 9.dp, y = (-6).dp)
+                                        .pressScale(interaction, pressedScale = 0.9f)
+                                        .size(width = 40.dp, height = 30.dp)
+                                        .clip(RoundedCornerShape(9.dp))
+                                        .background(SaluColors.Green),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(tab.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                }
+                            } else {
+                                Box(
+                                    Modifier
+                                        .size(width = indicatorWidth, height = 32.dp)
+                                        .graphicsLayer { alpha = indicatorAlpha }
+                                        .clip(SaluRadius.Pill)
+                                        .background(SaluColors.IconGreen)
                                 )
+                                Box {
+                                    Icon(
+                                        if (isSelected) tab.selectedIcon else tab.icon,
+                                        contentDescription = null,
+                                        tint = if (isSelected) SaluColors.Green else SaluColors.Gray,
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .pressScale(interaction, pressedScale = 0.88f)
+                                    )
+                                    CountBadge(
+                                        badge,
+                                        Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 9.dp, y = (-6).dp)
+                                    )
+                                }
                             }
                         }
                         Spacer(Modifier.height(4.dp))
@@ -2106,7 +2134,7 @@ private fun MainNavigationBar(
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
                             ),
-                            color = if (isSelected) SaluColors.Ink else SaluColors.InkMuted,
+                            color = if (isSelected || isPost) SaluColors.Green else SaluColors.Gray,
                             maxLines = 1
                         )
                     }
@@ -2150,15 +2178,15 @@ private fun HomeHeader(
             Text(
                 greeting,
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = SaluColors.Ink,
+                color = SaluColors.DarkGreen,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.semantics { heading() }
             )
             Text(
-                "Make a difference today",
+                "Make a difference today 🌿",
                 style = SaluText.Supporting,
-                color = SaluColors.InkMuted
+                color = SaluColors.Gray
             )
         }
 
@@ -2191,7 +2219,7 @@ private fun HeaderIconButton(
         }
     ) {
         Box {
-            Icon(icon, contentDescription = null, tint = SaluColors.Ink, modifier = Modifier.size(24.dp))
+            Icon(icon, contentDescription = null, tint = SaluColors.DarkGreen, modifier = Modifier.size(24.dp))
             CountBadge(
                 count,
                 Modifier
@@ -2211,12 +2239,12 @@ private fun AllListingsHeader(onBack: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back to Home", tint = SaluColors.Ink)
+            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back to Home", tint = SaluColors.DarkGreen)
         }
         Text(
             "All food listings",
             style = SaluText.ScreenTitle,
-            color = SaluColors.Ink,
+            color = SaluColors.DarkGreen,
             modifier = Modifier.semantics { heading() }
         )
     }
@@ -2257,7 +2285,7 @@ private fun FeedSearchAndFilters(
                 trailingIcon = {
                     if (search.isNotEmpty()) {
                         IconButton(onClick = { onSearch("") }) {
-                            Icon(Icons.Outlined.Close, contentDescription = "Clear search", tint = SaluColors.InkMuted)
+                            Icon(Icons.Outlined.Close, contentDescription = "Clear search", tint = SaluColors.Gray)
                         }
                     }
                 },
@@ -2272,7 +2300,7 @@ private fun FeedSearchAndFilters(
                 Icon(
                     Icons.Outlined.Info,
                     contentDescription = "About the filters",
-                    tint = SaluColors.InkMuted
+                    tint = SaluColors.Gray
                 )
             }
         }
@@ -2324,17 +2352,18 @@ private fun PickedForYouSection(
             .padding(start = 12.dp, end = 12.dp, top = 20.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(SaluColors.YellowSoft.copy(alpha = 0.7f))
+            .background(SaluColors.PaleGreen)
             .padding(vertical = 16.dp)
     ) {
         SectionHeader(
             title = if (preferencesActive) "Picked for you" else "Just posted",
             subtitle = if (preferencesActive) "Matches your food preferences" else "The newest food in your community",
             icon = Icons.Outlined.AutoAwesome,
+            iconTint = SaluColors.Sparkle,
             modifier = Modifier.padding(start = 16.dp, end = 4.dp),
             action = {
                 TextButton(onClick = onBrowseAll) {
-                    Text("Browse all", style = MaterialTheme.typography.labelLarge, color = SaluColors.GreenInk)
+                    Text("Browse all", style = MaterialTheme.typography.labelLarge, color = SaluColors.Green)
                 }
             }
         )
@@ -2357,12 +2386,12 @@ private fun PickedForYouSection(
                         Column(Modifier.padding(16.dp)) {
                             IconBubble(Icons.Outlined.SearchOff, size = 36.dp, iconSize = 20.dp)
                             Spacer(Modifier.height(10.dp))
-                            Text("No matching food yet", style = SaluText.FoodTitle, color = SaluColors.Ink)
+                            Text("No matching food yet", style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 "You can still browse all listings below.",
                                 style = SaluText.Supporting,
-                                color = SaluColors.InkMuted
+                                color = SaluColors.Gray
                             )
                         }
                     }
@@ -2380,21 +2409,21 @@ private fun PickedForYouSection(
             item(key = "how-it-works") {
                 SaluCard(Modifier.width(196.dp)) {
                     Column(Modifier.padding(16.dp)) {
-                        IconBubble(Icons.Outlined.Eco, tint = SaluColors.GreenInk, background = SaluColors.GreenSoft, size = 36.dp, iconSize = 20.dp)
+                        IconBubble(Icons.Outlined.Eco, tint = SaluColors.Green, background = SaluColors.PaleGreen, size = 36.dp, iconSize = 20.dp)
                         Spacer(Modifier.height(10.dp))
                         Text(
                             "Help reduce food waste in your community.",
                             style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, lineHeight = 19.sp),
-                            color = SaluColors.Ink
+                            color = SaluColors.DarkGreen
                         )
                         Spacer(Modifier.height(8.dp))
                         TextButton(
                             onClick = onHowItWorks,
                             contentPadding = PaddingValues(horizontal = 0.dp)
                         ) {
-                            Text("Learn more", style = MaterialTheme.typography.labelLarge, color = SaluColors.GreenInk)
+                            Text("Learn more", style = MaterialTheme.typography.labelLarge, color = SaluColors.Green)
                             Spacer(Modifier.width(4.dp))
-                            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = SaluColors.GreenInk, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = SaluColors.Green, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -2425,15 +2454,15 @@ private fun FeedHeader(
                     Icon(
                         Icons.AutoMirrored.Outlined.Sort,
                         contentDescription = null,
-                        tint = SaluColors.Ink,
+                        tint = SaluColors.DarkGreen,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text(sort, style = MaterialTheme.typography.labelLarge, color = SaluColors.Ink)
+                    Text(sort, style = MaterialTheme.typography.labelLarge, color = SaluColors.DarkGreen)
                     Icon(
                         Icons.Outlined.ExpandMore,
                         contentDescription = null,
-                        tint = SaluColors.InkMuted,
+                        tint = SaluColors.Gray,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -2448,7 +2477,7 @@ private fun FeedHeader(
                             onClick = { onSort(option) },
                             trailingIcon = {
                                 if (option == sort) {
-                                    Icon(Icons.Outlined.Check, contentDescription = "Selected", tint = SaluColors.GreenInk)
+                                    Icon(Icons.Outlined.Check, contentDescription = "Selected", tint = SaluColors.Green)
                                 }
                             }
                         )
@@ -2480,8 +2509,8 @@ private fun FeedEmptyState(
             message = "Check your internet connection, then try again or pull down to refresh.",
             actionLabel = "Try again",
             onAction = onRetry,
-            tint = SaluColors.PinkInk,
-            iconBackground = SaluColors.PinkSoft,
+            tint = SaluColors.Error,
+            iconBackground = SaluColors.ErrorSoft,
             modifier = modifier
         )
 
@@ -2537,8 +2566,8 @@ private fun FilterHelpRow(icon: ImageVector, label: String, text: String) {
         IconBubble(icon, size = 32.dp, iconSize = 18.dp)
         Spacer(Modifier.width(12.dp))
         Column {
-            Text(label, style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp), color = SaluColors.Ink)
-            Text(text, style = SaluText.Supporting, color = SaluColors.InkMuted)
+            Text(label, style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp), color = SaluColors.DarkGreen)
+            Text(text, style = SaluText.Supporting, color = SaluColors.Gray)
         }
     }
 }
@@ -2648,7 +2677,7 @@ private fun RecommendationCard(
                 Text(
                     food.title,
                     style = SaluText.FoodTitle,
-                    color = SaluColors.Ink,
+                    color = SaluColors.DarkGreen,
                     minLines = 2,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
@@ -2658,7 +2687,7 @@ private fun RecommendationCard(
                     Icon(
                         Icons.Outlined.AutoAwesome,
                         contentDescription = null,
-                        tint = SaluColors.AmberInk,
+                        tint = SaluColors.Green,
                         modifier = Modifier
                             .padding(top = 1.dp)
                             .size(14.dp)
@@ -2667,7 +2696,7 @@ private fun RecommendationCard(
                     Text(
                         reason,
                         style = SaluText.Meta,
-                        color = SaluColors.AmberInk,
+                        color = SaluColors.Green,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -2679,7 +2708,7 @@ private fun RecommendationCard(
                         food.distanceMeters?.let { "${distanceLabel(it)} away" } ?: food.pickupLocation
                     ).joinToString(" · "),
                     style = SaluText.Meta,
-                    color = SaluColors.InkMuted,
+                    color = SaluColors.Gray,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -2694,7 +2723,7 @@ private fun PhotoPriceLabel(food: HomeFood, modifier: Modifier = Modifier) {
     Text(
         if (food.free) "Free" else "${food.price} / ${food.unitLabel}",
         style = SaluText.Meta.copy(fontWeight = FontWeight.Bold),
-        color = if (food.free) SaluColors.GreenInk else SaluColors.Ink,
+        color = if (food.free) SaluColors.Green else SaluColors.DarkGreen,
         maxLines = 1,
         modifier = modifier
             .clip(SaluRadius.Small)
@@ -2776,7 +2805,7 @@ private fun AvailableFoodCard(
                             .weight(1f)
                             .padding(top = 2.dp),
                         style = SaluText.FoodTitle,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -2796,11 +2825,11 @@ private fun AvailableFoodCard(
                         append(food.donorName)
                         food.donorRating?.let {
                             append("  ")
-                            withStyle(SpanStyle(color = SaluColors.AmberInk, fontWeight = FontWeight.SemiBold)) { append(it) }
+                            withStyle(SpanStyle(color = SaluColors.Green, fontWeight = FontWeight.SemiBold)) { append(it) }
                         }
                     },
                     style = SaluText.Supporting,
-                    color = SaluColors.InkMuted,
+                    color = SaluColors.Gray,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -2813,7 +2842,7 @@ private fun AvailableFoodCard(
                     Text(
                         "${food.quantity} available",
                         style = SaluText.Meta,
-                        color = SaluColors.InkMuted,
+                        color = SaluColors.Gray,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -2826,14 +2855,15 @@ private fun AvailableFoodCard(
                         MetaItem(
                             icon = if (food.urgent) Icons.Outlined.HourglassBottom else Icons.Outlined.Schedule,
                             text = expires,
-                            color = if (food.urgent) SaluColors.PinkInk else SaluColors.InkMuted
+                            color = if (food.urgent) SaluColors.DarkGreen else SaluColors.Gray,
+                            iconTint = if (food.urgent) SaluColors.Urgent else SaluColors.Gray
                         )
                         Spacer(Modifier.width(12.dp))
                     }
                     MetaItem(
                         icon = Icons.Outlined.LocationOn,
                         text = food.distanceMeters?.let { "${distanceLabel(it)} away" } ?: food.pickupLocation,
-                        color = SaluColors.InkMuted,
+                        color = SaluColors.Gray,
                         modifier = Modifier.weight(1f, fill = false)
                     )
                 }
@@ -2848,10 +2878,11 @@ private fun MetaItem(
     icon: ImageVector,
     text: String,
     color: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    iconTint: Color = color
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(15.dp))
+        Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(4.dp))
         Text(
             text,
@@ -2865,7 +2896,7 @@ private fun MetaItem(
 
 /** The bookmark icon; it pops briefly when the saved state changes. */
 @Composable
-private fun SaveToggleIcon(saved: Boolean, title: String, tint: Color = SaluColors.InkMuted) {
+private fun SaveToggleIcon(saved: Boolean, title: String, tint: Color = SaluColors.Gray) {
     val scale = remember { Animatable(1f) }
     var shown by remember { mutableStateOf(saved) }
     LaunchedEffect(saved) {
@@ -2878,7 +2909,7 @@ private fun SaveToggleIcon(saved: Boolean, title: String, tint: Color = SaluColo
     Icon(
         imageVector = if (saved) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
         contentDescription = if (saved) "Remove saved $title" else "Save $title",
-        tint = if (saved) SaluColors.Pink else tint,
+        tint = if (saved) SaluColors.Green else tint,
         modifier = Modifier
             .size(24.dp)
             .graphicsLayer {
@@ -3066,7 +3097,7 @@ private fun FoodDetailsScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = SaluColors.Background
+        color = SaluColors.Cream
     ) {
         Column(Modifier.fillMaxSize()) {
             Column(
@@ -3143,7 +3174,7 @@ private fun FoodDetailsScreen(
                             modifier = Modifier.size(44.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = Color.White,
-                                contentColor = SaluColors.Ink
+                                contentColor = SaluColors.DarkGreen
                             )
                         ) {
                             Icon(
@@ -3160,10 +3191,10 @@ private fun FoodDetailsScreen(
                             modifier = Modifier.size(44.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = Color.White,
-                                contentColor = SaluColors.Ink
+                                contentColor = SaluColors.DarkGreen
                             )
                         ) {
-                            SaveToggleIcon(saved = saved, title = food.title, tint = SaluColors.Ink)
+                            SaveToggleIcon(saved = saved, title = food.title, tint = SaluColors.DarkGreen)
                         }
                     }
                 }
@@ -3179,10 +3210,10 @@ private fun FoodDetailsScreen(
                         Text(
                             post.category,
                             style = SaluText.Status,
-                            color = SaluColors.InkMuted,
+                            color = SaluColors.Gray,
                             modifier = Modifier
                                 .clip(SaluRadius.Pill)
-                                .background(SaluColors.Cream)
+                                .background(SaluColors.PaleGreen)
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         )
                     }
@@ -3192,7 +3223,7 @@ private fun FoodDetailsScreen(
                     Text(
                         food.title,
                         style = SaluText.ScreenTitle,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         modifier = Modifier.semantics { heading() }
                     )
 
@@ -3215,7 +3246,7 @@ private fun FoodDetailsScreen(
                                 Text(
                                     food.donorName,
                                     style = SaluText.FoodTitle,
-                                    color = SaluColors.Ink,
+                                    color = SaluColors.DarkGreen,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -3225,7 +3256,7 @@ private fun FoodDetailsScreen(
                                         append(" · ")
                                         val rating = food.donorRating
                                         if (rating != null) {
-                                            withStyle(SpanStyle(color = SaluColors.AmberInk, fontWeight = FontWeight.SemiBold)) {
+                                            withStyle(SpanStyle(color = SaluColors.Green, fontWeight = FontWeight.SemiBold)) {
                                                 append(rating)
                                             }
                                         } else {
@@ -3233,7 +3264,7 @@ private fun FoodDetailsScreen(
                                         }
                                     },
                                     style = SaluText.Supporting,
-                                    color = SaluColors.InkMuted
+                                    color = SaluColors.Gray
                                 )
                                 if (post.donorEmailVerified) {
                                     Row(
@@ -3243,11 +3274,11 @@ private fun FoodDetailsScreen(
                                         Icon(
                                             Icons.Outlined.Verified,
                                             contentDescription = null,
-                                            tint = SaluColors.GreenInk,
+                                            tint = SaluColors.Green,
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Spacer(Modifier.width(4.dp))
-                                        Text("Email verified", style = SaluText.Meta, color = SaluColors.GreenInk)
+                                        Text("Email verified", style = SaluText.Meta, color = SaluColors.Green)
                                     }
                                 }
                             }
@@ -3264,7 +3295,7 @@ private fun FoodDetailsScreen(
                                 Icon(
                                     Icons.Outlined.ChevronRight,
                                     contentDescription = null,
-                                    tint = SaluColors.InkMuted
+                                    tint = SaluColors.Gray
                                 )
                             }
                         }
@@ -3278,7 +3309,7 @@ private fun FoodDetailsScreen(
                             .fillMaxWidth()
                             .height(IntrinsicSize.Min)
                             .clip(SaluRadius.Card)
-                            .background(SaluColors.Cream.copy(alpha = 0.7f))
+                            .background(SaluColors.PaleGreen)
                             .padding(vertical = 14.dp)
                     ) {
                         KeyFact(
@@ -3293,7 +3324,7 @@ private fun FoodDetailsScreen(
                             value = food.price,
                             caption = if (donation) "Donation" else "Per ${food.unitLabel}",
                             modifier = Modifier.weight(1f),
-                            valueColor = if (donation) SaluColors.GreenInk else SaluColors.Ink
+                            valueColor = if (donation) SaluColors.Green else SaluColors.DarkGreen
                         )
                         KeyFactDivider()
                         KeyFact(
@@ -3301,7 +3332,7 @@ private fun FoodDetailsScreen(
                             value = expires,
                             caption = "Expires",
                             modifier = Modifier.weight(1f),
-                            valueColor = if (food.urgent) SaluColors.PinkInk else SaluColors.Ink
+                            iconTint = if (food.urgent) SaluColors.Urgent else SaluColors.Green
                         )
                     }
 
@@ -3312,7 +3343,7 @@ private fun FoodDetailsScreen(
                             description,
                             modifier = Modifier.smoothSize(),
                             style = SaluText.Body,
-                            color = if (food.description == null) SaluColors.InkMuted else SaluColors.Ink,
+                            color = if (food.description == null) SaluColors.Gray else SaluColors.DarkGreen,
                             maxLines = if (expanded) Int.MAX_VALUE else 4,
                             overflow = TextOverflow.Ellipsis,
                             onTextLayout = { layout -> if (!expanded) descriptionOverflows = layout.hasVisualOverflow }
@@ -3326,7 +3357,7 @@ private fun FoodDetailsScreen(
                             Text(
                                 if (expanded) "Read less" else "Read more",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = SaluColors.GreenInk
+                                color = SaluColors.Green
                             )
 
                             Icon(
@@ -3336,7 +3367,7 @@ private fun FoodDetailsScreen(
                                     Icons.Outlined.ExpandMore
                                 },
                                 contentDescription = null,
-                                tint = SaluColors.GreenInk,
+                                tint = SaluColors.Green,
                                 modifier = Modifier.size(19.dp)
                             )
                         }
@@ -3414,7 +3445,7 @@ private fun FoodDetailsScreen(
                             "Tap a detail to ask the $role about it in the chat."
                         },
                         style = SaluText.Meta,
-                        color = SaluColors.InkMuted
+                        color = SaluColors.Gray
                     )
 
                     if (!isOwnFood) {
@@ -3427,14 +3458,14 @@ private fun FoodDetailsScreen(
                             Icon(
                                 Icons.Outlined.Flag,
                                 contentDescription = null,
-                                tint = SaluColors.PinkInk,
+                                tint = SaluColors.Error,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 "Report this listing",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = SaluColors.PinkInk
+                                color = SaluColors.Error
                             )
                         }
                     }
@@ -3457,7 +3488,7 @@ private fun FoodDetailsScreen(
                                 icon = Icons.Outlined.Info
                             )
                         } else {
-                            Text(payLine, style = SaluText.Supporting, color = SaluColors.Ink)
+                            Text(payLine, style = SaluText.Supporting, color = SaluColors.DarkGreen)
 
                             Spacer(Modifier.height(10.dp))
 
@@ -3526,7 +3557,8 @@ private fun KeyFact(
     value: String,
     caption: String,
     modifier: Modifier,
-    valueColor: Color = SaluColors.Ink
+    valueColor: Color = SaluColors.DarkGreen,
+    iconTint: Color = SaluColors.Green
 ) {
     Column(
         modifier = modifier
@@ -3534,7 +3566,7 @@ private fun KeyFact(
             .padding(horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(icon, contentDescription = null, tint = SaluColors.AmberInk, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
         Spacer(Modifier.height(6.dp))
         Text(
             value,
@@ -3549,7 +3581,7 @@ private fun KeyFact(
             caption,
             modifier = Modifier.padding(top = 4.dp),
             style = SaluText.Meta,
-            color = SaluColors.InkMuted,
+            color = SaluColors.Gray,
             textAlign = TextAlign.Center
         )
     }
@@ -3562,7 +3594,7 @@ private fun KeyFactDivider() {
             .fillMaxHeight()
             .padding(vertical = 4.dp)
             .width(1.dp)
-            .background(SaluColors.CreamDeep)
+            .background(SaluColors.Line)
     )
 }
 
@@ -3573,7 +3605,7 @@ private fun DetailSection(title: String, content: @Composable ColumnScope.() -> 
         Text(
             title,
             style = SaluText.SectionTitle,
-            color = SaluColors.Ink,
+            color = SaluColors.DarkGreen,
             modifier = Modifier.semantics { heading() }
         )
         Spacer(Modifier.height(8.dp))
@@ -3605,8 +3637,6 @@ private fun DetailRow(
     ) {
         IconBubble(
             icon,
-            tint = SaluColors.Ink,
-            background = SaluColors.Cream,
             size = 36.dp,
             iconSize = 19.dp
         )
@@ -3614,19 +3644,19 @@ private fun DetailRow(
         Spacer(Modifier.width(12.dp))
 
         Column(Modifier.weight(1f)) {
-            Text(label, style = SaluText.Meta, color = SaluColors.InkMuted)
+            Text(label, style = SaluText.Meta, color = SaluColors.Gray)
             Spacer(Modifier.height(2.dp))
             Text(
                 value,
                 style = SaluText.Body,
-                color = if (missing) SaluColors.InkMuted else SaluColors.Ink
+                color = if (missing) SaluColors.Gray else SaluColors.DarkGreen
             )
         }
 
         Icon(
             trailing,
             contentDescription = null,
-            tint = SaluColors.InkMuted,
+            tint = SaluColors.Gray,
             modifier = Modifier
                 .padding(start = 8.dp, top = 8.dp)
                 .size(18.dp)
@@ -3646,7 +3676,7 @@ private fun QuantityStepper(
     Row(
         modifier = Modifier
             .clip(SaluRadius.Control)
-            .background(SaluColors.Cream)
+            .background(SaluColors.PaleGreen)
             .semantics(mergeDescendants = false) {
                 stateDescription = "$quantity of $available $unit"
             },
@@ -3667,7 +3697,7 @@ private fun QuantityStepper(
             modifier = Modifier.widthIn(min = 28.dp),
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.titleMedium,
-            color = SaluColors.Ink
+            color = SaluColors.DarkGreen
         )
 
         IconButton(

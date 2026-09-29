@@ -55,10 +55,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 
-private val SectionGreen = SaluColors.GreenInk
-private val SectionCream = SaluColors.Background
-private val SectionPale = SaluColors.YellowSoft
-private val SectionDark = SaluColors.Ink
+private val SectionGreen = SaluColors.Green
+private val SectionCream = SaluColors.Cream
+private val SectionPale = SaluColors.PaleGreen
+private val SectionDark = SaluColors.DarkGreen
 
 @Composable
 fun ProfileSections(
@@ -283,7 +283,7 @@ fun ProfileSections(
 
                                     SectionCard {
                                         StatusBadge(SaluStatus.Claimed)
-                                        Text(post.name, style = SaluText.FoodTitle, color = SaluColors.Ink)
+                                        Text(post.name, style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
                                         Text(successRecordLines(entry, showRecipient = donation != null))
                                         Text("Pickup location: ${post.pickupLocation}", fontSize = 12.sp)
                                     }
@@ -453,7 +453,7 @@ fun ProfileSections(
                                 Text(
                                     "Listings you bookmarked, newest first.",
                                     style = SaluText.Supporting,
-                                    color = SaluColors.InkMuted
+                                    color = SaluColors.Gray
                                 )
 
                                 when {
@@ -475,9 +475,7 @@ fun ProfileSections(
                                             icon = Icons.Outlined.BookmarkBorder,
                                             title = "You have no saved listings yet",
                                             message = "Tap the bookmark on a listing to save it here.",
-                                            tint = SaluColors.PinkInk,
-                                            iconBackground = SaluColors.PinkSoft
-                                        )
+                                                                                    )
                                 }
 
                                 savedRows.forEach { row ->
@@ -503,27 +501,27 @@ fun ProfileSections(
                                                 Text(
                                                     post?.name ?: row.fallbackName ?: "Saved listing",
                                                     style = SaluText.FoodTitle,
-                                                    color = SaluColors.Ink
+                                                    color = SaluColors.DarkGreen
                                                 )
                                                 if (post != null) {
                                                     Text(
                                                         post.donorName?.takeIf { it.isNotBlank() }
                                                             ?: "Donor name unavailable",
                                                         style = SaluText.Supporting,
-                                                        color = SaluColors.InkMuted
+                                                        color = SaluColors.Gray
                                                     )
                                                     Text(
                                                         "${post.quantity} ${post.unit} • " +
                                                                 if (post.price > 0) formatPeso(post.price) else "Free",
                                                         style = SaluText.Meta,
-                                                        color = SaluColors.Ink
+                                                        color = SaluColors.DarkGreen
                                                     )
                                                 }
                                                 if (!available) {
                                                     Text(
                                                         "No longer available",
                                                         style = SaluText.Status,
-                                                        color = SaluColors.PinkInk
+                                                        color = SaluColors.Error
                                                     )
                                                 }
                                             }
@@ -542,7 +540,7 @@ fun ProfileSections(
                                             TextButton(
                                                 onClick = { savedListingViewModel.remove(row.foodPostId) }
                                             ) {
-                                                Text("Remove", color = SaluColors.PinkInk)
+                                                Text("Remove", color = SaluColors.Error)
                                             }
                                         }
                                     }
@@ -552,7 +550,7 @@ fun ProfileSections(
                             "notifications" -> {
                                 SectionCard {
                                     if (serverPreferences == null) {
-                                        Text("Alert preferences have not loaded yet.", style = SaluText.Body, color = SaluColors.InkMuted)
+                                        Text("Alert preferences have not loaded yet.", style = SaluText.Body, color = SaluColors.Gray)
                                         TextButton(onClick = { notificationViewModel.loadPreferences() }) { Text("Retry") }
                                     } else {
                                         SectionToggle(
@@ -902,14 +900,14 @@ private fun SectionLink(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = SaluText.FoodTitle, color = SaluColors.Ink)
+                Text(title, style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
                 Spacer(Modifier.height(4.dp))
-                Text(subtitle, style = SaluText.Supporting, color = SaluColors.InkMuted)
+                Text(subtitle, style = SaluText.Supporting, color = SaluColors.Gray)
             }
             Icon(
                 Icons.Outlined.ChevronRight,
                 contentDescription = null,
-                tint = SaluColors.InkMuted
+                tint = SaluColors.Gray
             )
         }
     }
@@ -936,7 +934,7 @@ private fun SectionToggle(
             title,
             modifier = Modifier.weight(1f),
             style = SaluText.Body.copy(fontSize = 15.sp),
-            color = SaluColors.Ink
+            color = SaluColors.DarkGreen
         )
         Switch(checked = checked, onCheckedChange = onChange)
     }
@@ -958,7 +956,7 @@ private fun SavedFallbackPhoto(imageUrl: String?, name: String?) {
             onError = { imageFailed = true }
         )
     } else {
-        Box(modifier.background(SaluColors.Cream))
+        Box(modifier.background(SaluColors.PaleGreen))
     }
 }
 

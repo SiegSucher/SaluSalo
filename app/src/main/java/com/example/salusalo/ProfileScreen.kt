@@ -176,7 +176,7 @@ fun ProfileScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SaluColors.Background)
+            .background(SaluColors.Cream)
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -189,7 +189,7 @@ fun ProfileScreen(
                     .align(Alignment.TopEnd)
                     .offset(x = 8.dp)
             ) {
-                Icon(Icons.Outlined.Settings, "Settings", tint = SaluColors.Ink)
+                Icon(Icons.Outlined.Settings, "Settings", tint = SaluColors.DarkGreen)
             }
 
             Column(
@@ -218,7 +218,7 @@ fun ProfileScreen(
                                 Modifier
                                     .align(Alignment.Center)
                                     .size(30.dp),
-                                color = SaluColors.GreenInk
+                                color = SaluColors.Green
                             )
                         }
                     }
@@ -229,8 +229,8 @@ fun ProfileScreen(
                             .align(Alignment.BottomEnd)
                             .size(40.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = SaluColors.Yellow,
-                            contentColor = SaluColors.Ink
+                            containerColor = SaluColors.Green,
+                            contentColor = Color.White
                         )
                     ) { Icon(Icons.Outlined.PhotoCamera, "Change profile photo", Modifier.size(20.dp)) }
                 }
@@ -244,11 +244,11 @@ fun ProfileScreen(
                             .weight(1f, fill = false)
                             .semantics { heading() },
                         style = SaluText.ScreenTitle,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         textAlign = TextAlign.Center
                     )
                     IconButton(onClick = { page = "edit_profile" }, enabled = remoteProfile != null) {
-                        Icon(Icons.Outlined.Edit, "Edit profile", tint = SaluColors.GreenInk, modifier = Modifier.size(21.dp))
+                        Icon(Icons.Outlined.Edit, "Edit profile", tint = SaluColors.Green, modifier = Modifier.size(21.dp))
                     }
                 }
 
@@ -259,12 +259,12 @@ fun ProfileScreen(
                 Text(
                     remoteProfile?.bio?.takeIf { it.isNotBlank() } ?: "Add a little about yourself using the pencil.",
                     style = SaluText.Body,
-                    color = if (remoteProfile?.bio.isNullOrBlank()) SaluColors.InkMuted else SaluColors.Ink,
+                    color = if (remoteProfile?.bio.isNullOrBlank()) SaluColors.Gray else SaluColors.DarkGreen,
                     textAlign = TextAlign.Center
                 )
 
                 TextButton(onClick = { page = "membership" }) {
-                    Text("Member since $memberSince", style = SaluText.Meta, color = SaluColors.InkMuted)
+                    Text("Member since $memberSince", style = SaluText.Meta, color = SaluColors.Gray)
                 }
             }
         }
@@ -323,10 +323,10 @@ fun ProfileScreen(
                             .weight(1f)
                             .semantics { heading() },
                         style = SaluText.SectionTitle,
-                        color = SaluColors.Ink
+                        color = SaluColors.DarkGreen
                     )
                     TextButton(onClick = { page = "reviews" }) {
-                        Text("View all", style = MaterialTheme.typography.labelLarge, color = SaluColors.GreenInk)
+                        Text("View all", style = MaterialTheme.typography.labelLarge, color = SaluColors.Green)
                     }
                 }
                 val recent = receivedReviews
@@ -338,7 +338,7 @@ fun ProfileScreen(
                             tone = NoticeTone.Error
                         )
                         TextButton(onClick = { loadReviews() }) {
-                            Text("Try again", color = SaluColors.GreenInk)
+                            Text("Try again", color = SaluColors.Green)
                         }
                     }
                     recent == null -> SkeletonGroup(description = "Loading your reviews") {
@@ -352,11 +352,11 @@ fun ProfileScreen(
                     ) {
                         IconBubble(Icons.Outlined.StarOutline, size = 44.dp, iconSize = 24.dp)
                         Spacer(Modifier.height(8.dp))
-                        Text("No reviews yet", style = SaluText.FoodTitle, color = SaluColors.Ink)
+                        Text("No reviews yet", style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
                         Text(
                             "Reviews from people who picked up your food appear here.",
                             style = SaluText.Supporting,
-                            color = SaluColors.InkMuted,
+                            color = SaluColors.Gray,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -405,12 +405,12 @@ fun ProfileScreen(
                 .fillMaxWidth()
                 .heightIn(min = 52.dp),
             shape = SaluRadius.Control,
-            border = BorderStroke(1.dp, SaluColors.PinkInk.copy(alpha = 0.5f)),
+            border = BorderStroke(1.dp, SaluColors.Error.copy(alpha = 0.5f)),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)
         ) {
-            Icon(Icons.AutoMirrored.Outlined.Logout, null, tint = SaluColors.PinkInk)
+            Icon(Icons.AutoMirrored.Outlined.Logout, null, tint = SaluColors.Error)
             Spacer(Modifier.width(8.dp))
-            Text("Log out", style = MaterialTheme.typography.labelLarge, color = SaluColors.PinkInk)
+            Text("Log out", style = MaterialTheme.typography.labelLarge, color = SaluColors.Error)
         }
     }
 
@@ -462,7 +462,7 @@ private fun VerificationChip(verified: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .padding(top = 2.dp)
             .clip(SaluRadius.Pill)
-            .background(if (verified) SaluColors.GreenSoft else SaluColors.Cream)
+            .background(if (verified) SaluColors.PaleGreen else SaluColors.Neutral)
             .clickable(role = Role.Button, onClickLabel = "Open email verification", onClick = onClick)
             .heightIn(min = 36.dp)
             .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -471,14 +471,14 @@ private fun VerificationChip(verified: Boolean, onClick: () -> Unit) {
         Icon(
             if (verified) Icons.Outlined.Verified else Icons.Outlined.MarkEmailUnread,
             contentDescription = null,
-            tint = if (verified) SaluColors.GreenInk else SaluColors.InkMuted,
+            tint = if (verified) SaluColors.Green else SaluColors.Gray,
             modifier = Modifier.size(16.dp)
         )
         Spacer(Modifier.width(6.dp))
         Text(
             if (verified) "Email verified" else "Email not verified · Verify",
             style = SaluText.Meta.copy(fontSize = 13.sp),
-            color = if (verified) SaluColors.GreenInk else SaluColors.Ink
+            color = if (verified) SaluColors.Green else SaluColors.DarkGreen
         )
     }
 }
@@ -500,7 +500,7 @@ private fun ProfileStat(
             .padding(vertical = 10.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(icon, contentDescription = null, tint = SaluColors.AmberInk, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, tint = SaluColors.Green, modifier = Modifier.size(18.dp))
         Spacer(Modifier.height(4.dp))
         if (loading) {
             SkeletonGroup(description = "Loading $label") {
@@ -511,9 +511,9 @@ private fun ProfileStat(
                 )
             }
         } else {
-            Text(value, style = MaterialTheme.typography.titleLarge, color = SaluColors.Ink, maxLines = 1)
+            Text(value, style = MaterialTheme.typography.titleLarge, color = SaluColors.DarkGreen, maxLines = 1)
         }
-        Text(label, style = SaluText.Meta, color = SaluColors.InkMuted, maxLines = 1)
+        Text(label, style = SaluText.Meta, color = SaluColors.Gray, maxLines = 1)
     }
 }
 
@@ -548,7 +548,7 @@ private fun ProfileMenuRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconBubble(icon, tint = SaluColors.Ink, background = SaluColors.Cream, size = 36.dp, iconSize = 19.dp)
+        IconBubble(icon, size = 36.dp, iconSize = 19.dp)
 
         Spacer(Modifier.width(14.dp))
 
@@ -556,19 +556,19 @@ private fun ProfileMenuRow(
             Text(
                 title,
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
-                color = SaluColors.Ink
+                color = SaluColors.DarkGreen
             )
             Text(
                 subtitle,
                 style = SaluText.Supporting,
-                color = SaluColors.InkMuted
+                color = SaluColors.Gray
             )
         }
 
         Icon(
             Icons.Outlined.ChevronRight,
             contentDescription = null,
-            tint = SaluColors.InkMuted,
+            tint = SaluColors.Gray,
             modifier = Modifier.size(20.dp)
         )
     }

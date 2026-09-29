@@ -38,8 +38,8 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 
-private val PhotoTile = SaluColors.Cream
-private val PhotoTileText = SaluColors.InkMuted
+private val PhotoTile = SaluColors.PaleGreen
+private val PhotoTileText = SaluColors.Gray
 
 /**
  * A listing photo from its 1-hour signed URL, with the same fallbacks
@@ -140,7 +140,7 @@ internal fun FullScreenPhotos(
                     .size(42.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = Color.White,
-                    contentColor = SaluColors.Ink
+                    contentColor = SaluColors.DarkGreen
                 )
             ) {
                 Icon(Icons.Outlined.Close, contentDescription = "Close photos")

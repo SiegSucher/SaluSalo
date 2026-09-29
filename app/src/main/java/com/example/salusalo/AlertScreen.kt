@@ -56,15 +56,15 @@ private class AlertStyle(val icon: ImageVector, val tint: Color, val background:
 
 private fun NotificationType.style(): AlertStyle = when (this) {
     NotificationType.MESSAGE ->
-        AlertStyle(Icons.Outlined.ChatBubbleOutline, SaluColors.Ink, SaluColors.Cream, "Message")
+        AlertStyle(Icons.Outlined.ChatBubbleOutline, SaluColors.Green, SaluColors.PaleGreen, "Message")
     NotificationType.RESERVATION_CREATED ->
-        AlertStyle(Icons.Outlined.BookmarkAdded, SaluColors.AmberInk, SaluColors.YellowSoft, "New reservation")
+        AlertStyle(Icons.Outlined.BookmarkAdded, SaluColors.Orange, SaluColors.OrangeSoft, "New reservation")
     NotificationType.RESERVATION_CANCELLED ->
-        AlertStyle(Icons.Outlined.EventBusy, SaluColors.PinkInk, SaluColors.PinkSoft, "Cancelled")
+        AlertStyle(Icons.Outlined.EventBusy, SaluColors.Error, SaluColors.ErrorSoft, "Cancelled")
     NotificationType.RESERVATION_CLAIMED ->
-        AlertStyle(Icons.Outlined.TaskAlt, SaluColors.GreenInk, SaluColors.GreenSoft, "Claimed")
+        AlertStyle(Icons.Outlined.TaskAlt, Color.White, SaluColors.Green, "Claimed")
     NotificationType.RESERVATION_REMOVED ->
-        AlertStyle(Icons.Outlined.RemoveCircleOutline, SaluColors.InkMuted, SaluColors.Cream, "Listing removed")
+        AlertStyle(Icons.Outlined.RemoveCircleOutline, SaluColors.Gray, SaluColors.Neutral, "Listing removed")
 }
 
 /**
@@ -104,7 +104,7 @@ fun AlertsScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(SaluColors.Background),
+            .background(SaluColors.Cream),
         contentPadding = PaddingValues(
             top = 16.dp,
             bottom = 24.dp
@@ -119,14 +119,14 @@ fun AlertsScreen(
                     Text(
                         "Alerts",
                         style = SaluText.ScreenTitle,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         modifier = Modifier.semantics { heading() }
                     )
 
                     Text(
                         "Messages and updates on your reservations",
                         style = SaluText.Supporting,
-                        color = SaluColors.InkMuted
+                        color = SaluColors.Gray
                     )
                 }
 
@@ -139,7 +139,7 @@ fun AlertsScreen(
                     Icon(
                         Icons.Outlined.Settings,
                         contentDescription = "Alert settings",
-                        tint = SaluColors.Ink
+                        tint = SaluColors.DarkGreen
                     )
                 }
             }
@@ -180,7 +180,7 @@ fun AlertsScreen(
                     if (unreadShown == 0) "All caught up" else "$unreadShown unread",
                     modifier = Modifier.weight(1f),
                     style = SaluText.Meta,
-                    color = if (unreadShown == 0) SaluColors.InkMuted else SaluColors.PinkInk
+                    color = if (unreadShown == 0) SaluColors.Gray else SaluColors.Green
                 )
 
                 TextButton(
@@ -267,7 +267,7 @@ fun AlertsScreen(
                                 "These settings are saved to your account. " +
                                 "Messages still arrive in Messages when message alerts are off.",
                         style = SaluText.Supporting,
-                        color = SaluColors.InkMuted
+                        color = SaluColors.Gray
                     )
 
                     Spacer(Modifier.height(12.dp))
@@ -352,7 +352,7 @@ private fun AlertRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(shape)
-                .background(if (unread) SaluColors.YellowSoft.copy(alpha = 0.55f) else Color.White)
+                .background(if (unread) SaluColors.PaleGreen else Color.White)
                 .clickable(onClick = onClick)
                 .semantics { stateDescription = if (unread) "Unread" else "Read" }
                 .padding(14.dp),
@@ -375,7 +375,7 @@ private fun AlertRow(
                             lineHeight = 20.sp,
                             fontWeight = if (unread) FontWeight.Bold else FontWeight.Medium
                         ),
-                        color = SaluColors.Ink
+                        color = SaluColors.DarkGreen
                     )
 
                     Spacer(Modifier.width(8.dp))
@@ -383,7 +383,7 @@ private fun AlertRow(
                     Text(
                         formatAlertTime(alert.createdAt),
                         style = SaluText.Meta,
-                        color = if (unread) SaluColors.PinkInk else SaluColors.InkMuted
+                        color = if (unread) SaluColors.Green else SaluColors.Gray
                     )
 
                     if (unread) {
@@ -392,7 +392,7 @@ private fun AlertRow(
                                 .padding(start = 6.dp, top = 5.dp)
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(SaluColors.Pink)
+                                .background(SaluColors.Orange)
                         )
                     }
                 }
@@ -400,7 +400,7 @@ private fun AlertRow(
                 Text(
                     alert.body,
                     style = SaluText.Supporting,
-                    color = SaluColors.InkMuted,
+                    color = SaluColors.Gray,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -442,7 +442,7 @@ private fun AlertSettingRow(
             title,
             modifier = Modifier.weight(1f),
             style = SaluText.Body,
-            color = SaluColors.Ink
+            color = SaluColors.DarkGreen
         )
 
         Switch(

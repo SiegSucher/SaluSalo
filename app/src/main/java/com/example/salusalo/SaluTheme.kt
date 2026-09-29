@@ -1,5 +1,7 @@
 package com.example.salusalo
 
+import android.graphics.drawable.BitmapDrawable
+import android.util.DisplayMetrics
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.CubicBezierEasing
@@ -12,6 +14,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -28,7 +31,6 @@ import androidx.compose.material.icons.outlined.HourglassBottom
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.TaskAlt
-import androidx.compose.material.icons.rounded.RiceBowl
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,9 +41,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -62,35 +69,50 @@ import coil3.compose.AsyncImage
  * Salu-Salo's design tokens and shared components. Every screen takes its
  * colours, type, shapes and motion from here, so the app looks like one app.
  *
- * Brand colours: yellow #F8C163 (primary actions and selection), background
- * #FFF8ED, cream #F6EBD7 (fields, chips, skeletons), green #338C28 (free,
- * available, verified) and pink #D62F6B (unread, saved, urgent). Small green
- * and pink text uses the darker "ink" shades, which pass 4.5:1 on white and on
- * the soft tints; text on yellow is always Ink.
+ * The colours are Salu-Salo's original palette, exactly as the app used it
+ * before the UI refresh: brand green #47782E, dark green #263C29, cream
+ * #FCFBF6, pale green #F3F6E8, icon green #E4EDC9, grey #666873 and line
+ * #E3E4E7, with the original orange, gold and red accents. They are fixed
+ * brand colours; the refresh changes layout, type and components, not these.
+ * The only additions are see-through tints of them (the ...Soft values).
  */
 internal object SaluColors {
-    val Yellow = Color(0xFFF8C163)
-    val YellowSoft = Color(0xFFFDEFD2)
-    /** Text and icons on [YellowSoft] or white where yellow itself would be too light. */
-    val AmberInk = Color(0xFF875A00)
-    val Background = Color(0xFFFFF8ED)
-    val Cream = Color(0xFFF6EBD7)
-    val CreamDeep = Color(0xFFEADBC2)
+    /** Main actions, selection, links and icons; white text on it. */
+    val Green = Color(0xFF47782E)
+    /** Titles and body text. */
+    val DarkGreen = Color(0xFF263C29)
+    /** The app background. */
+    val Cream = Color(0xFFFCFBF6)
+    /** Soft surfaces: panels, tags, highlighted rows. */
+    val PaleGreen = Color(0xFFF3F6E8)
+    /** Icon circles, avatars and the selected tab. */
+    val IconGreen = Color(0xFFE4EDC9)
+    /** Supporting text and icons. */
+    val Gray = Color(0xFF666873)
+    /** Hairlines: card borders and dividers. */
+    val Line = Color(0xFFE3E4E7)
+    /** Inactive page dots. */
+    val DotGray = Color(0xFFDDDEDA)
+    /** Neutral chips and tiles (the original "not verified" grey). */
+    val Neutral = Color(0xFFEDEEF0)
+    /** Expiring soon. Too light for small text, so it marks icons and tints. */
+    val Urgent = Color(0xFFE85B13)
+    /** Unread dots and reservations being held. */
+    val Orange = Color(0xFFEF7900)
+    /** The spark before the recommendations. */
+    val Sparkle = Color(0xFFFFA125)
+    /** Rating stars and rating text. */
+    val StarGold = Color(0xFFFFAD08)
+    val RatingAmber = Color(0xFFB26A00)
+    /** Errors, destructive actions and unread counts: the original theme's error red. */
+    val Error = Color(0xFFB3261E)
     val Surface = Color.White
-    /** Hairlines: card borders and dividers (decorative). */
-    val Line = Color(0xFFEFE3D1)
-    /** Borders that identify a control, such as an unfocused text field (3:1 on white). */
-    val Outline = Color(0xFF9E8F7B)
-    val Green = Color(0xFF338C28)
-    val GreenInk = Color(0xFF256B1D)
-    val GreenSoft = Color(0xFFE3F1DC)
-    val Pink = Color(0xFFD62F6B)
-    val PinkInk = Color(0xFFA8244F)
-    val PinkSoft = Color(0xFFFBE3EB)
-    val Ink = Color(0xFF2B2622)
-    val InkMuted = Color(0xFF6B625A)
+
+    val UrgentSoft = Urgent.copy(alpha = 0.10f)
+    val OrangeSoft = Orange.copy(alpha = 0.12f)
+    val ErrorSoft = Error.copy(alpha = 0.08f)
     /** Disabled text and decorative icons only; too light for information. */
-    val InkFaint = Color(0xFFA0968C)
+    val Faint = Gray.copy(alpha = 0.6f)
 }
 
 /** Motion: short and calm. Durations in milliseconds. */
@@ -126,7 +148,7 @@ internal object SaluText {
     val Meta: TextStyle @Composable get() = MaterialTheme.typography.labelMedium
     val Status: TextStyle @Composable get() = MaterialTheme.typography.labelSmall
     val Price: TextStyle @Composable get() = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-    val Overline: TextStyle @Composable get() = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp, color = SaluColors.InkMuted)
+    val Overline: TextStyle @Composable get() = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp, color = SaluColors.Gray)
 }
 
 internal val SaluShapes = Shapes(
@@ -147,44 +169,44 @@ internal object SaluRadius {
 }
 
 private val SaluColorScheme = lightColorScheme(
-    // Interactive accents (text buttons, focus, switches, progress) use the
-    // darker green so small text stays readable; filled primary buttons are
-    // yellow through SaluPrimaryButton.
-    primary = SaluColors.GreenInk,
+    // The original theme set primary, background and surface to these same
+    // colours; the other roles follow the palette instead of Material's defaults.
+    primary = SaluColors.Green,
     onPrimary = Color.White,
-    primaryContainer = SaluColors.YellowSoft,
-    onPrimaryContainer = SaluColors.Ink,
-    inversePrimary = SaluColors.Yellow,
+    primaryContainer = SaluColors.IconGreen,
+    onPrimaryContainer = SaluColors.DarkGreen,
+    inversePrimary = SaluColors.IconGreen,
     secondary = SaluColors.Green,
     onSecondary = Color.White,
-    secondaryContainer = SaluColors.YellowSoft,
-    onSecondaryContainer = SaluColors.Ink,
-    tertiary = SaluColors.Pink,
+    secondaryContainer = SaluColors.PaleGreen,
+    onSecondaryContainer = SaluColors.DarkGreen,
+    tertiary = SaluColors.Orange,
     onTertiary = Color.White,
-    tertiaryContainer = SaluColors.PinkSoft,
-    onTertiaryContainer = SaluColors.PinkInk,
-    background = SaluColors.Background,
-    onBackground = SaluColors.Ink,
+    tertiaryContainer = SaluColors.PaleGreen,
+    onTertiaryContainer = SaluColors.DarkGreen,
+    background = SaluColors.Cream,
+    onBackground = SaluColors.DarkGreen,
     surface = SaluColors.Surface,
-    onSurface = SaluColors.Ink,
-    surfaceVariant = SaluColors.Cream,
-    onSurfaceVariant = SaluColors.InkMuted,
+    onSurface = SaluColors.DarkGreen,
+    surfaceVariant = SaluColors.PaleGreen,
+    onSurfaceVariant = SaluColors.Gray,
     surfaceTint = Color.Transparent,
-    inverseSurface = SaluColors.Ink,
-    inverseOnSurface = SaluColors.Background,
-    error = SaluColors.PinkInk,
+    inverseSurface = SaluColors.DarkGreen,
+    inverseOnSurface = SaluColors.Cream,
+    // Material's error colours, which the original theme used unchanged.
+    error = SaluColors.Error,
     onError = Color.White,
-    errorContainer = SaluColors.PinkSoft,
-    onErrorContainer = SaluColors.PinkInk,
-    outline = SaluColors.Outline,
+    errorContainer = Color(0xFFF9DEDC),
+    onErrorContainer = Color(0xFF410E0B),
+    outline = SaluColors.Gray,
     outlineVariant = SaluColors.Line,
     surfaceBright = Color.White,
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFFFFCF7),
-    surfaceContainer = Color(0xFFFFFAF2),
-    surfaceContainerHigh = Color(0xFFFFFCF7),
-    surfaceContainerHighest = SaluColors.Cream,
-    surfaceDim = SaluColors.Cream
+    surfaceContainerLow = SaluColors.Cream,
+    surfaceContainer = Color.White,
+    surfaceContainerHigh = Color.White,
+    surfaceContainerHighest = SaluColors.PaleGreen,
+    surfaceDim = SaluColors.PaleGreen
 )
 
 @Composable
@@ -214,7 +236,7 @@ internal fun Modifier.pressScale(interactionSource: MutableInteractionSource, pr
     }
 }
 
-/** The main action on a screen: yellow, Ink text, 52 dp tall. */
+/** The main action on a screen: brand green with white text, 52 dp tall. */
 @Composable
 internal fun SaluPrimaryButton(
     text: String,
@@ -233,10 +255,10 @@ internal fun SaluPrimaryButton(
             .pressScale(interaction),
         shape = SaluRadius.Control,
         colors = ButtonDefaults.buttonColors(
-            containerColor = SaluColors.Yellow,
-            contentColor = SaluColors.Ink,
-            disabledContainerColor = if (loading) SaluColors.Yellow.copy(alpha = 0.7f) else SaluColors.Cream,
-            disabledContentColor = if (loading) SaluColors.Ink else SaluColors.InkMuted
+            containerColor = SaluColors.Green,
+            contentColor = Color.White,
+            disabledContainerColor = if (loading) SaluColors.Green.copy(alpha = 0.75f) else SaluColors.PaleGreen,
+            disabledContentColor = if (loading) Color.White else SaluColors.Gray
         ),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
@@ -245,7 +267,7 @@ internal fun SaluPrimaryButton(
         if (loading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(18.dp),
-                color = SaluColors.Ink,
+                color = Color.White,
                 strokeWidth = 2.dp
             )
             Spacer(Modifier.width(10.dp))
@@ -257,7 +279,7 @@ internal fun SaluPrimaryButton(
     }
 }
 
-/** A secondary action: white with an outline, Ink text. */
+/** A secondary action: white with a soft green outline and green text. */
 @Composable
 internal fun SaluSecondaryButton(
     text: String,
@@ -265,7 +287,7 @@ internal fun SaluSecondaryButton(
     modifier: Modifier = Modifier.fillMaxWidth(),
     enabled: Boolean = true,
     icon: ImageVector? = null,
-    contentColor: Color = SaluColors.Ink
+    contentColor: Color = SaluColors.Green
 ) {
     val interaction = remember { MutableInteractionSource() }
     OutlinedButton(
@@ -275,12 +297,12 @@ internal fun SaluSecondaryButton(
             .heightIn(min = 48.dp)
             .pressScale(interaction),
         shape = SaluRadius.Control,
-        border = BorderStroke(1.dp, if (enabled) SaluColors.Outline.copy(alpha = 0.55f) else SaluColors.Line),
+        border = BorderStroke(1.dp, if (enabled) contentColor.copy(alpha = 0.35f) else SaluColors.Line),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = Color.White,
             contentColor = contentColor,
             disabledContainerColor = Color.White,
-            disabledContentColor = SaluColors.InkFaint
+            disabledContentColor = SaluColors.Faint
         ),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
         interactionSource = interaction
@@ -327,7 +349,7 @@ internal fun SectionHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     icon: ImageVector? = null,
-    iconTint: Color = SaluColors.AmberInk,
+    iconTint: Color = SaluColors.Green,
     action: (@Composable () -> Unit)? = null
 ) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -339,11 +361,11 @@ internal fun SectionHeader(
             Text(
                 title,
                 style = SaluText.SectionTitle,
-                color = SaluColors.Ink,
+                color = SaluColors.DarkGreen,
                 modifier = Modifier.semantics { heading() }
             )
             if (subtitle != null) {
-                Text(subtitle, style = SaluText.Supporting, color = SaluColors.InkMuted)
+                Text(subtitle, style = SaluText.Supporting, color = SaluColors.Gray)
             }
         }
         action?.invoke()
@@ -362,20 +384,25 @@ internal fun GroupLabel(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Statuses shown as a pill with an icon and a word, so colour is never the only signal. */
+/**
+ * Statuses shown as a pill with an icon and a word, so colour is never the only
+ * signal. [icon] may be brighter than [content]: an accent too light for small
+ * text (orange) marks the icon and the tint, and the word stays dark.
+ */
 internal enum class SaluStatus(
     val label: String,
     val icon: ImageVector,
     val container: Color,
-    val content: Color
+    val content: Color,
+    val iconTint: Color = content
 ) {
-    Available("Available", Icons.Outlined.CheckCircle, SaluColors.GreenSoft, SaluColors.GreenInk),
-    Reserved("Reserved", Icons.Outlined.Bookmark, SaluColors.YellowSoft, SaluColors.AmberInk),
-    Claimed("Claimed", Icons.Outlined.TaskAlt, SaluColors.Ink, Color.White),
-    Cancelled("Cancelled", Icons.Outlined.HighlightOff, SaluColors.PinkSoft, SaluColors.PinkInk),
-    Expired("Expired", Icons.Outlined.Schedule, SaluColors.Cream, SaluColors.InkMuted),
-    Removed("Removed", Icons.Outlined.Block, SaluColors.Cream, SaluColors.InkMuted),
-    ExpiresSoon("Expires soon", Icons.Outlined.HourglassBottom, SaluColors.PinkSoft, SaluColors.PinkInk);
+    Available("Available", Icons.Outlined.CheckCircle, SaluColors.PaleGreen, SaluColors.Green),
+    Reserved("Reserved", Icons.Outlined.Bookmark, SaluColors.OrangeSoft, SaluColors.DarkGreen, SaluColors.Orange),
+    Claimed("Claimed", Icons.Outlined.TaskAlt, SaluColors.Green, Color.White),
+    Cancelled("Cancelled", Icons.Outlined.HighlightOff, SaluColors.ErrorSoft, SaluColors.Error),
+    Expired("Expired", Icons.Outlined.Schedule, SaluColors.Neutral, SaluColors.Gray),
+    Removed("Removed", Icons.Outlined.Block, SaluColors.Neutral, SaluColors.Gray),
+    ExpiresSoon("Expires soon", Icons.Outlined.HourglassBottom, SaluColors.UrgentSoft, SaluColors.DarkGreen, SaluColors.Urgent);
 
     companion object {
         /** The status words the Activity records use ("Available", "Reserved", …); null for anything else. */
@@ -392,31 +419,31 @@ internal fun StatusBadge(status: SaluStatus, modifier: Modifier = Modifier, labe
             .padding(start = 7.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(status.icon, contentDescription = null, tint = status.content, modifier = Modifier.size(14.dp))
+        Icon(status.icon, contentDescription = null, tint = status.iconTint, modifier = Modifier.size(14.dp))
         Spacer(Modifier.width(4.dp))
         Text(label, style = SaluText.Status, color = status.content, maxLines = 1)
     }
 }
 
-/** "Free" as a green tag; a price as bold Ink text with an optional unit ("per pack"). */
+/** "Free" as a green tag on pale green (the original price tag); a price as bold text with an optional unit. */
 @Composable
 internal fun PriceTag(price: String, free: Boolean, modifier: Modifier = Modifier, unit: String? = null) {
     if (free) {
         Text(
             "Free",
             style = SaluText.Meta.copy(fontWeight = FontWeight.Bold),
-            color = SaluColors.GreenInk,
+            color = SaluColors.Green,
             modifier = modifier
                 .clip(SaluRadius.Small)
-                .background(SaluColors.GreenSoft)
+                .background(SaluColors.PaleGreen)
                 .padding(horizontal = 8.dp, vertical = 3.dp)
         )
     } else {
         Text(
             buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = SaluColors.Ink)) { append(price) }
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = SaluColors.DarkGreen)) { append(price) }
                 if (unit != null) {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = SaluColors.InkMuted, fontSize = 12.sp)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = SaluColors.Gray, fontSize = 12.sp)) {
                         append(" / $unit")
                     }
                 }
@@ -427,13 +454,13 @@ internal fun PriceTag(price: String, free: Boolean, modifier: Modifier = Modifie
     }
 }
 
-/** An icon on a soft circle, for list rows, empty states and alerts. */
+/** An icon on a soft circle (green on icon green, as the original), for list rows, empty states and alerts. */
 @Composable
 internal fun IconBubble(
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    tint: Color = SaluColors.AmberInk,
-    background: Color = SaluColors.YellowSoft,
+    tint: Color = SaluColors.Green,
+    background: Color = SaluColors.IconGreen,
     size: Dp = 40.dp,
     iconSize: Dp = size * 0.5f
 ) {
@@ -460,8 +487,8 @@ internal fun EmptyState(
     modifier: Modifier = Modifier,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
-    tint: Color = SaluColors.AmberInk,
-    iconBackground: Color = SaluColors.YellowSoft
+    tint: Color = SaluColors.Green,
+    iconBackground: Color = SaluColors.IconGreen
 ) {
     Column(
         modifier = modifier
@@ -471,9 +498,9 @@ internal fun EmptyState(
     ) {
         IconBubble(icon, tint = tint, background = iconBackground, size = 56.dp, iconSize = 28.dp)
         Spacer(Modifier.height(14.dp))
-        Text(title, style = SaluText.FoodTitle, color = SaluColors.Ink, textAlign = TextAlign.Center)
+        Text(title, style = SaluText.FoodTitle, color = SaluColors.DarkGreen, textAlign = TextAlign.Center)
         Spacer(Modifier.height(6.dp))
-        Text(message, style = SaluText.Supporting, color = SaluColors.InkMuted, textAlign = TextAlign.Center)
+        Text(message, style = SaluText.Supporting, color = SaluColors.Gray, textAlign = TextAlign.Center)
         if (actionLabel != null && onAction != null) {
             Spacer(Modifier.height(16.dp))
             SaluSecondaryButton(text = actionLabel, onClick = onAction, modifier = Modifier)
@@ -482,11 +509,11 @@ internal fun EmptyState(
 }
 
 /** A one-line note with an icon, for hints, warnings and errors under a control. */
-internal enum class NoticeTone(val container: Color, val content: Color) {
-    Info(SaluColors.Cream, SaluColors.Ink),
-    Warning(SaluColors.YellowSoft, SaluColors.AmberInk),
-    Error(SaluColors.PinkSoft, SaluColors.PinkInk),
-    Success(SaluColors.GreenSoft, SaluColors.GreenInk)
+internal enum class NoticeTone(val container: Color, val content: Color, val iconTint: Color = content) {
+    Info(SaluColors.PaleGreen, SaluColors.DarkGreen, SaluColors.Green),
+    Warning(SaluColors.UrgentSoft, SaluColors.DarkGreen, SaluColors.Urgent),
+    Error(SaluColors.ErrorSoft, SaluColors.Error),
+    Success(SaluColors.PaleGreen, SaluColors.Green)
 }
 
 @Composable
@@ -504,13 +531,13 @@ internal fun InlineNotice(
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.Top
     ) {
-        Icon(icon, contentDescription = null, tint = tone.content, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, tint = tone.iconTint, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Text(text, style = SaluText.Supporting, color = tone.content, modifier = Modifier.weight(1f))
     }
 }
 
-/** A pink count for unread messages and alerts ("99+" above 99). */
+/** A red count for unread messages and alerts ("99+" above 99), like the original Home badges. */
 @Composable
 internal fun CountBadge(count: Int, modifier: Modifier = Modifier) {
     if (count <= 0) return
@@ -520,7 +547,7 @@ internal fun CountBadge(count: Int, modifier: Modifier = Modifier) {
             .clearAndSetSemantics { }
             .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
             .clip(SaluRadius.Pill)
-            .background(SaluColors.Pink)
+            .background(SaluColors.Error)
             .padding(horizontal = 5.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -533,7 +560,7 @@ internal fun CountBadge(count: Int, modifier: Modifier = Modifier) {
     }
 }
 
-/** A round profile photo, else the name's initial on cream. The photo URL is a signed URL. */
+/** A round profile photo, else the name's initial in green on icon green. The photo URL is a signed URL. */
 @Composable
 internal fun Avatar(
     photoUrl: String?,
@@ -548,7 +575,7 @@ internal fun Avatar(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
-            .background(SaluColors.YellowSoft),
+            .background(SaluColors.IconGreen),
         contentAlignment = Alignment.Center
     ) {
         if (photoUrl != null && !failed) {
@@ -565,7 +592,7 @@ internal fun Avatar(
                 modifier = Modifier.clearAndSetSemantics {
                     if (contentDescription != null) this.contentDescription = contentDescription
                 },
-                color = SaluColors.AmberInk,
+                color = SaluColors.Green,
                 fontSize = (size.value * 0.42f).sp,
                 fontWeight = FontWeight.Bold
             )
@@ -573,45 +600,59 @@ internal fun Avatar(
             Icon(
                 Icons.Outlined.Person,
                 contentDescription = contentDescription,
-                tint = SaluColors.AmberInk,
+                tint = SaluColors.Green,
                 modifier = Modifier.size(size * 0.55f)
             )
         }
     }
 }
 
-/** The app's mark: a rice bowl on a yellow tile. */
+/**
+ * Salu-Salo's logo: the original emblem of the app's launcher icon, shown round
+ * like the round launcher icon. It is drawn from the launcher artwork itself
+ * (R.mipmap.ic_launcher_foreground), unchanged: the emblem's green square fills
+ * the middle 268 of the artwork's 432 px, so the artwork is enlarged until that
+ * square fills the circle, which also leaves out its transparent margin.
+ */
 @Composable
-internal fun BrandMark(size: Dp, modifier: Modifier = Modifier) {
-    Box(
+internal fun SaluLogo(size: Dp, modifier: Modifier = Modifier, contentDescription: String? = null) {
+    Image(
+        painter = rememberLogoPainter(),
+        contentDescription = contentDescription,
+        contentScale = ContentScale.Crop,
         modifier = modifier
             .size(size)
-            .clip(RoundedCornerShape(size * 0.3f))
-            .background(SaluColors.Yellow),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            Icons.Rounded.RiceBowl,
-            contentDescription = null,
-            tint = SaluColors.Ink,
-            modifier = Modifier.size(size * 0.56f)
-        )
-    }
+            .clip(CircleShape)
+            .graphicsLayer {
+                scaleX = LOGO_ZOOM
+                scaleY = LOGO_ZOOM
+            }
+    )
 }
 
-/** "Salu-Salo" with the hyphen in brand green. */
+/** A little more than 432 / 268, so the square's soft edge stays outside the circle. */
+private const val LOGO_ZOOM = 432f / 262f
+
+/**
+ * The launcher artwork at its sharpest (the xxxhdpi file): the logo is shown
+ * larger than a launcher icon, and the phone's own density would blur it.
+ */
+@Composable
+private fun rememberLogoPainter(): Painter {
+    val resources = LocalContext.current.resources
+    val sharp = remember(resources) {
+        val drawable = runCatching {
+            resources.getDrawableForDensity(R.mipmap.ic_launcher_foreground, DisplayMetrics.DENSITY_XXXHIGH, null)
+        }.getOrNull()
+        (drawable as? BitmapDrawable)?.bitmap?.let { BitmapPainter(it.asImageBitmap()) }
+    }
+    return sharp ?: painterResource(R.mipmap.ic_launcher_foreground)
+}
+
+/** The app's name as text, in the original dark green. */
 @Composable
 internal fun BrandWordmark(modifier: Modifier = Modifier, style: TextStyle = MaterialTheme.typography.displaySmall) {
-    Text(
-        buildAnnotatedString {
-            append("Salu")
-            withStyle(SpanStyle(color = SaluColors.Green)) { append("-") }
-            append("Salo")
-        },
-        style = style,
-        color = SaluColors.Ink,
-        modifier = modifier.semantics { contentDescription = "Salu-Salo" }
-    )
+    Text("Salu-Salo", style = style, color = SaluColors.DarkGreen, modifier = modifier)
 }
 
 /**
@@ -627,7 +668,7 @@ internal fun SaluTopBar(
     backDescription: String = "Back",
     actions: @Composable RowScope.() -> Unit = {}
 ) {
-    Surface(color = SaluColors.Background, modifier = modifier) {
+    Surface(color = SaluColors.Cream, modifier = modifier) {
         Column {
             Row(
                 modifier = Modifier
@@ -638,7 +679,7 @@ internal fun SaluTopBar(
             ) {
                 if (onBack != null) {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = backDescription, tint = SaluColors.Ink)
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = backDescription, tint = SaluColors.DarkGreen)
                     }
                 } else {
                     Spacer(Modifier.width(12.dp))
@@ -651,7 +692,7 @@ internal fun SaluTopBar(
                     Text(
                         title,
                         style = MaterialTheme.typography.titleLarge,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.semantics { heading() }
@@ -660,7 +701,7 @@ internal fun SaluTopBar(
                         Text(
                             subtitle,
                             style = SaluText.Supporting,
-                            color = SaluColors.InkMuted,
+                            color = SaluColors.Gray,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -673,7 +714,7 @@ internal fun SaluTopBar(
     }
 }
 
-/** Page dots for pagers: the current page is a longer yellow bar. */
+/** Page dots for pagers: the current page is a longer green bar, the others the original grey dots. */
 @Composable
 internal fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier, onDark: Boolean = false) {
     Row(
@@ -686,9 +727,9 @@ internal fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier, o
             val width by animateDpAsState(if (selected) 20.dp else 7.dp, tween(SaluMotion.MEDIUM), label = "dotWidth")
             val color by animateColorAsState(
                 when {
-                    selected -> SaluColors.Yellow
+                    selected -> if (onDark) Color.White else SaluColors.Green
                     onDark -> Color.White.copy(alpha = 0.6f)
-                    else -> SaluColors.CreamDeep
+                    else -> SaluColors.DotGray
                 },
                 tween(SaluMotion.MEDIUM),
                 label = "dotColor"
@@ -704,29 +745,29 @@ internal fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier, o
     }
 }
 
-/** Text-field colours shared by every form: white fill, warm outline, green focus. */
+/** Text-field colours shared by every form: white fill, grey outline, green focus (as the original fields). */
 @Composable
 internal fun saluFieldColors(container: Color = Color.White) = OutlinedTextFieldDefaults.colors(
     focusedContainerColor = container,
     unfocusedContainerColor = container,
-    disabledContainerColor = SaluColors.Cream.copy(alpha = 0.6f),
-    focusedBorderColor = SaluColors.GreenInk,
-    unfocusedBorderColor = SaluColors.Outline.copy(alpha = 0.6f),
+    disabledContainerColor = SaluColors.PaleGreen,
+    focusedBorderColor = SaluColors.Green,
+    unfocusedBorderColor = SaluColors.Gray.copy(alpha = 0.45f),
     disabledBorderColor = SaluColors.Line,
-    focusedLabelColor = SaluColors.GreenInk,
-    unfocusedLabelColor = SaluColors.InkMuted,
-    cursorColor = SaluColors.GreenInk,
-    focusedTextColor = SaluColors.Ink,
-    unfocusedTextColor = SaluColors.Ink,
-    focusedPlaceholderColor = SaluColors.InkMuted,
-    unfocusedPlaceholderColor = SaluColors.InkMuted,
-    focusedLeadingIconColor = SaluColors.InkMuted,
-    unfocusedLeadingIconColor = SaluColors.InkMuted,
-    focusedSupportingTextColor = SaluColors.InkMuted,
-    unfocusedSupportingTextColor = SaluColors.InkMuted
+    focusedLabelColor = SaluColors.Green,
+    unfocusedLabelColor = SaluColors.Gray,
+    cursorColor = SaluColors.Green,
+    focusedTextColor = SaluColors.DarkGreen,
+    unfocusedTextColor = SaluColors.DarkGreen,
+    focusedPlaceholderColor = SaluColors.Gray,
+    unfocusedPlaceholderColor = SaluColors.Gray,
+    focusedLeadingIconColor = SaluColors.Gray,
+    unfocusedLeadingIconColor = SaluColors.Gray,
+    focusedSupportingTextColor = SaluColors.Gray,
+    unfocusedSupportingTextColor = SaluColors.Gray
 )
 
-/** Filter chips: pills (they are filters), Ink when selected, with an optional icon. */
+/** Filter chips as the original: cream with a green label and soft green border, green when selected. */
 @Composable
 internal fun SaluFilterChip(
     label: String,
@@ -745,17 +786,17 @@ internal fun SaluFilterChip(
         },
         shape = SaluRadius.Pill,
         colors = FilterChipDefaults.filterChipColors(
-            containerColor = Color.White,
-            labelColor = SaluColors.Ink,
-            iconColor = SaluColors.InkMuted,
-            selectedContainerColor = SaluColors.Ink,
+            containerColor = SaluColors.Cream,
+            labelColor = SaluColors.Green,
+            iconColor = SaluColors.Green,
+            selectedContainerColor = SaluColors.Green,
             selectedLabelColor = Color.White,
             selectedLeadingIconColor = Color.White
         ),
         border = FilterChipDefaults.filterChipBorder(
             enabled = true,
             selected = selected,
-            borderColor = SaluColors.Line,
+            borderColor = SaluColors.Green.copy(alpha = 0.3f),
             selectedBorderColor = Color.Transparent
         )
     )
@@ -797,7 +838,7 @@ internal fun SkeletonBlock(modifier: Modifier, shape: Shape = RoundedCornerShape
     Box(
         modifier
             .clip(shape)
-            .background(SaluColors.Cream)
+            .background(SaluColors.IconGreen.copy(alpha = 0.55f))
             .drawBehind {
                 val p = progress?.value ?: return@drawBehind
                 val width = size.width.coerceAtLeast(1f)

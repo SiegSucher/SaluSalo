@@ -60,15 +60,15 @@ private fun SettingsRow(icon: ImageVector, label: String, supporting: String? = 
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconBubble(icon, tint = SaluColors.Ink, background = SaluColors.Cream, size = 36.dp, iconSize = 19.dp)
+        IconBubble(icon, size = 36.dp, iconSize = 19.dp)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp), color = SaluColors.Ink)
+            Text(label, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp), color = SaluColors.DarkGreen)
             if (supporting != null) {
-                Text(supporting, style = SaluText.Supporting, color = SaluColors.InkMuted)
+                Text(supporting, style = SaluText.Supporting, color = SaluColors.Gray)
             }
         }
-        Icon(Icons.Outlined.ChevronRight, null, tint = SaluColors.InkMuted)
+        Icon(Icons.Outlined.ChevronRight, null, tint = SaluColors.Gray)
     }
 }
 
@@ -79,7 +79,7 @@ private fun RowDivider() {
 
 @Composable
 private fun SettingsCaption(text: String) {
-    Text(text, style = SaluText.Supporting, color = SaluColors.InkMuted)
+    Text(text, style = SaluText.Supporting, color = SaluColors.Gray)
 }
 
 @Composable
@@ -112,7 +112,7 @@ internal fun SettingsHub(navigate: (String) -> Unit) {
     Text(
         "Every extra is an invitation.",
         style = SaluText.Supporting,
-        color = SaluColors.InkMuted,
+        color = SaluColors.Gray,
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth()
     )
@@ -151,12 +151,12 @@ internal fun ProfileEditor(profile: UserProfile?, onUpdated: (UserProfile) -> Un
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center) {
             Avatar(photoUrl = photoUrl, name = name, size = 108.dp, contentDescription = "Profile photo")
-            if (uploading) CircularProgressIndicator(Modifier.size(32.dp), color = SaluColors.GreenInk)
+            if (uploading) CircularProgressIndicator(Modifier.size(32.dp), color = SaluColors.Green)
         }
         TextButton(onClick = { picker.launch(arrayOf("image/*")) }, enabled = !saving && !uploading && profile != null) {
-            Icon(Icons.Outlined.PhotoCamera, null, tint = SaluColors.GreenInk)
+            Icon(Icons.Outlined.PhotoCamera, null, tint = SaluColors.Green)
             Spacer(Modifier.width(6.dp))
-            Text("Change photo", style = MaterialTheme.typography.labelLarge, color = SaluColors.GreenInk)
+            Text("Change photo", style = MaterialTheme.typography.labelLarge, color = SaluColors.Green)
         }
         SettingsCaption("Photo changes save immediately.")
     }
@@ -208,7 +208,7 @@ internal fun FoodPreferenceSettings(profileId: String?) {
     var feedback by rememberSaveable { mutableStateOf("") }
     SettingsCaption("Choose food for the ‘For your preferences’ row on Home.")
     SettingsCard {
-        Text("Food categories", style = SaluText.FoodTitle, color = SaluColors.Ink, modifier = Modifier.semantics { heading() })
+        Text("Food categories", style = SaluText.FoodTitle, color = SaluColors.DarkGreen, modifier = Modifier.semantics { heading() })
         Column {
             listOf("Bread & pastries", "Vegetables", "Fruit", "Cooked meals", "Packaged food", "Other").forEach { label ->
                 val checked = label in selected
@@ -227,17 +227,17 @@ internal fun FoodPreferenceSettings(profileId: String?) {
                     Checkbox(
                         checked,
                         onCheckedChange = null,
-                        colors = CheckboxDefaults.colors(checkedColor = SaluColors.GreenInk, uncheckedColor = SaluColors.Outline)
+                        colors = CheckboxDefaults.colors(checkedColor = SaluColors.Green, uncheckedColor = SaluColors.Gray)
                     )
                     Spacer(Modifier.width(12.dp))
-                    Text(label, style = SaluText.Body, color = SaluColors.Ink)
+                    Text(label, style = SaluText.Body, color = SaluColors.DarkGreen)
                 }
             }
         }
         SettingsCaption("Leave all categories unchecked to include every category.")
     }
     SettingsCard {
-        Text("Listing preference", style = SaluText.FoodTitle, color = SaluColors.Ink, modifier = Modifier.semantics { heading() })
+        Text("Listing preference", style = SaluText.FoodTitle, color = SaluColors.DarkGreen, modifier = Modifier.semantics { heading() })
         Column(Modifier.selectableGroup()) {
             listOf("Both", "Donations", "For sale").forEach { label ->
                 Row(
@@ -248,9 +248,9 @@ internal fun FoodPreferenceSettings(profileId: String?) {
                         .heightIn(min = 48.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RadioButton(type == label, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = SaluColors.GreenInk))
+                    RadioButton(type == label, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = SaluColors.Green))
                     Spacer(Modifier.width(12.dp))
-                    Text(label, style = SaluText.Body, color = SaluColors.Ink)
+                    Text(label, style = SaluText.Body, color = SaluColors.DarkGreen)
                 }
             }
         }
@@ -273,7 +273,7 @@ internal fun LocationPreferenceSettings(profileId: String?) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconBubble(Icons.Outlined.LocationOn, size = 36.dp, iconSize = 20.dp)
             Spacer(Modifier.width(12.dp))
-            Text("Preferred pickup area", style = SaluText.FoodTitle, color = SaluColors.Ink)
+            Text("Preferred pickup area", style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
         }
         OutlinedTextField(
             area, { if (it.length <= 120) area = it }, singleLine = true,
@@ -282,13 +282,13 @@ internal fun LocationPreferenceSettings(profileId: String?) {
         )
         SettingsCaption("Matches this text in listing pickup locations. Leave blank to include all areas.")
     }
-    SaluCard(Modifier.fillMaxWidth(), color = SaluColors.Cream, border = false) {
+    SaluCard(Modifier.fillMaxWidth(), color = SaluColors.PaleGreen, border = false) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("About distance", style = SaluText.FoodTitle, color = SaluColors.Ink)
+            Text("About distance", style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
             Text(
                 "Listings with a map pin show how far away they are, and Home's Nearby chip lists those within 5 km. This pickup area filter matches the written pickup location instead.",
                 style = SaluText.Body,
-                color = SaluColors.Ink
+                color = SaluColors.DarkGreen
             )
         }
     }
@@ -303,8 +303,8 @@ internal fun LocationPreferenceSettings(profileId: String?) {
 internal fun AccountSecuritySettings(profile: UserProfile?, navigate: (String) -> Unit) {
     SettingsCaption("Manage your sign-in details.")
     SettingsCard {
-        Text("Email address", style = SaluText.Meta, color = SaluColors.InkMuted)
-        Text(profile?.email.orEmpty(), style = SaluText.Body.copy(fontSize = 15.sp), color = SaluColors.Ink)
+        Text("Email address", style = SaluText.Meta, color = SaluColors.Gray)
+        Text(profile?.email.orEmpty(), style = SaluText.Body.copy(fontSize = 15.sp), color = SaluColors.DarkGreen)
         StatusBadge(
             if (profile?.emailVerified == true) SaluStatus.Available else SaluStatus.Expired,
             label = if (profile?.emailVerified == true) "Email verified" else "Email not verified"
@@ -315,8 +315,8 @@ internal fun AccountSecuritySettings(profile: UserProfile?, navigate: (String) -
         SettingsRow(Icons.Outlined.Lock, "Change password", "Update the password you sign in with") { navigate("password") }
     }
     SettingsCard {
-        Text("Keep your account secure", style = SaluText.FoodTitle, color = SaluColors.Ink)
-        Text("Use a unique password and never share verification codes.", style = SaluText.Body, color = SaluColors.Ink)
+        Text("Keep your account secure", style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
+        Text("Use a unique password and never share verification codes.", style = SaluText.Body, color = SaluColors.DarkGreen)
         SettingsCaption("Email changes are not supported in this version. Edit your name and bio using the pencil on Profile.")
     }
 }
@@ -334,24 +334,24 @@ internal fun HelpSettings(navigate: (String) -> Unit) {
     Text(
         "Before you collect food",
         style = SaluText.SectionTitle,
-        color = SaluColors.Ink,
+        color = SaluColors.DarkGreen,
         modifier = Modifier.semantics { heading() }
     )
     SettingsCard {
-        Text("• Check ingredients and allergens with the provider.", style = SaluText.Body, color = SaluColors.Ink)
-        Text("• Ask how the food was stored.", style = SaluText.Body, color = SaluColors.Ink)
-        Text("• Agree on a pickup place and time.", style = SaluText.Body, color = SaluColors.Ink)
+        Text("• Check ingredients and allergens with the provider.", style = SaluText.Body, color = SaluColors.DarkGreen)
+        Text("• Ask how the food was stored.", style = SaluText.Body, color = SaluColors.DarkGreen)
+        Text("• Agree on a pickup place and time.", style = SaluText.Body, color = SaluColors.DarkGreen)
     }
-    SaluCard(Modifier.fillMaxWidth(), color = SaluColors.PinkSoft, border = false) {
+    SaluCard(Modifier.fillMaxWidth(), color = SaluColors.UrgentSoft, border = false) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
-            Icon(Icons.Outlined.WarningAmber, null, tint = SaluColors.PinkInk)
+            Icon(Icons.Outlined.WarningAmber, null, tint = SaluColors.Urgent)
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("Food safety matters", style = SaluText.FoodTitle, color = SaluColors.PinkInk)
+                Text("Food safety matters", style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
                 Text(
                     "Do not consume food if its storage or safety is uncertain. Appearance and smell alone cannot confirm safety.",
                     style = SaluText.Body,
-                    color = SaluColors.Ink
+                    color = SaluColors.DarkGreen
                 )
             }
         }
@@ -367,19 +367,19 @@ internal fun AboutSettings(navigate: (String) -> Unit) {
             .padding(vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        BrandMark(72.dp)
+        SaluLogo(72.dp, contentDescription = "Salu-Salo logo")
         Spacer(Modifier.height(14.dp))
-        BrandWordmark()
+        BrandWordmark(style = MaterialTheme.typography.headlineMedium)
         SettingsCaption("Every extra is an invitation.")
     }
     SettingsCard {
-        Text("Good food. Shared locally.", style = SaluText.SectionTitle, color = SaluColors.Ink)
+        Text("Good food. Shared locally.", style = SaluText.SectionTitle, color = SaluColors.DarkGreen)
         Text(
             "Connect with your community to share surplus food through donations or affordable listings.",
             style = SaluText.Body,
-            color = SaluColors.Ink
+            color = SaluColors.DarkGreen
         )
-        Text("Share surplus food • Find listings • Coordinate pickups", style = SaluText.Supporting, color = SaluColors.InkMuted)
+        Text("Share surplus food • Find listings • Coordinate pickups", style = SaluText.Supporting, color = SaluColors.Gray)
     }
     SettingsGroup {
         SettingsRow(Icons.AutoMirrored.Outlined.MenuBook, "How it works") { navigate("how_it_works") }
@@ -389,7 +389,7 @@ internal fun AboutSettings(navigate: (String) -> Unit) {
     Text(
         "Built for a more caring community.",
         style = SaluText.Supporting,
-        color = SaluColors.InkMuted,
+        color = SaluColors.Gray,
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth()
     )
@@ -399,11 +399,11 @@ internal fun AboutSettings(navigate: (String) -> Unit) {
 internal fun HowItWorksSettings(pickups: Boolean) {
     if (pickups) {
         SettingsCard {
-            Text("Your reservations", style = SaluText.FoodTitle, color = SaluColors.Ink)
-            Text("Open Activity to view reservations. Use the message action to agree on pickup details with the provider.", style = SaluText.Body, color = SaluColors.Ink)
-            Text("If you cannot collect the food, cancel your open reservation in Activity. The quantity becomes available again.", style = SaluText.Body, color = SaluColors.Ink)
-            Text("The provider marks a reservation as claimed after pickup. Completed pickups appear in your Activity history, where you can review the provider.", style = SaluText.Body, color = SaluColors.Ink)
-            Text("For paid listings, the reservation shows the amount due at pickup.", style = SaluText.Body, color = SaluColors.Ink)
+            Text("Your reservations", style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
+            Text("Open Activity to view reservations. Use the message action to agree on pickup details with the provider.", style = SaluText.Body, color = SaluColors.DarkGreen)
+            Text("If you cannot collect the food, cancel your open reservation in Activity. The quantity becomes available again.", style = SaluText.Body, color = SaluColors.DarkGreen)
+            Text("The provider marks a reservation as claimed after pickup. Completed pickups appear in your Activity history, where you can review the provider.", style = SaluText.Body, color = SaluColors.DarkGreen)
+            Text("For paid listings, the reservation shows the amount due at pickup.", style = SaluText.Body, color = SaluColors.DarkGreen)
         }
     } else {
         HowItWorksStep(1, Icons.Outlined.AddCircleOutline, "Share food",
@@ -426,7 +426,7 @@ private fun HowItWorksStep(number: Int, icon: ImageVector, title: String, text: 
                     Modifier
                         .size(18.dp)
                         .clip(CircleShape)
-                        .background(SaluColors.Ink),
+                        .background(SaluColors.DarkGreen),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -438,9 +438,9 @@ private fun HowItWorksStep(number: Int, icon: ImageVector, title: String, text: 
             }
             Spacer(Modifier.width(14.dp))
             Column {
-                Text(title, style = SaluText.FoodTitle, color = SaluColors.Ink, modifier = Modifier.semantics { heading() })
+                Text(title, style = SaluText.FoodTitle, color = SaluColors.DarkGreen, modifier = Modifier.semantics { heading() })
                 Spacer(Modifier.height(4.dp))
-                Text(text, style = SaluText.Body, color = SaluColors.InkMuted)
+                Text(text, style = SaluText.Body, color = SaluColors.Gray)
             }
         }
     }

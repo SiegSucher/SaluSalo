@@ -118,19 +118,19 @@ fun FoodActionsDialog(
                         Text(
                             foodTitle,
                             style = SaluText.FoodTitle,
-                            color = SaluColors.Ink
+                            color = SaluColors.DarkGreen
                         )
 
                         Text(
                             provider,
                             style = SaluText.Supporting,
-                            color = SaluColors.InkMuted
+                            color = SaluColors.Gray
                         )
 
                         Text(
                             price,
                             style = SaluText.Meta.copy(fontWeight = FontWeight.Bold),
-                            color = if (donation) SaluColors.GreenInk else SaluColors.Ink
+                            color = if (donation) SaluColors.Green else SaluColors.DarkGreen
                         )
                     }
                 }
@@ -147,11 +147,11 @@ fun FoodActionsDialog(
                             Text(
                                 "Pickup area",
                                 style = SaluText.SectionTitle,
-                                color = SaluColors.Ink,
+                                color = SaluColors.DarkGreen,
                                 modifier = Modifier.semantics { heading() }
                             )
 
-                            Text(address, style = SaluText.Body, color = SaluColors.Ink)
+                            Text(address, style = SaluText.Body, color = SaluColors.DarkGreen)
 
                             if (pickupPin != null && distanceMeters != null) {
                                 Spacer(Modifier.height(6.dp))
@@ -159,7 +159,7 @@ fun FoodActionsDialog(
                                     Icon(
                                         Icons.Outlined.NearMe,
                                         contentDescription = null,
-                                        tint = SaluColors.GreenInk,
+                                        tint = SaluColors.Green,
                                         modifier = Modifier.size(15.dp)
                                     )
                                     Spacer(Modifier.width(4.dp))
@@ -167,7 +167,7 @@ fun FoodActionsDialog(
                                         "About ${distanceLabel(distanceMeters)} from you in a straight line; " +
                                                 "the route may be longer.",
                                         style = SaluText.Meta,
-                                        color = SaluColors.GreenInk
+                                        color = SaluColors.Green
                                     )
                                 }
                             }
@@ -234,7 +234,7 @@ fun FoodActionsDialog(
                     Text(
                         "Pickup instructions",
                         style = SaluText.FoodTitle,
-                        color = SaluColors.Ink
+                        color = SaluColors.DarkGreen
                     )
 
                     Text(
@@ -246,7 +246,7 @@ fun FoodActionsDialog(
                                     "point and collection instructions."
                         },
                         style = SaluText.Body,
-                        color = SaluColors.InkMuted
+                        color = SaluColors.Gray
                     )
 
                     SaluSecondaryButton(
@@ -292,32 +292,32 @@ fun FoodActionsDialog(
                         Text(
                             provider,
                             style = MaterialTheme.typography.titleLarge,
-                            color = SaluColors.Ink,
+                            color = SaluColors.DarkGreen,
                             modifier = Modifier.semantics { heading() }
                         )
 
                         Text(
                             if (donation) "Food donor" else "Food seller",
                             style = SaluText.Supporting,
-                            color = SaluColors.InkMuted
+                            color = SaluColors.Gray
                         )
 
                         if (verified) {
                             Row(
                                 modifier = Modifier
                                     .clip(SaluRadius.Pill)
-                                    .background(SaluColors.GreenSoft)
+                                    .background(SaluColors.PaleGreen)
                                     .padding(horizontal = 10.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
                                     Icons.Outlined.Verified,
                                     contentDescription = null,
-                                    tint = SaluColors.GreenInk,
+                                    tint = SaluColors.Green,
                                     modifier = Modifier.size(15.dp)
                                 )
                                 Spacer(Modifier.width(4.dp))
-                                Text("Email verified", color = SaluColors.GreenInk, style = SaluText.Status)
+                                Text("Email verified", color = SaluColors.Green, style = SaluText.Status)
                             }
                         }
 
@@ -327,7 +327,7 @@ fun FoodActionsDialog(
                             } else {
                                 "No reviews yet"
                             },
-                            color = if (count > 0) RatingAmber else SaluColors.InkMuted,
+                            color = if (count > 0) RatingAmber else SaluColors.Gray,
                             style = SaluText.FoodTitle
                         )
                     }
@@ -344,7 +344,7 @@ fun FoodActionsDialog(
                     Text(
                         "Reviews",
                         style = SaluText.SectionTitle,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         modifier = Modifier.semantics { heading() }
                     )
 
@@ -367,7 +367,7 @@ fun FoodActionsDialog(
                                     Text(
                                         "Showing the latest ${loaded.size} reviews.",
                                         style = SaluText.Meta,
-                                        color = SaluColors.InkMuted
+                                        color = SaluColors.Gray
                                     )
                                 }
                             }
@@ -389,7 +389,7 @@ fun FoodActionsDialog(
                 Text(
                     "Listing from this provider",
                     style = SaluText.SectionTitle,
-                    color = SaluColors.Ink,
+                    color = SaluColors.DarkGreen,
                     modifier = Modifier.semantics { heading() }
                 )
 
@@ -407,10 +407,10 @@ fun FoodActionsDialog(
                     Text(
                         foodTitle,
                         style = SaluText.FoodTitle,
-                        color = SaluColors.Ink
+                        color = SaluColors.DarkGreen
                     )
 
-                    Text("$price • $status", style = SaluText.Supporting, color = SaluColors.InkMuted)
+                    Text("$price • $status", style = SaluText.Supporting, color = SaluColors.Gray)
 
                     SaluSecondaryButton(
                         text = "Return to food details",
@@ -429,14 +429,14 @@ fun FoodActionsDialog(
                         Icon(
                             Icons.Outlined.Flag,
                             contentDescription = null,
-                            tint = SaluColors.PinkInk,
+                            tint = SaluColors.Error,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
                             "Report " + (donorName ?: if (donation) "this donor" else "this seller"),
                             style = MaterialTheme.typography.labelLarge,
-                            color = SaluColors.PinkInk
+                            color = SaluColors.Error
                         )
                     }
                 }
@@ -505,11 +505,11 @@ fun ReservationReviewDialog(
             Text(
                 foodTitle,
                 style = MaterialTheme.typography.titleLarge,
-                color = SaluColors.Ink
+                color = SaluColors.DarkGreen
             )
 
             donorName?.takeIf { it.isNotBlank() }?.let {
-                Text("From $it", style = SaluText.Supporting, color = SaluColors.InkMuted)
+                Text("From $it", style = SaluText.Supporting, color = SaluColors.Gray)
             }
         }
 
@@ -520,8 +520,8 @@ fun ReservationReviewDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconBubble(
                         Icons.Outlined.CheckCircle,
-                        tint = SaluColors.GreenInk,
-                        background = SaluColors.GreenSoft,
+                        tint = SaluColors.Green,
+                        background = SaluColors.PaleGreen,
                         size = 44.dp,
                         iconSize = 24.dp
                     )
@@ -529,7 +529,7 @@ fun ReservationReviewDialog(
                     Text(
                         "You reserved ${reservation.quantity} $unit of $foodTitle.",
                         style = SaluText.FoodTitle,
-                        color = SaluColors.Ink,
+                        color = SaluColors.DarkGreen,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -541,7 +541,7 @@ fun ReservationReviewDialog(
                         "Free — nothing to pay."
                     },
                     style = SaluText.Price,
-                    color = if (paid) SaluColors.Ink else SaluColors.GreenInk
+                    color = if (paid) SaluColors.DarkGreen else SaluColors.Green
                 )
 
                 HorizontalDivider(color = SaluColors.Line)
@@ -557,7 +557,7 @@ fun ReservationReviewDialog(
                             "Your message was sent to $donorName."
                         },
                         style = SaluText.Supporting,
-                        color = SaluColors.InkMuted
+                        color = SaluColors.Gray
                     )
                     false -> InlineNotice(
                         text = "Your message could not be sent. You can send it from the chat.",
@@ -570,7 +570,7 @@ fun ReservationReviewDialog(
                 Text(
                     "You'll find this reservation in Activity → My Reservations.",
                     style = SaluText.Supporting,
-                    color = SaluColors.InkMuted
+                    color = SaluColors.Gray
                 )
             }
 
@@ -601,7 +601,7 @@ fun ReservationReviewDialog(
                     Text(
                         "Paid at pickup. The app takes no payments.",
                         style = SaluText.Meta,
-                        color = SaluColors.InkMuted
+                        color = SaluColors.Gray
                     )
                 } else {
                     ActionLine("Price", "Free", emphasis = true)
@@ -688,7 +688,7 @@ internal fun ActionPage(
         DarkSystemBarIcons()
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = SaluColors.Background
+            color = SaluColors.Cream
         ) {
             Column(
                 modifier = Modifier
@@ -730,14 +730,14 @@ private fun ActionLine(label: String, value: String, emphasis: Boolean = false) 
         Text(
             label,
             style = SaluText.Supporting,
-            color = SaluColors.InkMuted,
+            color = SaluColors.Gray,
             modifier = Modifier.weight(0.42f)
         )
 
         Text(
             value,
             style = if (emphasis) SaluText.Price else SaluText.Body.copy(fontWeight = FontWeight.Medium),
-            color = SaluColors.Ink,
+            color = SaluColors.DarkGreen,
             modifier = Modifier.weight(0.58f)
         )
     }
