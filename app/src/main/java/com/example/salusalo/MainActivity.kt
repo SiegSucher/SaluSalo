@@ -1957,8 +1957,8 @@ private fun HomeScreen(
 
 /* MAIN NAVIGATION */
 
-/** The main tabs, in bottom-bar and swipe order. */
-private val MainTabs = listOf("home", "post", "alerts", "activity", "profile")
+/** The main tabs, in bottom-bar and swipe order, with Post in the middle as in the original bar. */
+private val MainTabs = listOf("home", "alerts", "post", "activity", "profile")
 
 /** The tab a page belongs to: All listings and Messages open from Home. */
 private fun tabOf(page: String): String = if (page == "all" || page == "messages") "home" else page
@@ -2025,8 +2025,8 @@ private class NavTab(val page: String, val label: String, val selectedIcon: Imag
 
 private val NavTabs = listOf(
     NavTab("home", "Home", Icons.Filled.Home, Icons.Outlined.Home),
-    NavTab("post", "Post", Icons.Outlined.Add, Icons.Outlined.Add),
     NavTab("alerts", "Alerts", Icons.Filled.Notifications, Icons.Outlined.Notifications),
+    NavTab("post", "Post", Icons.Outlined.Add, Icons.Outlined.Add),
     NavTab("activity", "Activity", Icons.Rounded.Timeline, Icons.Outlined.Timeline),
     NavTab("profile", "Profile", Icons.Filled.Person, Icons.Outlined.Person)
 )
