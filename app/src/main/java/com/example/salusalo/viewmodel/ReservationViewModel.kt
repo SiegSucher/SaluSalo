@@ -1,6 +1,7 @@
 package com.example.salusalo.viewmodel
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.salusalo.data.MessageRepository
@@ -85,10 +86,18 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     // right after that request, so a refresh is never dropped.
     private val requestMutex = Mutex()
     private var refreshPending = false
+    // When the lists were last asked for (SystemClock.elapsedRealtime()).
+    private var refreshRequestedAt = 0L
 
     fun refresh() {
+        refreshRequestedAt = SystemClock.elapsedRealtime()
         refreshPending = true
         if (!requestMutex.isLocked) launchRequest {}
+    }
+
+    /** For Activity tab taps: reloads unless the lists were asked for in the last 10 seconds. */
+    fun refreshIfStale() {
+        if (SystemClock.elapsedRealtime() - refreshRequestedAt >= 10_000L) refresh()
     }
 
     /**
@@ -192,6 +201,7 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
 
     fun clearSession() {
         refreshPending = false
+        refreshRequestedAt = 0L
         _myReservations.value = emptyList()
         _donorReservations.value = emptyList()
         _loaded.value = false

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.salusalo.data.NotificationRepository
 import com.example.salusalo.data.SupabaseClientProvider
+import com.example.salusalo.data.shortErrorText
 import com.example.salusalo.model.AppNotification
 import com.example.salusalo.model.NotificationPreferences
 import io.github.jan.supabase.realtime.realtime
@@ -134,6 +135,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         _notifications.update { list -> list.map { if (it.readAt == null && predicate(it)) it.copy(readAt = now) else it } }
     }
 
-    private fun errorText(error: Throwable) = error.message?.takeIf { it.isNotBlank() }
-        ?: "Could not load alerts. Check your connection and try again."
+    // Only the server's short text: the exception's own message can include the URL and headers.
+    private fun errorText(error: Throwable) =
+        shortErrorText(error, "Could not load alerts. Check your connection and try again.")
 }

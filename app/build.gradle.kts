@@ -20,6 +20,17 @@ val supabaseUrl = localProperties.getProperty("SUPABASE_URL").orEmpty()
 val supabasePublishableKey =
     localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY").orEmpty()
 
+// Release signing comes from keystore.properties in the project root (storeFile,
+// storePassword, keyAlias, keyPassword), git-ignored like local.properties; the
+// keystore and its passwords are never committed (README, "Release build").
+// Without the file, release builds stay unsigned, as before.
+val keystoreProperties = Properties().apply {
+    val propertiesFile = rootProject.file("keystore.properties")
+    if (propertiesFile.exists()) {
+        propertiesFile.inputStream().use(::load)
+    }
+}
+
 android {
     namespace = "com.example.salusalo"
     compileSdk = 37
@@ -42,13 +53,25 @@ android {
         )
     }
 
+    signingConfigs {
+        keystoreProperties.getProperty("storeFile")?.let { storePath ->
+            create("release") {
+                storeFile = rootProject.file(storePath)
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // R8 stays off until keep rules for kotlinx.serialization, supabase-kt/Ktor
+            // and osmdroid are written and a release build has been tested on a phone.
+            // The app's own keep rules go in src/main/keepRules/, which AGP reads itself.
             isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 

@@ -1,13 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Backup rules for Android 11 and older (Android 12+ uses data_extraction_rules.xml).
+   Everything the app stores is backed up except Firebase Auth's saved sign-in,
+   which holds the account's refresh token: restoring it would sign another
+   device in to this account. After a restore the user signs in again. The app's
+   own preferences (salusalo_session: welcome pages, Keep me signed in, alert
+   sound; salusalo_discovery_<account>: food preferences) are still backed up.
+
+   The file name is com.google.firebase.auth.api.Store.<base64url "[DEFAULT]">+<base64url
+   Firebase app ID> (FirebaseApp.getPersistenceKey()), with the app ID from
+   app/google-services.json. Update it if the Firebase Android app changes.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude
+        domain="sharedpref"
+        path="com.google.firebase.auth.api.Store.W0RFRkFVTFRd+MTo2NDg5NjYwNTg3OTU6YW5kcm9pZDo0MWY2NzFhMGEzYWFjMGY5MDljYjZl.xml" />
 </full-backup-content>

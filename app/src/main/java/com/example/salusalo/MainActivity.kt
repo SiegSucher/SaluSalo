@@ -37,9 +37,13 @@ import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.clearGoogleCredentialState
 import com.example.salusalo.data.requestGoogleIdToken
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
 import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.example.salusalo.data.profileErrorMessage
 import com.example.salusalo.data.ProfileException
@@ -360,12 +364,14 @@ private fun SaluSaloApp() {
                 // A new Google user's profile is created with the Google name and email.
                 openAuthenticatedHome()
             } catch (error: GetCredentialCancellationException) {
-                // The user closed the account picker: nothing to report.
+                // The user closed the account picker: nothing to report. Offline,
+                // Google also ends it this way after an account is chosen.
                 isAuthenticating = false
+                if (!hasInternet(context)) message = NO_CONNECTION_TEXT
             } catch (error: NoCredentialException) {
                 isAuthenticating = false
                 message = "No Google account was found on this phone. Add one in " +
-                        "your phone's Settings, then try again." + errorDetails(error)
+                        "your phone's Settings, then try again."
             } catch (error: FirebaseAuthException) {
                 isAuthenticating = false
                 message = authErrorMessage(error)
@@ -373,7 +379,12 @@ private fun SaluSaloApp() {
                 throw error
             } catch (error: Exception) {
                 isAuthenticating = false
-                message = "Google sign-in failed. Please try again." + errorDetails(error)
+                logGoogleSignInError(error)
+                message = if (error is FirebaseNetworkException) {
+                    authErrorMessage(error)
+                } else {
+                    "Google sign-in failed. Please try again."
+                }
             }
         }
     }
@@ -624,13 +635,27 @@ private fun authErrorMessage(exception: Exception?): String = when (exception) {
         "No account was found for this email address."
     is FirebaseAuthInvalidCredentialsException ->
         "The email address or password is incorrect."
+    is FirebaseNetworkException -> NO_CONNECTION_TEXT
+    is FirebaseTooManyRequestsException ->
+        "Too many attempts. Please wait a moment and try again."
     else -> "Authentication failed. Please try again."
 }
 
-// A second line with the exception's own text, so setup problems (for example
-// a missing SHA-1) can be read on a test phone without logcat.
-private fun errorDetails(error: Exception): String =
-    error.message?.takeIf { it.isNotBlank() }?.let { "\nDetails: $it" }.orEmpty()
+private const val NO_CONNECTION_TEXT =
+    "Could not reach the server. Check your internet connection and try again."
+
+// False in airplane mode or on a network without working internet.
+private fun hasInternet(context: Context): Boolean {
+    val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return true
+    return connectivity.getNetworkCapabilities(connectivity.activeNetwork)
+        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+}
+
+// The exception's own text goes to logcat only (setup problems such as a
+// missing SHA-1 show there), never on screen: it can be technical.
+private fun logGoogleSignInError(error: Exception) {
+    android.util.Log.w("SaluSalo", "Google sign-in failed: ${error.javaClass.simpleName}: ${error.message}")
+}
 
 /* WELCOME SCREEN */
 
@@ -1632,8 +1657,8 @@ private fun HomeScreen(
         val matchesCategory = when (category) {
             // Listings with a pin within 5 km; none until the phone's position is known.
             "Nearby" -> food.distanceMeters?.let { it <= NEARBY_RADIUS_METERS } == true
-            "Donation" -> food.price == "Free"
-            "For Sale" -> food.price != "Free"
+            "Donation" -> food.free
+            "For Sale" -> !food.free
             "Expiring Soon" -> food.urgent
             else -> true
         }
@@ -2788,7 +2813,8 @@ private data class HomeFood(
     // The listing itself, for the details that the cards don't show.
     val post: FoodPost
 ) {
-    val free: Boolean get() = price == "Free"
+    // From the listing's price, not the display text.
+    val free: Boolean get() = post.price <= 0.0
 }
 
 /** A card in "Picked for you": photo with its price, the name, and why it is here. */
@@ -3103,13 +3129,10 @@ private fun FoodDetailsScreen(
     onPhotoError: () -> Unit,
     onBack: () -> Unit
 ) {
-    val available = food.quantity
-        .substringBefore(" ")
-        .toIntOrNull()
-        ?: 1
-
-    val unit = food.quantity.substringAfter(" ", "items")
-    val donation = food.price == "Free"
+    // From the listing itself, not parsed back out of the display texts.
+    val available = food.post.quantity
+    val unit = food.post.unit
+    val donation = food.free
 
     var quantity by rememberSaveable(food.id) {
         mutableStateOf(1)

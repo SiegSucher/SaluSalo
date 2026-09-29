@@ -1,19 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Backup and transfer rules for Android 12 and newer (older versions use
+   backup_rules.xml, with the same rule). Everything the app stores is included
+   except Firebase Auth's saved sign-in, which holds the account's refresh
+   token: neither a cloud restore nor a phone-to-phone transfer signs the new
+   device in; the user signs in again there. The file name is explained in
+   backup_rules.xml; update both files together.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude
+            domain="sharedpref"
+            path="com.google.firebase.auth.api.Store.W0RFRkFVTFRd+MTo2NDg5NjYwNTg3OTU6YW5kcm9pZDo0MWY2NzFhMGEzYWFjMGY5MDljYjZl.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude
+            domain="sharedpref"
+            path="com.google.firebase.auth.api.Store.W0RFRkFVTFRd+MTo2NDg5NjYwNTg3OTU6YW5kcm9pZDo0MWY2NzFhMGEzYWFjMGY5MDljYjZl.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

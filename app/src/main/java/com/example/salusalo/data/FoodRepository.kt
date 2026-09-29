@@ -53,10 +53,10 @@ class FoodRepository(
     }
 
     suspend fun getUserFoodPosts(): List<FoodPost> {
-        val profile = userRepository.getCurrentProfile()
+        val profileId = userRepository.getCurrentProfileId()
         val posts = supabase.from("food_posts").select {
             filter {
-                filter("donor_id", FilterOperator.EQ, profile.id)
+                filter("donor_id", FilterOperator.EQ, profileId)
                 // Removed listings stay in the database for their reservations only.
                 filter("status", FilterOperator.NEQ, FoodPostStatus.REMOVED.name)
             }
@@ -107,7 +107,7 @@ class FoodRepository(
         require(photos.size <= MAX_LISTING_PHOTOS) { "Choose at most $MAX_LISTING_PHOTOS photos." }
         val pin = draft.pickupPin.rounded()
         require(pin.isValid) { "Place the pickup pin on the map." }
-        val profile = userRepository.getCurrentProfile()
+        val profileId = userRepository.getCurrentProfileId()
         val firebaseUid = firebaseAuth.currentUser?.uid
             ?: throw ProfileException.NotSignedIn
         val paths = photos.indices.map { index ->
@@ -115,7 +115,7 @@ class FoodRepository(
         }
         val newPost = NewFoodPost(
             id = id,
-            donorId = profile.id,
+            donorId = profileId,
             name = draft.name.trim(),
             description = draft.description.trim().ifBlank { null },
             category = draft.category,

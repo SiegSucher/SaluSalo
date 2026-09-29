@@ -17,3 +17,7 @@ local.properties
 # which belongs only in the Supabase secret). Not app/google-services.json.
 salusalo-*.json
 *service-account*.json
+# Release signing: the keystore and its passwords never go in the repository.
+keystore.properties
+*.jks
+*.keystore

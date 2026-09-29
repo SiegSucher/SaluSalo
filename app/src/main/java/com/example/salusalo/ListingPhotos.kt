@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil3.PlatformContext
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
@@ -40,6 +41,25 @@ import coil3.request.crossfade
 
 private val PhotoTile = SaluColors.PaleGreen
 private val PhotoTileText = SaluColors.Gray
+
+/**
+ * An image request for a 1-hour signed Storage URL, cached by the object's
+ * path instead of the whole URL. Every signing gives the URL a new token, so
+ * caching by URL downloaded each photo again after every reload. A path never
+ * gets other bytes: listing photos can't be replaced (a retried post re-uploads
+ * only while its listing doesn't exist yet), and each profile photo gets a new
+ * path. Coil still decodes to the size shown; the file downloaded is the stored
+ * one (up to 1600 px), once per phone while it stays in the disk cache.
+ */
+internal fun signedImageRequest(context: PlatformContext, url: String): ImageRequest {
+    val key = url.substringBefore('?')
+    return ImageRequest.Builder(context)
+        .data(url)
+        .memoryCacheKey(key)
+        .diskCacheKey(key)
+        .crossfade(true)
+        .build()
+}
 
 /**
  * A listing photo from its 1-hour signed URL, with the same fallbacks
@@ -64,9 +84,7 @@ internal fun ListingPhoto(
     if (imageUrl != null && !failed) {
         // Cream while it loads, then a short fade-in instead of a sudden pop.
         val context = LocalPlatformContext.current
-        val request = remember(imageUrl, context) {
-            ImageRequest.Builder(context).data(imageUrl).crossfade(true).build()
-        }
+        val request = remember(imageUrl, context) { signedImageRequest(context, imageUrl) }
         AsyncImage(
             model = request,
             contentDescription = contentDescription,

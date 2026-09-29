@@ -33,6 +33,7 @@ import com.example.salusalo.model.isExpired
 import com.example.salusalo.model.hasPhoto
 import androidx.compose.foundation.background
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
 import com.example.salusalo.data.PasswordChangeException
 import com.example.salusalo.data.VerificationException
 import com.example.salusalo.model.RatingSummary
@@ -948,8 +949,9 @@ private fun SavedFallbackPhoto(imageUrl: String?, name: String?) {
         .size(72.dp)
         .clip(SaluRadius.Small)
     if (imageUrl != null && !imageFailed) {
+        val context = LocalPlatformContext.current
         AsyncImage(
-            model = imageUrl,
+            model = remember(imageUrl, context) { signedImageRequest(context, imageUrl) },
             contentDescription = name,
             contentScale = ContentScale.Crop,
             modifier = modifier,

@@ -39,7 +39,7 @@ class NotificationRepository(
 
     /** The caller's saved preferences, or the all-on defaults when none are saved yet. */
     suspend fun getPreferences(): NotificationPreferences {
-        val profileId = userRepository.getCurrentProfile().id
+        val profileId = userRepository.getCurrentProfileId()
         return supabase.from("notification_preferences").select()
             .decodeSingleOrNull<NotificationPreferences>()
             ?: NotificationPreferences(userId = profileId)
@@ -47,7 +47,7 @@ class NotificationRepository(
 
     suspend fun savePreferences(preferences: NotificationPreferences): NotificationPreferences {
         // The row is always the caller's own profile; RLS rejects any other user_id.
-        val own = preferences.copy(userId = userRepository.getCurrentProfile().id)
+        val own = preferences.copy(userId = userRepository.getCurrentProfileId())
         supabase.from("notification_preferences").upsert(own) { onConflict = "user_id" }
         return own
     }

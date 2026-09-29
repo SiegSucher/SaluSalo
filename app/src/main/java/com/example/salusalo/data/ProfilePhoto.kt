@@ -34,13 +34,7 @@ private suspend fun encodeJpegPhoto(context: Context, uri: Uri, maxSide: Int): B
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
 
         // Decode at roughly the target size first, to keep memory low.
-        var sample = 1
-        while (
-            bounds.outWidth / (sample * 2) >= maxSide &&
-            bounds.outHeight / (sample * 2) >= maxSide
-        ) {
-            sample *= 2
-        }
+        val sample = photoSampleSize(bounds.outWidth, bounds.outHeight, maxSide)
         val decoded = resolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
         } ?: return@withContext null
@@ -67,9 +61,24 @@ private suspend fun encodeJpegPhoto(context: Context, uri: Uri, maxSide: Int): B
             if (rotation != 0f) postRotate(rotation)
         }
         val finalBitmap = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+        // Free the larger decode now; several photos are encoded one after another.
+        if (finalBitmap !== decoded) decoded.recycle()
 
         ByteArrayOutputStream().use { out ->
             finalBitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
             out.toByteArray()
         }
     }
+
+/**
+ * The largest power-of-two `inSampleSize` that still leaves the image's longer
+ * side at least [maxSide], so decoding never loads more than needed (a 12 MP
+ * 4032×3024 photo decodes at 2016×1512, not full size) and the final scaling
+ * down to [maxSide] keeps full quality.
+ */
+internal fun photoSampleSize(width: Int, height: Int, maxSide: Int): Int {
+    val longer = maxOf(width, height)
+    var sample = 1
+    while (longer / (sample * 2) >= maxSide) sample *= 2
+    return sample
+}

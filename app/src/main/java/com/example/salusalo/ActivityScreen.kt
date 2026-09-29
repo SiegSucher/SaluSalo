@@ -294,8 +294,10 @@ fun ActivityScreen(
     fun selectTab(key: String) {
         tab = key
         // Reservations can change on another device while this screen is open,
-        // so reload them when a tab is tapped; they also give My Listings its counts.
-        reservationViewModel.refresh()
+        // so reload them when a tab is tapped (at most every 10 seconds, so
+        // switching tabs doesn't repeat the requests); they also give My
+        // Listings its counts.
+        reservationViewModel.refreshIfStale()
     }
 
     fun openManage(post: FoodPost) {
@@ -999,12 +1001,9 @@ private fun listingOffer(post: FoodPost): String =
 private fun listingStock(post: FoodPost): String =
     if (post.quantity > 0) "${post.quantity} ${post.unit} available" else "None left to reserve"
 
-/** A badge for a listing that can't simply be reserved (Expired, Reserved, Claimed); null otherwise. */
-private fun listingStatus(post: FoodPost, now: Instant): SaluStatus? = when {
-    post.isExpired(now) -> SaluStatus.Expired
-    post.status == FoodPostStatus.AVAILABLE -> null
-    else -> SaluStatus.fromLabel(post.status.name)
-}
+/** A badge for a listing that can't simply be reserved (Expired, Reserved, Claimed, Removed); null otherwise. */
+private fun listingStatus(post: FoodPost, now: Instant): SaluStatus? =
+    listingStatus(post, post.isExpired(now)).takeIf { it != SaluStatus.Available }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
