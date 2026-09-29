@@ -2081,7 +2081,7 @@ The steps, with the log lines and what to do on a 500 or 502, are in [`supabase/
 **Preconditions:** this branch built with AGP (`assembleDebug testDebugUnitTest lintDebug`) and installed on both phones; A has an available listing; B has Food preferences set. There is no migration.
 
 1. [New] With "Keep me signed in" on, swipe Salu-Salo away and open it: the loading screen with the original logo (round, sharp, not cut off), then Home fades in, with no Sign In form in between. Log out: Sign In; a wrong password shows the error dialog; Create Account and Forgot password switch in place.
-2. [New] Home: skeleton cards on the first load; greeting, photo and counts; search and clear; each filter chip; Nearby without location access (a notice and an empty state); the sort menu; "Picked for you" reasons match B's Food preferences ("Just posted" without preferences); a bookmark animates, and stays after reopening.
+2. [New] Home: skeleton cards on the first load; greeting, photo and counts (the red badges on Messages and Alerts show the whole number, two digits too, with nothing cut off); search and clear; each filter chip; Nearby without location access (a notice and an empty state); the sort menu; "Picked for you" reasons match B's Food preferences ("Just posted" without preferences); a bookmark animates, and stays after reopening.
 3. [New] The bottom bar reads Home, Alerts, Post, Activity, Profile, with the green Post button in the middle. Swipe Home → Alerts → Post → Activity → Profile and back. The chip row, the "Picked for you" row, the Activity tabs, the photo row on Post and the map scroll without changing tab, and scrolling up and down never changes tab. Tap each tab; tap Home while on Home.
 4. [New] Post: fill half the form, open Alerts, come back: the draft is still there. Back: Home, and Post opens empty. Post a listing (photos, chips, pin, times): "Listing published" → "Post another listing" shows an empty form.
 5. [New, Regression] B opens A's listing: photos and dots, full screen; the donor card → Donor page; tap Allergens → the chat with the prefilled question; View on map → map and Directions; the quantity stepper and the pay line; Reserve → Review reservation → the Reserved receipt.
@@ -2104,4 +2104,4 @@ The steps, with the log lines and what to do on a 500 or 502, are in [`supabase/
 
 ### 19.5 Results
 
-- None yet: not built with AGP and not run on a phone.
+- 2026-09-29, reported by the developer: on Home, the red count badges on Messages and Alerts were cut off along a curve, hiding part of the number. Cause: both sat in Material's `IconButton`, which clips its content to a 40 dp circle, and the badge reached past it. Fixed afterwards: `HeaderIconButton` (`MainActivity.kt`) is now a plain 48 dp button with the same round ripple that doesn't clip. Not re-tested. Nothing else was reported, so the §19.3 test is still to be run.

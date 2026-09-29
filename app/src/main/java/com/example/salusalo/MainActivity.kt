@@ -2212,11 +2212,21 @@ private fun HeaderIconButton(
     count: Int,
     onClick: () -> Unit
 ) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.semantics {
-            contentDescription = if (count > 0) "$description, $count unread" else description
-        }
+    // Not an IconButton: that clips its content to a 40 dp circle, which cut the
+    // badge off along the curve. The same 48 dp target and round ripple, unclipped.
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(bounded = false, radius = 20.dp),
+                role = Role.Button,
+                onClick = onClick
+            )
+            .semantics {
+                contentDescription = if (count > 0) "$description, $count unread" else description
+            },
+        contentAlignment = Alignment.Center
     ) {
         Box {
             Icon(icon, contentDescription = null, tint = SaluColors.DarkGreen, modifier = Modifier.size(24.dp))
