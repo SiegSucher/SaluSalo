@@ -277,7 +277,7 @@ window.SaluSample = (function () {
       l.status = i % 6 === 3 || i === 124 ? 'RESERVED' : 'AVAILABLE';
       if (l === nenaBread) return;
       if (now - l.createdAt > 5 * HOUR) {
-        l.pickupStart = Math.max(roundTo(l.createdAt + HOUR, 30 * MIN), roundTo(now - int(1, 4) * HOUR, 30 * MIN));
+        l.pickupStart = Math.max(roundTo(l.createdAt + HOUR, 30 * MIN), roundTo(now - int(6, 30) * HOUR, 30 * MIN));
         l.pickupEnd = roundTo(now + int(1, 6) * HOUR, 30 * MIN);
       } else if (l.pickupEnd < now + HOUR) {
         l.pickupStart = roundTo(now + int(1, 6) * HOUR, 30 * MIN);
@@ -391,7 +391,8 @@ window.SaluSample = (function () {
       }
       const started = l.pickupStart < now - 30 * MIN;
       splitQty(total, Math.min(total, now - l.createdAt > DAY ? int(2, 3) : int(1, 3))).forEach((q, k) => {
-        const made = within(l.createdAt + 5 * MIN, now - 20 * MIN);
+        // Most reservations come soon after a listing is posted.
+        const made = l.createdAt + 5 * MIN + Math.floor(Math.pow(rand(), 2) * Math.max(0, now - 20 * MIN - (l.createdAt + 5 * MIN)));
         const canClaim = started && made < now - 25 * MIN;
         // A fully reserved listing keeps at least one reservation waiting, or it would be closed.
         planned.push({ l, q, made, open: !canClaim || (l.status === 'RESERVED' && k === 0) });
