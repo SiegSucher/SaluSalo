@@ -222,11 +222,13 @@ private fun SaluSaloApp() {
         appScope.launch { clearGoogleCredentialState(context) }
         screen = "signin"
     }
-    // With a saved session ("Keep me signed in"), the branded loading screen
-    // shows instead of the sign-in form until the first account setup has finished.
-    var startupPending by remember { mutableStateOf(firebaseAuth.currentUser != null) }
+    // True while an account setup runs (after a sign-in, or Try again), and from a
+    // start with a saved session ("Keep me signed in") until its setup has finished:
+    // the branded loading screen then shows instead of a form.
+    var setupPending by remember { mutableStateOf(firebaseAuth.currentUser != null) }
     fun openAuthenticatedHome(displayNameOverride: String? = null) {
         isAuthenticating = true
+        setupPending = true
         appScope.launch {
             runCatching {
                 // Before the first Supabase call: a new account's token gets the
@@ -265,7 +267,7 @@ private fun SaluSaloApp() {
                 }
             }
             isAuthenticating = false
-            startupPending = false
+            setupPending = false
         }
     }
 
@@ -313,16 +315,20 @@ private fun SaluSaloApp() {
         screen = "signin"
     }
 
-    // While a signed-in account is being set up (a saved session at start, or
-    // right after signing in), show the loading screen rather than a form.
-    val showStartup = screen != "home" && currentProfile == null && !canRetrySetup &&
-            firebaseAuth.currentUser != null && (startupPending || isAuthenticating)
-    val shownScreen = if (showStartup) "loading" else screen
-
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = SaluColors.Cream
     ) {
+        // While a signed-in account is set up (a saved session at start, or right
+        // after a sign-in), the loading screen shows instead of a form. The flag
+        // comes first because Firebase's user is not Compose state: only the flag
+        // can re-run this check once a sign-in has finished. The check sits here,
+        // not in SaluSaloApp's own body: re-running that body after a sign-in would
+        // restart the LaunchedEffect above with the new UID and start a second setup.
+        val showStartup = setupPending && screen != "home" && currentProfile == null &&
+                !canRetrySetup && firebaseAuth.currentUser != null
+        val shownScreen = if (showStartup) "loading" else screen
+
         // Under Home's white bottom bar, the system navigation area is white too.
         Box(
             Modifier
