@@ -871,7 +871,7 @@ private fun ActivityEmptyState(tab: String, onPost: () -> Unit) {
             title = "No reservations on your listings yet",
             message = "When someone reserves your food, you'll see it here.",
             tint = SaluColors.Green,
-            iconBackground = SaluColors.PaleGreen
+            iconBackground = SaluColors.IconGreen
         )
         "Purchases" -> EmptyState(
             icon = Icons.Outlined.ShoppingBag,
@@ -883,7 +883,7 @@ private fun ActivityEmptyState(tab: String, onPost: () -> Unit) {
             title = "No claims yet",
             message = "Free food appears here after the donor marks your pickup as claimed.",
             tint = SaluColors.Green,
-            iconBackground = SaluColors.PaleGreen
+            iconBackground = SaluColors.IconGreen
         )
         else -> EmptyState(
             icon = Icons.Outlined.Inventory2,

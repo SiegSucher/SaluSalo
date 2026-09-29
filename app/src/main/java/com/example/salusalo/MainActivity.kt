@@ -2409,7 +2409,7 @@ private fun PickedForYouSection(
             item(key = "how-it-works") {
                 SaluCard(Modifier.width(196.dp)) {
                     Column(Modifier.padding(16.dp)) {
-                        IconBubble(Icons.Outlined.Eco, tint = SaluColors.Green, background = SaluColors.PaleGreen, size = 36.dp, iconSize = 20.dp)
+                        IconBubble(Icons.Outlined.Eco, tint = SaluColors.Green, background = SaluColors.IconGreen, size = 36.dp, iconSize = 20.dp)
                         Spacer(Modifier.height(10.dp))
                         Text(
                             "Help reduce food waste in your community.",

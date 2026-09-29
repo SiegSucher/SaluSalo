@@ -103,7 +103,7 @@ fun RateDonorPage(
                     IconBubble(
                         Icons.Outlined.CheckCircle,
                         tint = SaluColors.Green,
-                        background = SaluColors.PaleGreen,
+                        background = SaluColors.IconGreen,
                         size = 44.dp,
                         iconSize = 24.dp
                     )
@@ -242,7 +242,7 @@ fun ReportPage(
                     IconBubble(
                         Icons.Outlined.CheckCircle,
                         tint = SaluColors.Green,
-                        background = SaluColors.PaleGreen,
+                        background = SaluColors.IconGreen,
                         size = 44.dp,
                         iconSize = 24.dp
                     )

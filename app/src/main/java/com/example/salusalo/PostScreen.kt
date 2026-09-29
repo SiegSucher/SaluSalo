@@ -297,7 +297,7 @@ fun PostScreen(
                         IconBubble(
                             Icons.Outlined.CheckCircle,
                             tint = SaluColors.Green,
-                            background = SaluColors.PaleGreen,
+                            background = SaluColors.IconGreen,
                             size = 52.dp,
                             iconSize = 28.dp
                         )

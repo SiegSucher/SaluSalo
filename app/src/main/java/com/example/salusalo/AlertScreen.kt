@@ -65,7 +65,7 @@ private class AlertStyle(
 
 private fun NotificationType.style(): AlertStyle = when (this) {
     NotificationType.MESSAGE ->
-        AlertStyle(Icons.Outlined.ChatBubbleOutline, SaluColors.Green, SaluColors.PaleGreen, "Message")
+        AlertStyle(Icons.Outlined.ChatBubbleOutline, SaluColors.Green, SaluColors.IconGreen, "Message")
     NotificationType.RESERVATION_CREATED ->
         AlertStyle(Icons.Outlined.BookmarkAdded, SaluColors.Orange, SaluColors.OrangeSoft, "New reservation", SaluColors.DarkGreen)
     NotificationType.RESERVATION_CANCELLED ->
