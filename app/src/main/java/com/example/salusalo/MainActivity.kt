@@ -2825,7 +2825,7 @@ private fun AvailableFoodCard(
                         append(food.donorName)
                         food.donorRating?.let {
                             append("  ")
-                            withStyle(SpanStyle(color = SaluColors.Green, fontWeight = FontWeight.SemiBold)) { append(it) }
+                            withStyle(SpanStyle(color = SaluColors.RatingAmber, fontWeight = FontWeight.SemiBold)) { append(it) }
                         }
                     },
                     style = SaluText.Supporting,
@@ -3256,7 +3256,7 @@ private fun FoodDetailsScreen(
                                         append(" · ")
                                         val rating = food.donorRating
                                         if (rating != null) {
-                                            withStyle(SpanStyle(color = SaluColors.Green, fontWeight = FontWeight.SemiBold)) {
+                                            withStyle(SpanStyle(color = SaluColors.RatingAmber, fontWeight = FontWeight.SemiBold)) {
                                                 append(rating)
                                             }
                                         } else {
