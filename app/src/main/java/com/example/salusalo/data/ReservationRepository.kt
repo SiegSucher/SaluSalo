@@ -41,7 +41,7 @@ class ReservationRepository(
     suspend fun releaseReservation(reservationId: String): Reservation =
         postgrest.rpc("release_reservation", buildJsonObject { put("p_reservation_id", reservationId) }).decodeAs()
 
-    suspend fun getMyReservations(): List<ReservationDisplay> = getReservationsForProfile(userRepository.getCurrentProfile().id)
+    suspend fun getMyReservations(): List<ReservationDisplay> = getReservationsForProfile(userRepository.getCurrentProfileId())
 
     suspend fun getReservationsForMyFoodPosts(): List<ReservationDisplay> {
         // This RPC exposes recipient names only for reservations on the signed-in

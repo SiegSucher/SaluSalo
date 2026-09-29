@@ -116,6 +116,19 @@ class UserRepository(
         return findProfile(firebaseUid) ?: throw ProfileException.NotFound
     }
 
+    /**
+     * The signed-in account's profile ID, looked up once per Firebase account
+     * and then remembered while the app runs, which saves a `users` request on
+     * most loads. A profile's ID never changes (a restored profile keeps it);
+     * every request is still checked against the token by RLS.
+     */
+    suspend fun getCurrentProfileId(): String {
+        val firebaseUid = firebaseAuth.currentUser?.uid
+            ?: throw ProfileException.NotSignedIn
+        profileIdsByUid[firebaseUid]?.let { return it }
+        return getCurrentProfile().id.also { profileIdsByUid[firebaseUid] = it }
+    }
+
     /** Saves only the authenticated caller's name and bio through the restricted RPC. */
     suspend fun updateMyProfile(name: String, bio: String): UserProfile =
         supabase.postgrest.rpc("update_my_profile_details", buildJsonObject {
@@ -267,6 +280,9 @@ private const val SET_ROLE_FUNCTION = "set-firebase-role"
 
 /** One role setup at a time: sign-in and the check when the signed-in user changes can overlap. */
 private val roleSetupLock = Mutex()
+
+/** Profile IDs by Firebase UID, for [UserRepository.getCurrentProfileId]; shared by every repository. */
+private val profileIdsByUid = java.util.concurrent.ConcurrentHashMap<String, String>()
 
 /** True when Firebase ID token claims carry the role Supabase requires. */
 internal fun hasSupabaseRole(claims: Map<String, Any?>): Boolean = claims["role"] == "authenticated"

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.salusalo.data.MessageRepository
+import com.example.salusalo.data.shortErrorText
 import com.example.salusalo.model.ChatMessage
 import com.example.salusalo.model.ConversationSummary
 import com.example.salusalo.model.parseTimestamp
@@ -232,6 +233,8 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun errorText(error: Throwable) = error.message?.takeIf { it.isNotBlank() }
-        ?: "Could not complete the message request. Check your connection and try again."
+    // Only the server's short text (for example "This listing is no longer
+    // available"): the exception's own message can include the URL and headers.
+    private fun errorText(error: Throwable) =
+        shortErrorText(error, "Could not complete the message request. Check your connection and try again.")
 }

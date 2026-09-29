@@ -28,6 +28,10 @@ class SavedListingViewModel(application: Application) : AndroidViewModel(applica
     private var startedProfileId: String? = null
     // Listings with a save or remove on its way, so a quick second tap is ignored.
     private val pending = mutableSetOf<String>()
+    // Bookmarks changed on this phone that a running load may not include yet
+    // (listing ID → saved): those still on their way, and those that finished
+    // after the load began. They win over that load's older answer.
+    private val localChanges = mutableMapOf<String, Boolean>()
 
     /** Loads the bookmarks once per signed-in profile, so the icons are right from the start. */
     fun start(profileId: String) {
@@ -38,12 +42,16 @@ class SavedListingViewModel(application: Application) : AndroidViewModel(applica
 
     fun load() {
         if (_loading.value) return
+        // Changes that finished before this load began are in its answer.
+        localChanges.keys.retainAll(pending)
         viewModelScope.launch {
             _loading.value = true
             try {
                 val rows = repository.getSavedListings()
-                _saved.value = rows
-                _savedIds.value = rows.map { it.foodPostId }.toSet()
+                _saved.value = rows.filterNot { localChanges[it.foodPostId] == false }
+                _savedIds.value = rows.map { it.foodPostId }.toMutableSet().apply {
+                    localChanges.forEach { (id, saved) -> if (saved) add(id) else remove(id) }
+                }
                 _loadFailed.value = false
             } catch (error: CancellationException) {
                 throw error
@@ -60,6 +68,7 @@ class SavedListingViewModel(application: Application) : AndroidViewModel(applica
         if (!pending.add(foodPostId)) return
         val wasSaved = foodPostId in _savedIds.value
         _savedIds.update { if (wasSaved) it - foodPostId else it + foodPostId }
+        localChanges[foodPostId] = !wasSaved
         viewModelScope.launch {
             try {
                 if (wasSaved) {
@@ -72,6 +81,7 @@ class SavedListingViewModel(application: Application) : AndroidViewModel(applica
                 throw error
             } catch (error: Exception) {
                 _savedIds.update { if (wasSaved) it + foodPostId else it - foodPostId }
+                localChanges[foodPostId] = wasSaved
                 _message.value = "Your bookmark could not be saved. Check your internet connection and try again."
             } finally {
                 pending.remove(foodPostId)
@@ -92,6 +102,7 @@ class SavedListingViewModel(application: Application) : AndroidViewModel(applica
     fun clearSession() {
         startedProfileId = null
         pending.clear()
+        localChanges.clear()
         _savedIds.value = emptySet()
         _saved.value = emptyList()
         _loadFailed.value = false

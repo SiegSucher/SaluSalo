@@ -65,9 +65,9 @@ class SavedListingRepository(
     }
 
     suspend fun save(foodPostId: String) {
-        val profile = userRepository.getCurrentProfile()
+        val profileId = userRepository.getCurrentProfileId()
         // A second tap on another phone is not an error: the row already exists.
-        supabase.from("saved_listings").upsert(NewSavedListing(profile.id, foodPostId)) {
+        supabase.from("saved_listings").upsert(NewSavedListing(profileId, foodPostId)) {
             ignoreDuplicates = true
         }
     }

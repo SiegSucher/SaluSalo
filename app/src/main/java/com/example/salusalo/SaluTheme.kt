@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
 
 /*
  * Salu-Salo's design tokens and shared components. Every screen takes its
@@ -590,8 +591,9 @@ internal fun Avatar(
         contentAlignment = Alignment.Center
     ) {
         if (photoUrl != null && !failed) {
+            val context = LocalPlatformContext.current
             AsyncImage(
-                model = photoUrl,
+                model = remember(photoUrl, context) { signedImageRequest(context, photoUrl) },
                 contentDescription = contentDescription,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

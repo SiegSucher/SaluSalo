@@ -355,6 +355,34 @@ Run `migrations/20261007_bugfix_profile_relink.sql` by hand in the SQL Editor af
 
 After running it, run `tests/bugfix_profile_relink_live_safety_check.sql` the same way. All 9 checks should pass. It needs one account.
 
+## Bug fix pass, round 2: one rating per reviewer
+
+Run `migrations/20261008_bugfix_one_rating_per_reviewer.sql` by hand in the SQL Editor after `20261007_bugfix_profile_relink.sql`. It can run before or after installing any build and is safe to run again; it changes four read functions and no table or row.
+
+- **Why (audit #12).** Every picked-up reservation allows its own review (that stays), and every review counted toward the donor's rating, so repeated small pickups by one person, or by the donor's own second account, counted many times.
+- **What:** `get_listing_donor_profiles`, `get_listing_donor_reviews`, `get_my_rating_summary` and `get_my_received_reviews` count and list only each reviewer's **latest** review of a donor (newest `updated_at`). No review is deleted; `submit_review` and `get_my_given_reviews` are unchanged, so the Rate page and "Change your review" work as before. Same names, arguments, result columns, checks and grants (`authenticated` only).
+- **Limit:** a friendly second account still adds one rating; stopping that would need identity checks (Phase 6).
+
+After running it, run `tests/bugfix_ratings_live_safety_check.sql` the same way as the other live checks. All 5 checks should pass. It needs three accounts.
+
+## Bug fix pass, round 2: Storage limits and rate limits
+
+Run `migrations/20261009_bugfix_storage_and_rate_limits.sql` by hand in the SQL Editor after `20261008_bugfix_one_rating_per_reviewer.sql`. It can run before or after installing any build and is safe to run again.
+
+- **Bucket limits (audit #24).** `food-images` and `profile-images` accept only `image/jpeg`, `image/png` and `image/webp`, at most 5 MB per file, and stay private. The app uploads JPEGs of a few hundred KB (listing photos are shrunk to 1600 px, profile photos to 512 px); supabase-kt sends `image/jpeg` from the `.jpg` file name. Nothing is deleted automatically: `tests/storage_orphans_query.sql` (read-only) lists files older than a day that no listing or profile uses, to review and delete by hand in Storage.
+- **Rate limits (#25).** `send_message`: at most 20 messages per person per minute ("You are sending messages too quickly. Wait a minute and try again."). `create_reservation`, and so `create_reservation_at_price`: at most 10 reservations per person per 10 minutes ("You made many reservations in a short time. Wait a few minutes and try again."), which also bounds reserve/cancel loops. Both are counted under a per-person advisory lock, like `submit_report`'s daily limit, and use two new indexes (`messages_sender_created_idx`, `reservations_recipient_created_idx`). Otherwise the two functions are unchanged (same arguments, results, checks and texts). `start_listing_conversation` needs no limit (one chat per listing and person).
+
+After running it, run `tests/bugfix_limits_live_safety_check.sql` the same way. All 5 checks should pass. It needs two accounts.
+
+## Bug fix pass, round 2: no function without a login
+
+Run `migrations/20261010_bugfix_revoke_anon_execute.sql` by hand in the SQL Editor after `20261009_bugfix_storage_and_rate_limits.sql`. It can run before or after installing any build and is safe to run again; it changes only function privileges.
+
+- **Why (audit #32).** Supabase gives `anon` (a request without a login) EXECUTE on new functions, and PUBLIC has EXECUTE unless revoked. The later migrations revoked both, but the Phase 1–4 ones often revoked only PUBLIC, so `anon` could still call, for example, `is_reservation_recipient` and the Phase 4 chat functions. They all refused (each checks the Firebase token first); this removes the privilege itself.
+- **What:** for every function in `public` that isn't part of an extension, EXECUTE is revoked from `anon`. Where `anon` could still run it through PUBLIC, EXECUTE is first granted to `authenticated` and `service_role`, then revoked from PUBLIC, so signed-in users keep exactly the access they had. Functions already closed to clients (`notify_user`, `caller_can_view_food_post`, `food_posts_check_values`, …) get nothing.
+
+After running it, run `tests/bugfix_anon_grants_check.sql` (read-only): 3 rows, all PASS. It confirms that no function is executable by `anon`, that `authenticated` can still run the 34 functions the app and its policies use, and that the internal functions stay closed. Running all the earlier live checks again afterwards is a good regression test.
+
 ## Safety checks (`tests/`)
 
 The files in `tests/` are not migrations and change nothing. `tests/phase4_live_safety_check.sql` checks that the live Phase 4 rules still refuse what they should. Paste it into the SQL Editor (role `postgres`) and run it. It pretends to be the two participants of the most recent chat and the newest other account, tries forbidden actions, and reports each check as PASS, FAIL or SKIP. It always ends with an error on purpose (`SAFETY CHECK FINISHED: …`); the error rolls back everything the check did. It needs at least one chat with messages, and a third account for the outsider checks.
