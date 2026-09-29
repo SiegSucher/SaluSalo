@@ -93,6 +93,12 @@ class FoodRepository(
      * the photos uploaded so far are deleted, best effort.
      */
     suspend fun createFoodPost(draft: FoodPostDraft, photos: List<ByteArray>): FoodPost {
+        require(
+            draft.maxPerReceiver == null ||
+                    draft.maxPerReceiver in 1..draft.quantity
+        ) {
+            "The maximum per receiver must be between 1 and the listing quantity."
+        }
         require(photos.isNotEmpty() && photos.all { it.isNotEmpty() }) { "Choose a food image before posting." }
         require(photos.size <= MAX_LISTING_PHOTOS) { "Choose at most $MAX_LISTING_PHOTOS photos." }
         val pin = draft.pickupPin.rounded()
@@ -125,6 +131,7 @@ class FoodRepository(
             description = draft.description.trim().ifBlank { null },
             category = draft.category,
             quantity = draft.quantity,
+            maxPerReceiver = draft.maxPerReceiver,
             unit = draft.unit,
             imageUrl = paths.first(),
             pickupLocation = draft.pickupLocation.trim(),

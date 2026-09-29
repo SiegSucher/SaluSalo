@@ -14,6 +14,8 @@ data class FoodPost(
     val description: String? = null,
     val category: String,
     val quantity: Int,
+    @SerialName("max_per_receiver")
+    val maxPerReceiver: Int? = null,
     val unit: String,
     @SerialName("image_url") val imageUrl: String? = null,
     @SerialName("pickup_location") val pickupLocation: String,
@@ -68,6 +70,8 @@ data class NewFoodPost(
     val description: String? = null,
     val category: String,
     val quantity: Int,
+    @SerialName("max_per_receiver")
+    val maxPerReceiver: Int?,
     val unit: String,
     @SerialName("image_url") val imageUrl: String? = null,
     @SerialName("pickup_location") val pickupLocation: String,
