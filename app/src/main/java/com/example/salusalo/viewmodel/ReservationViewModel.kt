@@ -88,11 +88,7 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     ): Boolean = launchWrite {
         _reserveResult.value = null
         _reserveResult.value = try {
-            val reservation = repository.createReservation(
-                foodPostId = foodPostId,
-                quantity = quantity,
-                pickupMinutes = pickupMinutes
-            )
+            val reservation = repository.createReservation(foodPostId, quantity, pickupMinutes)
             refreshPending = true
             val text = note.trim()
             val noteSent = if (text.isEmpty()) null else try {
@@ -117,9 +113,13 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     /** Returns false when ignored because another write has not finished yet. */
     fun cancel(reservationId: String): Boolean = launchWrite {
         _message.value = try {
-            repository.cancelReservation(reservationId)
+            val cancelled = repository.cancelReservation(reservationId)
             refreshPending = true
-            "Reservation cancelled. The quantity is available again."
+            if (cancelled.expiredByPickupDeadline) {
+                "Reservation expired. The pickup deadline passed and its held quantity was released."
+            } else {
+                "Reservation cancelled. Its held quantity was released."
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {

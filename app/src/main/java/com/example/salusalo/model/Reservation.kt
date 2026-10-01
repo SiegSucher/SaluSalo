@@ -20,9 +20,12 @@ data class Reservation(
     @SerialName("pickup_deadline") val pickupDeadline: String? = null
 ) {
     val cancelledByListingRemoval: Boolean get() = cancelReason == CANCEL_REASON_LISTING_REMOVED
+    val expiredByPickupDeadline: Boolean
+        get() = status == ReservationStatus.CANCELLED && cancelReason == CANCEL_REASON_PICKUP_EXPIRED
 }
 
 const val CANCEL_REASON_LISTING_REMOVED = "LISTING_REMOVED"
+const val CANCEL_REASON_PICKUP_EXPIRED = "PICKUP_EXPIRED"
 
 @Serializable
 enum class ReservationStatus { RESERVED, CLAIMED, CANCELLED }
@@ -43,8 +46,23 @@ internal data class DonorReservationRow(
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("recipient_name") val recipientName: String,
-    @SerialName("unit_price") val unitPrice: Double = 0.0
+    @SerialName("unit_price") val unitPrice: Double = 0.0,
+    @SerialName("cancel_reason") val cancelReason: String? = null,
+    @SerialName("pickup_minutes") val pickupMinutes: Int? = null,
+    @SerialName("pickup_deadline") val pickupDeadline: String? = null
 ) {
-    fun toReservation() = Reservation(id, foodPostId, recipientId, quantity, status, createdAt, updatedAt, unitPrice)
+    fun toReservation() = Reservation(
+        id = id,
+        foodPostId = foodPostId,
+        recipientId = recipientId,
+        quantity = quantity,
+        status = status,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        unitPrice = unitPrice,
+        cancelReason = cancelReason,
+        pickupMinutes = pickupMinutes,
+        pickupDeadline = pickupDeadline
+    )
 }
 

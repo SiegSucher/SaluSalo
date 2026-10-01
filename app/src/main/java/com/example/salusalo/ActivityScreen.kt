@@ -35,6 +35,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleStartEffect
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import java.time.Duration
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.ListingHandover
@@ -113,6 +121,71 @@ private class ActivityReservation(val entry: ReservationDisplay, val mine: Boole
     val lastChange: Instant? get() = parseTimestamp(reservation.updatedAt) ?: parseTimestamp(reservation.createdAt)
 }
 
+
+/** The phone estimates remaining time; Supabase alone confirms expiry and releases stock. */
+private fun ActivityReservation.deadlinePassed(now: Instant): Boolean =
+    status == ReservationStatus.RESERVED &&
+            parseTimestamp(reservation.pickupDeadline)?.let { !it.isAfter(now) } == true
+
+private fun ActivityReservation.canConfirmPickup(now: Instant): Boolean =
+    status == ReservationStatus.RESERVED && !deadlinePassed(now) &&
+            post.status in listOf(FoodPostStatus.AVAILABLE, FoodPostStatus.RESERVED) &&
+            !post.isExpired(now) &&
+            (parseTimestamp(post.pickupStart)?.let { !it.isAfter(now) } ?: true) &&
+            (parseTimestamp(post.pickupEnd)?.isAfter(now) ?: true)
+
+private fun pickupCountdownText(deadline: Instant, now: Instant): String {
+    val duration = Duration.between(now, deadline)
+    val seconds = if (duration.isNegative || duration.isZero) 0L
+    else duration.seconds + if (duration.nano > 0) 1L else 0L
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    val rest = (seconds % 60).toString().padStart(2, '0')
+    return if (hours > 0) "$hours:${minutes.toString().padStart(2, '0')}:$rest"
+    else "${minutes.toString().padStart(2, '0')}:$rest"
+}
+
+@Composable
+private fun PickupCountdown(item: ActivityReservation, now: Instant, details: Boolean = false) {
+    val reservation = item.reservation
+    val deadline = parseTimestamp(reservation.pickupDeadline)
+    val expired = reservation.expiredByPickupDeadline
+    val pending = item.deadlinePassed(now)
+    if (!details && item.status != ReservationStatus.RESERVED && !expired) return
+    val urgent = pending || expired || (item.status == ReservationStatus.RESERVED &&
+            deadline != null && Duration.between(now, deadline).seconds <= 300)
+    val color = if (urgent) SaluColors.Error else SaluColors.DarkGreen
+    val heading = when {
+        expired -> "Expired — pickup deadline passed"
+        item.status == ReservationStatus.CLAIMED -> "Pickup completed"
+        item.status == ReservationStatus.CANCELLED -> "Reservation cancelled"
+        pending -> "Deadline passed — awaiting server update"
+        deadline != null -> "Time left: ${pickupCountdownText(deadline, now)}"
+        else -> "No pickup deadline recorded"
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(heading, style = SaluText.Supporting, color = color)
+        if (deadline != null) {
+            val formatted = DateTimeFormatter
+                .ofPattern("MMM d, yyyy · h:mm:ss a z", Locale.getDefault())
+                .withZone(ZoneId.systemDefault()).format(deadline)
+            Text("Pickup deadline: $formatted", style = SaluText.Meta, color = SaluColors.Gray)
+        }
+        if (details) {
+            reservation.pickupMinutes?.let {
+                Text("Selected duration: $it minutes", style = SaluText.Meta, color = SaluColors.Gray)
+            }
+            if (item.status == ReservationStatus.RESERVED) {
+                Text(
+                    if (deadline == null) "This older reservation has no automatic pickup timeout."
+                    else "The provider must confirm the handover before the deadline. Server time decides expiry.",
+                    style = SaluText.Meta, color = SaluColors.Gray
+                )
+            }
+        }
+    }
+}
+
 /** The review page that is open: which reservation, with what it showed when opened. */
 private data class RatingTarget(
     val reservationId: String,
@@ -154,9 +227,42 @@ fun ActivityScreen(
     val reviewResult by reservationViewModel.reviewResult.collectAsStateWithLifecycle()
     val reservationMessage by reservationViewModel.message.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) {
+    var now by remember { mutableStateOf(Instant.now()) }
+    val activityScope = rememberCoroutineScope()
+    LifecycleStartEffect(reservationViewModel, foodViewModel) {
         foodViewModel.loadMyPosts()
-        reservationViewModel.refresh()
+        val clockJob = activityScope.launch {
+            while (isActive) {
+                now = Instant.now()
+                delay(1_000)
+            }
+        }
+        val refreshJob = activityScope.launch {
+            while (isActive) {
+                if (!reservationViewModel.loading.value && !reservationViewModel.saving.value) {
+                    reservationViewModel.refresh()
+                }
+                delay(15_000)
+            }
+        }
+        onStopOrDispose {
+            clockJob.cancel()
+            refreshJob.cancel()
+        }
+    }
+
+    // Only server status changes move a reservation to History and release stock.
+    var previousReservationStates by remember { mutableStateOf<List<String>?>(null) }
+    LaunchedEffect(myReservations, donorReservations) {
+        val states = (myReservations + donorReservations)
+            .map { "${it.reservation.id}:${it.reservation.status}:${it.reservation.cancelReason}" }
+            .distinct().sorted()
+        val previous = previousReservationStates
+        previousReservationStates = states
+        if (previous != null && previous != states) {
+            foodViewModel.loadMyPosts()
+            foodViewModel.loadAvailablePosts()
+        }
     }
 
     // My Listings shows skeleton cards, not "no listings", until its first load here has finished.
@@ -184,7 +290,7 @@ fun ActivityScreen(
             }
             reservationViewModel.clearMessage()
             // A cancel returns quantity to the listing, so refresh the Home feed.
-            if (it.startsWith("Reservation cancelled")) foodViewModel.loadAvailablePosts()
+            if (it.startsWith("Reservation cancelled") || it.startsWith("Reservation expired")) foodViewModel.loadAvailablePosts()
         }
     }
 
@@ -206,18 +312,17 @@ fun ActivityScreen(
     var rating by remember { mutableStateOf<RatingTarget?>(null) }
     var notice by rememberSaveable { mutableStateOf("") }
 
-    val now = remember(myPosts, myReservations, donorReservations) { Instant.now() }
     // Only reservations this account made, and only reservations on its own listings.
     val made = myReservations.map { ActivityReservation(it, mine = true) }
     val received = donorReservations.map { ActivityReservation(it, mine = false) }
     val everyReservation = made + received
     val onListing = received.groupBy { it.reservation.foodPostId }
 
-    // Active: can still be reserved, or has reservations to hand over. Nothing on
-    // the server marks a listing EXPIRED; it is worked out from expiration_date.
+    // Active: still available or still has a reservation awaiting a server status update.
+    // Expiry cleanup may also mark a listing EXPIRED when its pickup window ends.
     fun isActive(post: FoodPost): Boolean =
         onListing[post.id].orEmpty().any { it.status == ReservationStatus.RESERVED } ||
-            (post.status == FoodPostStatus.AVAILABLE && !post.isExpired(now))
+                (post.status == FoodPostStatus.AVAILABLE && !post.isExpired(now))
 
     // Removed listings are left out by the repository.
     val listings = myPosts.sortedByDescending { parseTimestamp(it.createdAt) ?: Instant.EPOCH }
@@ -583,14 +688,19 @@ fun ActivityScreen(
 
     confirmClaim?.let { item ->
         val name = item.otherName ?: "the recipient"
+        val current = everyReservation.firstOrNull { it.key == item.key }
+        val canConfirm = current?.canConfirmPickup(now) == true
         AlertDialog(
             onDismissRequest = { confirmClaim = null },
             title = { Text("Mark as picked up?") },
             text = {
-                Text("Do this only after you've handed ${item.amount} of ${item.post.name} to $name. It can't be undone.")
+                Text(
+                    if (canConfirm) "Do this only after you've handed ${item.amount} of ${item.post.name} to $name. It can't be undone."
+                    else "This reservation can no longer be confirmed here. Check its status and pickup window."
+                )
             },
             confirmButton = {
-                TextButton(enabled = !reservationSaving, onClick = {
+                TextButton(enabled = !reservationSaving && canConfirm, onClick = {
                     if (reservationViewModel.claim(item.id)) confirmClaim = null
                 }) { Text("Mark as picked up") }
             },
@@ -605,7 +715,7 @@ fun ActivityScreen(
             onDismissRequest = { confirmCancel = null },
             title = { Text("Cancel this reservation?") },
             text = {
-                Text("Your ${item.amount} of ${item.post.name} will be available for others to reserve again.")
+                Text("This releases your hold on ${item.amount} of ${item.post.name}. The food is available to others only while the listing remains open.")
             },
             confirmButton = {
                 TextButton(enabled = !reservationSaving, onClick = {
@@ -865,14 +975,14 @@ private fun HistoryTotals(
             ActivityMetric("Completed", completed.toString(), "transactions", Modifier.weight(1f)) {
                 onExplain(
                     "$completed completed: your reservations that providers marked as picked up, " +
-                        "plus reservations on your listings that you marked as picked up."
+                            "plus reservations on your listings that you marked as picked up."
                 )
             }
             MetricDivider()
             ActivityMetric("Items rescued", items.toString(), "items", Modifier.weight(1f)) {
                 onExplain(
                     "$items items rescued: the total quantity of those completed reservations, " +
-                        "counting each unit (pack, piece, kg) as one."
+                            "counting each unit (pack, piece, kg) as one."
                 )
             }
         }
@@ -1099,7 +1209,11 @@ private fun ActivityReservationCard(
                             color = SaluColors.Gray
                         )
                         Spacer(Modifier.height(4.dp))
-                        ReservationStatusBadge(item.status)
+                        ReservationStatusBadge(
+                            item.status,
+                            expired = item.reservation.expiredByPickupDeadline,
+                            deadlinePassed = item.deadlinePassed(now)
+                        )
                         Spacer(Modifier.height(2.dp))
                         if (item.priced) IconLine(Icons.Outlined.Payments, "Pay at pickup")
                         val window = pickupLine(parseTimestamp(post.pickupStart), parseTimestamp(post.pickupEnd), now)
@@ -1110,6 +1224,7 @@ private fun ActivityReservationCard(
                         }
                     }
                 }
+                PickupCountdown(item, now)
                 SaluSecondaryButton(text = "View reservation", onClick = onView)
             }
 
@@ -1166,7 +1281,11 @@ private fun ActivityHistoryRow(
                             .weight(1f)
                             .padding(end = 8.dp)
                     )
-                    ReservationStatusBadge(item.status)
+                    ReservationStatusBadge(
+                        item.status,
+                        expired = item.reservation.expiredByPickupDeadline,
+                        deadlinePassed = item.deadlinePassed(now)
+                    )
                 }
                 Text(
                     historyKind(item),
@@ -1195,7 +1314,20 @@ private fun ActivityHistoryRow(
 
 /** A reservation's status: Reserved, Completed (marked picked up) or Cancelled, each with its icon. */
 @Composable
-private fun ReservationStatusBadge(status: ReservationStatus, modifier: Modifier = Modifier) {
+private fun ReservationStatusBadge(
+    status: ReservationStatus,
+    modifier: Modifier = Modifier,
+    expired: Boolean = false,
+    deadlinePassed: Boolean = false
+) {
+    if (expired) {
+        StatusBadge(SaluStatus.Cancelled, modifier, label = "Expired")
+        return
+    }
+    if (status == ReservationStatus.RESERVED && deadlinePassed) {
+        StatusBadge(SaluStatus.Reserved, modifier, label = "Deadline passed")
+        return
+    }
     when (status) {
         ReservationStatus.RESERVED -> StatusBadge(SaluStatus.Reserved, modifier)
         ReservationStatus.CLAIMED -> StatusBadge(SaluStatus.Claimed, modifier, label = "Completed")
@@ -1295,7 +1427,13 @@ private fun MoreMenu(title: String, actions: List<MenuAction>, modifier: Modifie
 
 /** The food at the top of a reservation page: photo, name, who it's from or for, and the status. */
 @Composable
-private fun PageFoodCard(post: FoodPost, line: String?, status: ReservationStatus) {
+private fun PageFoodCard(
+    post: FoodPost,
+    line: String?,
+    status: ReservationStatus,
+    expired: Boolean = false,
+    deadlinePassed: Boolean = false
+) {
     SaluCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -1317,7 +1455,7 @@ private fun PageFoodCard(post: FoodPost, line: String?, status: ReservationStatu
                 line?.let {
                     Text(it, style = SaluText.Supporting, color = SaluColors.Gray, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-                ReservationStatusBadge(status)
+                ReservationStatusBadge(status, expired = expired, deadlinePassed = deadlinePassed)
             }
         }
     }
@@ -1529,9 +1667,14 @@ private fun ManagedReservationCard(
                     )
                     moment?.let { Text(it, style = SaluText.Meta, color = SaluColors.Gray) }
                     Spacer(Modifier.height(2.dp))
-                    ReservationStatusBadge(item.status)
+                    ReservationStatusBadge(
+                        item.status,
+                        expired = item.reservation.expiredByPickupDeadline,
+                        deadlinePassed = item.deadlinePassed(now)
+                    )
                 }
             }
+            PickupCountdown(item, now)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SaluSecondaryButton(
                     text = "Message",
@@ -1543,7 +1686,7 @@ private fun ManagedReservationCard(
                     SaluPrimaryButton(
                         text = "Mark as picked up",
                         onClick = onMarkPickedUp,
-                        enabled = !saving,
+                        enabled = !saving && item.canConfirmPickup(now),
                         modifier = Modifier.weight(1.15f)
                     )
                 }
@@ -1553,28 +1696,34 @@ private fun ManagedReservationCard(
 }
 
 /** What a reservation page says about where things stand. */
-private fun reservationNote(item: ActivityReservation): String {
+private fun reservationNote(item: ActivityReservation, now: Instant): String {
+    if (item.reservation.expiredByPickupDeadline) {
+        return "Expired — pickup was not confirmed before the deadline. The held quantity was released."
+    }
+    if (item.deadlinePassed(now)) {
+        return "The pickup deadline has passed on this device. Waiting for the server's updated status."
+    }
     val removedLater = item.post.status == FoodPostStatus.REMOVED
     return when (item.status) {
         ReservationStatus.RESERVED -> if (item.mine) {
             "Your reservation is recorded. Message the provider to coordinate pickup." +
-                if (item.priced) " Pay ${item.total} at pickup." else ""
+                    if (item.priced) " Pay ${item.total} at pickup." else ""
         } else {
             "Hand over the food, then mark it as picked up." +
-                if (item.priced) " Collect ${item.total} at pickup." else ""
+                    if (item.priced) " Collect ${item.total} at pickup." else ""
         }
         ReservationStatus.CLAIMED -> if (item.mine) {
             "The provider marked this as picked up." +
-                if (removedLater) " The donor has since removed this listing." else ""
+                    if (removedLater) " The donor has since removed this listing." else ""
         } else {
             "You marked this as picked up." +
-                if (removedLater) " You have since removed this listing." else ""
+                    if (removedLater) " You have since removed this listing." else ""
         }
         ReservationStatus.CANCELLED -> when {
             item.mine && item.reservation.cancelledByListingRemoval ->
                 "Cancelled because the donor removed this listing."
             item.mine -> "You cancelled this reservation." +
-                if (removedLater) " The donor has since removed this listing." else ""
+                    if (removedLater) " The donor has since removed this listing." else ""
             removedLater -> "This reservation was cancelled. You have since removed this listing."
             else -> (item.otherName ?: "The recipient") + " cancelled this reservation."
         }
@@ -1609,8 +1758,11 @@ private fun ReservationDetailsPage(
         PageFoodCard(
             post = post,
             line = item.otherName?.let { if (item.mine) "From $it" else "Reserved by $it" },
-            status = item.status
+            status = item.status,
+            expired = item.reservation.expiredByPickupDeadline,
+            deadlinePassed = item.deadlinePassed(now)
         )
+        PickupCountdown(item, now, details = true)
 
         DetailCard {
             DetailRow(Icons.Outlined.Inventory2, "Quantity", item.amount)
@@ -1640,7 +1792,7 @@ private fun ReservationDetailsPage(
             )
         }
 
-        InlineNotice(text = reservationNote(item), icon = Icons.Outlined.Info)
+        InlineNotice(text = reservationNote(item, now), icon = Icons.Outlined.Info)
 
         val messageLabel = if (item.mine) "Message provider" else "Message recipient"
         when {
@@ -1659,7 +1811,7 @@ private fun ReservationDetailsPage(
                 SaluSecondaryButton(text = messageLabel, icon = Icons.Outlined.ChatBubbleOutline, onClick = onMessage)
             }
             !item.mine && open -> {
-                ActionButton(text = "Mark as picked up", enabled = !saving, onClick = onMarkPickedUp)
+                ActionButton(text = "Mark as picked up", enabled = !saving && item.canConfirmPickup(now), onClick = onMarkPickedUp)
                 SaluSecondaryButton(text = messageLabel, icon = Icons.Outlined.ChatBubbleOutline, onClick = onMessage)
             }
             else -> SaluSecondaryButton(text = messageLabel, icon = Icons.Outlined.ChatBubbleOutline, onClick = onMessage)
@@ -1684,7 +1836,14 @@ private fun PickupDetailsPage(
     var directionsError by remember { mutableStateOf("") }
 
     ActionPage(heading = "Pickup details", onBack = onBack) {
-        PageFoodCard(post = post, line = item.otherName?.let { "From $it" }, status = item.status)
+        PageFoodCard(
+            post = post,
+            line = item.otherName?.let { "From $it" },
+            status = item.status,
+            expired = item.reservation.expiredByPickupDeadline,
+            deadlinePassed = item.deadlinePassed(now)
+        )
+        PickupCountdown(item, now, details = true)
 
         DetailCard {
             DetailRow(Icons.Outlined.Inventory2, "Quantity", item.amount)
@@ -1808,7 +1967,7 @@ private fun ListingDetailsPage(
                 Icons.Outlined.People,
                 "Reserved",
                 "${open.sumOf { it.reservation.quantity }} ${post.unit}" +
-                    if (open.isNotEmpty()) " (${open.size} open)" else ""
+                        if (open.isNotEmpty()) " (${open.size} open)" else ""
             )
             DetailRow(
                 Icons.Outlined.Sell,

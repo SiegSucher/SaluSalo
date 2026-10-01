@@ -25,21 +25,13 @@ class ReservationRepository(
         quantity: Int,
         pickupMinutes: Int
     ): Reservation {
-        require(quantity > 0) {
-            "Choose a quantity greater than zero."
-        }
-        require(pickupMinutes in setOf(15, 30, 60, 120)) {
-            "Choose a valid pickup duration."
-        }
-
-        return postgrest.rpc(
-            "create_reservation_with_pickup",
-            buildJsonObject {
-                put("p_food_post_id", foodPostId)
-                put("p_quantity", quantity)
-                put("p_pickup_minutes", pickupMinutes)
-            }
-        ).decodeAs()
+        require(quantity > 0) { "Choose a quantity greater than zero." }
+        require(pickupMinutes in setOf(15, 30, 60, 120)) { "Choose a valid pickup duration." }
+        return postgrest.rpc("create_reservation_with_pickup", buildJsonObject {
+            put("p_food_post_id", foodPostId)
+            put("p_quantity", quantity)
+            put("p_pickup_minutes", pickupMinutes)
+        }).decodeAs()
     }
 
     suspend fun cancelReservation(reservationId: String): Reservation =
@@ -53,7 +45,7 @@ class ReservationRepository(
     suspend fun getReservationsForMyFoodPosts(): List<ReservationDisplay> {
         // This RPC exposes recipient names only for reservations on the signed-in
         // donor's own food posts; it does not broaden profile-table RLS access.
-        val rows = postgrest.rpc("get_donor_reservations").decodeList<DonorReservationRow>()
+        val rows = postgrest.rpc("get_donor_reservations_with_pickup").decodeList<DonorReservationRow>()
         if (rows.isEmpty()) return emptyList()
         val posts = foodPostsById(rows.map { it.foodPostId }).withSignedImageUrls(bucket).associateBy { it.id }
         return rows.mapNotNull { row ->
