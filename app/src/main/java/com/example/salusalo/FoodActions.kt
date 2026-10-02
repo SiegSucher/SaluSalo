@@ -472,6 +472,7 @@ fun ReservationReviewDialog(
     expires: String,
     saving: Boolean,
     result: ReserveResult?,
+    allowanceState: ReservationAllowanceState,
     onConfirm: (note: String, pickupMinutes: Int) -> Unit,
     onMessageDonor: (reservationId: String) -> Unit,
     // Back or Done on the receipt: closes the receipt and the details page.
@@ -482,10 +483,11 @@ fun ReservationReviewDialog(
     val priced = unitPrice > 0
     val donorRole = if (priced) "seller" else "donor"
     var note by rememberSaveable(foodPostId) { mutableStateOf("") }
-    var pickupMinutes by rememberSaveable(foodPostId) {
-        mutableStateOf(30)
+    var pickupMinutes by rememberSaveable(foodPostId) { mutableStateOf<Int?>(null) }
+    val allowedMinutes = allowanceState.allowedMinutes
+    LaunchedEffect(allowedMinutes, saving) {
+        if (!saving && pickupMinutes !in allowedMinutes) pickupMinutes = null
     }
-
 
     val reserved = (result as? ReserveResult.Reserved)
         ?.takeIf { it.reservation.foodPostId == foodPostId }
@@ -552,6 +554,15 @@ fun ReservationReviewDialog(
 
                 ActionLine("Pickup location", pickupLocation)
                 ActionLine("Pickup window", pickupWindow)
+                reservation.pickupMinutes?.let { ActionLine("Selected duration", "$it minutes") }
+                reservation.pickupDeadline?.let { deadline ->
+                    com.example.salusalo.model.parseTimestamp(deadline)?.let { parsed ->
+                        val formatted = java.time.format.DateTimeFormatter
+                            .ofPattern("MMM d, yyyy · h:mm:ss a z", java.util.Locale.getDefault())
+                            .withZone(java.time.ZoneId.systemDefault()).format(parsed)
+                        ActionLine("Pickup deadline", formatted)
+                    }
+                }
 
                 when (reserved.noteSent) {
                     true -> Text(
@@ -613,32 +624,30 @@ fun ReservationReviewDialog(
             }
 
             ActionCard {
+                ReservationAllowanceSummary(allowanceState, unit)
+                Text("Pick up within", style = MaterialTheme.typography.titleMedium)
+                listOf(15 to "15 minutes", 30 to "30 minutes", 60 to "1 hour", 120 to "2 hours")
+                    .forEach { (minutes, label) ->
+                        FilterChip(
+                            selected = pickupMinutes == minutes,
+                            onClick = { pickupMinutes = minutes },
+                            enabled = !saving && minutes in allowedMinutes,
+                            label = { Text(label + if (minutes !in allowedMinutes) " · unavailable" else "") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 Text(
-                    text = "Pick up within",
-                    style = MaterialTheme.typography.titleMedium
-                )
-
-                listOf(
-                    15 to "15 minutes",
-                    30 to "30 minutes",
-                    60 to "1 hour",
-                    120 to "2 hours"
-                ).forEach { (minutes, label) ->
-                    FilterChip(
-                        selected = pickupMinutes == minutes,
-                        onClick = { pickupMinutes = minutes },
-                        enabled = !saving,
-                        label = { Text(label) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                Text(
-                    text = "Time starts when your reservation is confirmed. " +
-                            "Choose a duration that fits the listing's pickup window " +
-                            "and food expiry.",
+                    "Time starts when your reservation is confirmed. Choices must fit the pickup window and food expiry.",
                     style = MaterialTheme.typography.bodySmall
                 )
+                if (allowanceState.fresh && allowedMinutes.isEmpty()) {
+                    Text("No pickup duration currently fits, or no quantity is available to you.", color = SaluColors.Error)
+                } else if (pickupMinutes == null) {
+                    Text("Choose an available pickup duration.", style = MaterialTheme.typography.bodySmall)
+                }
+                if (allowanceState.fresh && quantity > allowanceState.maxQuantity) {
+                    Text("Your allowance changed. Go back and reduce the quantity.", color = SaluColors.Error)
+                }
             }
 
             OutlinedTextField(
@@ -674,9 +683,10 @@ fun ReservationReviewDialog(
 
             ActionButton(
                 text = if (saving) "Reserving…" else "Confirm reservation",
-                enabled = !saving,
+                enabled = !saving && quantity in 1..allowanceState.maxQuantity &&
+                        pickupMinutes != null && pickupMinutes in allowedMinutes,
                 loading = saving,
-                onClick = { onConfirm(note, pickupMinutes) }
+                onClick = { pickupMinutes?.let { onConfirm(note, it) } }
             )
         }
     }

@@ -2952,11 +2952,6 @@ private fun FoodDetailsScreen(
     onMessageReservation: (String) -> Unit,
     onBack: () -> Unit
 ) {
-    val available = food.quantity
-        .substringBefore(" ")
-        .toIntOrNull()
-        ?: 1
-
     val unit = food.quantity.substringAfter(" ", "items")
     val donation = food.price == "Free"
 
@@ -2981,6 +2976,17 @@ private fun FoodDetailsScreen(
     }
     val reserveSaving by reservationViewModel.saving.collectAsStateWithLifecycle()
     val reserveResult by reservationViewModel.reserveResult.collectAsStateWithLifecycle()
+    val allowanceState = rememberReservationAllowance(
+        food.id,
+        enabled = !isOwnFood &&
+                (reserveResult as? com.example.salusalo.viewmodel.ReserveResult.Reserved)?.reservation?.foodPostId != food.id
+    )
+    val reservableQuantity = allowanceState.maxQuantity
+    LaunchedEffect(reservableQuantity, reserveSaving, reviewing) {
+        if (!reserveSaving && !reviewing && reservableQuantity > 0 && quantity > reservableQuantity) {
+            quantity = reservableQuantity
+        }
+    }
 
     // Opens the real conversation with this listing's donor (Phase 4).
     fun messageDonor(draft: String) {
@@ -3060,13 +3066,9 @@ private fun FoodDetailsScreen(
             expires = expires,
             saving = reserveSaving,
             result = reserveResult,
+            allowanceState = allowanceState,
             onConfirm = { note, pickupMinutes ->
-                reservationViewModel.reserve(
-                    foodPostId = food.id,
-                    quantity = quantity,
-                    note = note,
-                    pickupMinutes = pickupMinutes
-                )
+                reservationViewModel.reserve(food.id, quantity, note, pickupMinutes)
             },
             onMessageDonor = { reservationId -> onMessageReservation(reservationId) },
             onFinished = {
@@ -3512,22 +3514,28 @@ private fun FoodDetailsScreen(
                             )
                         } else {
                             Text(payLine, style = SaluText.Supporting, color = SaluColors.DarkGreen)
+                            ReservationAllowanceSummary(allowanceState, unit)
+                            if (allowanceState.fresh && reservableQuantity > 0 && allowanceState.allowedMinutes.isEmpty()) {
+                                Text("No pickup duration currently fits this listing's pickup window and expiry.", style = SaluText.Meta, color = SaluColors.Error)
+                            }
 
                             Spacer(Modifier.height(10.dp))
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 QuantityStepper(
                                     quantity = quantity,
-                                    available = available,
+                                    available = reservableQuantity,
                                     unit = unit,
                                     onDecrease = { quantity-- },
-                                    onIncrease = { quantity++ }
+                                    onIncrease = { if (quantity < reservableQuantity) quantity++ }
                                 )
 
                                 Spacer(Modifier.width(12.dp))
 
                                 SaluPrimaryButton(
                                     text = "Reserve",
+                                    enabled = !reserveSaving && quantity in 1..reservableQuantity &&
+                                            allowanceState.allowedMinutes.isNotEmpty(),
                                     onClick = {
                                         reservationViewModel.clearReserveResult()
                                         reviewing = true

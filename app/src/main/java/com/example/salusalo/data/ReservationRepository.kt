@@ -34,6 +34,11 @@ class ReservationRepository(
         }).decodeAs()
     }
 
+    suspend fun getReservationAllowance(foodPostId: String): com.example.salusalo.model.ReservationAllowance =
+        postgrest.rpc("get_my_reservation_allowance", buildJsonObject {
+            put("p_food_post_id", foodPostId)
+        }).decodeList<com.example.salusalo.model.ReservationAllowance>().single()
+
     suspend fun cancelReservation(reservationId: String): Reservation =
         postgrest.rpc("cancel_reservation", buildJsonObject { put("p_reservation_id", reservationId) }).decodeAs()
 
