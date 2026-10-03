@@ -43,7 +43,7 @@ The web dashboard in `admin/` (today sample data only, `PROJECT_STATUS.md` §20)
 | Audit log | Every admin action, newest first: admin, action, target, details; filters admin, action, date; search | none |
 | Settings | The signed-in admin's name and email; Log out | none |
 
-The bell shows the open-reports count and links to Reports (the sample "admin alerts" are dropped). Notifications, Analytics and the Users "Verification requests" tab show "Not connected yet"; Verify, Suspend and Restore buttons are hidden.
+The bell shows the open-reports count and links to Reports (the sample "admin alerts" are dropped). Notifications and Analytics show "Not connected yet"; the Users "Verification requests" tab and the Verify, Suspend and Restore buttons are removed until their slices.
 
 ## 3. Database (one migration, `supabase/migrations/20261012_admin_dashboard.sql`, run by hand)
 
