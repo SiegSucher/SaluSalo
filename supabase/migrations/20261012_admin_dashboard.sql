@@ -782,24 +782,205 @@ begin
 end; $$;
 
 -- ---------------------------------------------------------------------------
--- 7. Privileges
+-- 6. Admin actions. Each writes its audit row in the same transaction.
 -- ---------------------------------------------------------------------------
-revoke all on function public.is_salusalo_admin() from public;
-revoke all on function public.is_salusalo_admin() from anon;
-grant execute on function public.is_salusalo_admin() to authenticated;
 
+-- Like remove_my_food_post, but never deletes: the listing stays as REMOVED with
+-- its quantity, its open reservations are cancelled (LISTING_REMOVED, which the
+-- reservations trigger does not alert about), each recipient gets one alert and
+-- the donor one, saved rows go, and its open reports are resolved.
+create or replace function public.admin_remove_listing(p_post uuid, p_reason text)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+    v_admin public.users := public.admin_require();
+    v_reason text := nullif(btrim(coalesce(p_reason, '')), '');
+    v_post public.food_posts;
+    v_cancelled integer := 0;
+    v_closed integer := 0;
+    v_recipient uuid;
+    v_count integer;
+    v_reservation uuid;
+begin
+    if v_reason is null or char_length(v_reason) > 500 then
+        raise exception 'Give a reason (up to 500 characters).';
+    end if;
+
+    -- Lock the open reservations, then the listing (the order remove_my_food_post uses).
+    perform 1 from public.reservations r
+    where r.food_post_id = p_post and r.status = 'RESERVED'
+    order by r.id
+    for update;
+    select * into v_post from public.food_posts p where p.id = p_post for update;
+    if not found then
+        raise exception 'Listing not found';
+    end if;
+    if v_post.status = 'REMOVED' then
+        raise exception 'This listing was already removed.';
+    end if;
+
+    update public.food_posts p set status = 'REMOVED' where p.id = p_post;
+
+    update public.reservations r
+    set status = 'CANCELLED', cancel_reason = 'LISTING_REMOVED'
+    where r.food_post_id = p_post and r.status = 'RESERVED';
+    get diagnostics v_cancelled = row_count;
+
+    -- The listing was not REMOVED before this call, so every LISTING_REMOVED
+    -- reservation on it was cancelled just now.
+    for v_recipient, v_count, v_reservation in
+        select r.recipient_id, count(*)::integer, (array_agg(r.id order by r.created_at desc))[1]
+        from public.reservations r
+        where r.food_post_id = p_post and r.cancel_reason = 'LISTING_REMOVED'
+        group by r.recipient_id
+    loop
+        perform public.notify_user(v_recipient, 'RESERVATION_REMOVED', 'Listing removed',
+            v_post.name || ' was removed by Salu-Salo, so your '
+            || case when v_count = 1 then 'reservation was' else v_count || ' reservations were' end
+            || ' cancelled.',
+            v_post.id, null, v_reservation);
+    end loop;
+
+    perform public.notify_user(v_post.donor_id, 'RESERVATION_REMOVED', 'Your listing was removed',
+        'Salu-Salo removed ' || v_post.name || ': ' || v_reason, v_post.id, null, null);
+
+    delete from public.saved_listings s where s.food_post_id = p_post;
+
+    update public.reports rp
+    set status = 'RESOLVED', resolved_by = v_admin.id, resolved_at = now(),
+        resolution_action = 'LISTING_REMOVED', resolution_note = v_reason
+    where rp.target_type = 'LISTING' and rp.food_post_id = p_post and rp.status = 'OPEN';
+    get diagnostics v_closed = row_count;
+
+    perform public.admin_log(v_admin, 'LISTING_REMOVED', 'LISTING', v_post.id, v_post.name, v_reason);
+    return jsonb_build_object('cancelled', v_cancelled, 'closedReports', v_closed);
+end; $$;
+
+create or replace function public.admin_dismiss_listing_reports(p_post uuid, p_note text)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+    v_admin public.users := public.admin_require();
+    v_note text := coalesce(nullif(btrim(coalesce(p_note, '')), ''), 'No problem found.');
+    v_post public.food_posts;
+    v_n integer;
+begin
+    if char_length(v_note) > 1000 then
+        raise exception 'Keep the note under 1,000 characters.';
+    end if;
+    select * into v_post from public.food_posts p where p.id = p_post;
+    if not found then
+        raise exception 'Listing not found';
+    end if;
+    update public.reports rp
+    set status = 'DISMISSED', resolved_by = v_admin.id, resolved_at = now(),
+        resolution_action = 'DISMISSED', resolution_note = v_note
+    where rp.target_type = 'LISTING' and rp.food_post_id = p_post and rp.status = 'OPEN';
+    get diagnostics v_n = row_count;
+    if v_n > 0 then
+        perform public.admin_log(v_admin, 'REPORTS_DISMISSED', 'LISTING', v_post.id, v_post.name, v_note);
+    end if;
+    return jsonb_build_object('dismissed', v_n);
+end; $$;
+
+create or replace function public.admin_dismiss_report(p_report uuid, p_note text)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+    v_admin public.users := public.admin_require();
+    v_note text := coalesce(nullif(btrim(coalesce(p_note, '')), ''), 'No problem found.');
+    v_report public.reports;
+begin
+    if char_length(v_note) > 1000 then
+        raise exception 'Keep the note under 1,000 characters.';
+    end if;
+    select * into v_report from public.reports rp where rp.id = p_report for update;
+    if not found then
+        raise exception 'Report not found';
+    end if;
+    if v_report.status <> 'OPEN' then
+        raise exception 'This report is already closed.';
+    end if;
+    update public.reports rp
+    set status = 'DISMISSED', resolved_by = v_admin.id, resolved_at = now(),
+        resolution_action = 'DISMISSED', resolution_note = v_note
+    where rp.id = p_report;
+    perform public.admin_log(v_admin, 'REPORTS_DISMISSED', 'REPORT', v_report.id,
+        '#' || upper(left(v_report.id::text, 8)), v_note);
+    return jsonb_build_object('dismissed', 1);
+end; $$;
+
+create or replace function public.admin_add_report_note(p_report uuid, p_note text)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+    v_admin public.users := public.admin_require();
+    v_note text := nullif(btrim(coalesce(p_note, '')), '');
+    v_id uuid;
+begin
+    if v_note is null or char_length(v_note) > 1000 then
+        raise exception 'Write a note (up to 1,000 characters).';
+    end if;
+    if not exists (select 1 from public.reports rp where rp.id = p_report) then
+        raise exception 'Report not found';
+    end if;
+    insert into public.report_notes (report_id, admin_id, note)
+    values (p_report, v_admin.id, v_note)
+    returning id into v_id;
+    perform public.admin_log(v_admin, 'REPORT_NOTE_ADDED', 'REPORT', p_report,
+        '#' || upper(left(p_report::text, 8)), left(v_note, 200));
+    return jsonb_build_object('id', v_id);
+end; $$;
+
+create or replace function public.admin_mark_listing_reviewed(p_post uuid, p_note text)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+    v_admin public.users := public.admin_require();
+    v_note text := coalesce(nullif(btrim(coalesce(p_note, '')), ''), 'Checked; no change needed.');
+    v_post public.food_posts;
+begin
+    if char_length(v_note) > 1000 then
+        raise exception 'Keep the note under 1,000 characters.';
+    end if;
+    select * into v_post from public.food_posts p where p.id = p_post;
+    if not found then
+        raise exception 'Listing not found';
+    end if;
+    perform public.admin_log(v_admin, 'LISTING_REVIEWED', 'LISTING', v_post.id, v_post.name, v_note);
+    return jsonb_build_object('reviewed', true);
+end; $$;
+
+-- ---------------------------------------------------------------------------
+-- 7. Privileges: client functions for authenticated only; helpers for no client.
+-- ---------------------------------------------------------------------------
 do $$
 declare f text;
 begin
     foreach f in array array[
-        'admin_whoami()', 'admin_counts()', 'admin_overview()', 'admin_users(text,text,integer,integer)',
-        'admin_user(uuid)', 'admin_listings(text,text,text,uuid,integer,integer)', 'admin_listing(uuid)',
+        'is_salusalo_admin()', 'admin_whoami()', 'admin_counts()', 'admin_overview()',
+        'admin_users(text,text,integer,integer)', 'admin_user(uuid)',
+        'admin_listings(text,text,text,uuid,integer,integer)', 'admin_listing(uuid)',
         'admin_reservations(text,text,text,integer,integer)', 'admin_reservation(uuid)',
         'admin_reports(text,text,text,text,integer,integer)', 'admin_report(uuid)',
-        'admin_audit(text,uuid,text,text,integer,integer)']
+        'admin_audit(text,uuid,text,text,integer,integer)',
+        'admin_remove_listing(uuid,text)', 'admin_dismiss_listing_reports(uuid,text)',
+        'admin_dismiss_report(uuid,text)', 'admin_add_report_note(uuid,text)',
+        'admin_mark_listing_reviewed(uuid,text)']
     loop
         execute format('revoke all on function public.%s from public', f);
         execute format('revoke all on function public.%s from anon', f);
         execute format('grant execute on function public.%s to authenticated', f);
+    end loop;
+    foreach f in array array[
+        'admin_require()', 'admin_ms(timestamptz)', 'admin_like(text)', 'admin_since(text)',
+        'admin_listing_status(public.food_posts)', 'admin_qty(integer,text)', 'admin_reason_label(text,text)',
+        'admin_who(uuid)', 'admin_user_json(public.users)', 'admin_listing_json(public.food_posts)',
+        'admin_reservation_json(public.reservations)', 'admin_report_json(public.reports)',
+        'admin_paging(integer,integer,bigint)', 'admin_log(public.users,text,text,uuid,text,text)',
+        'admin_user_matches(public.users,text,text)',
+        'admin_listing_matches(public.food_posts,text,text,timestamptz,uuid)',
+        'admin_reservation_matches(public.reservations,text,text,timestamptz)',
+        'admin_report_matches(public.reports,text,text,text,text)',
+        'admin_audit_matches(public.admin_audit_log,text,uuid,text,timestamptz)']
+    loop
+        execute format('revoke all on function public.%s from public', f);
+        execute format('revoke all on function public.%s from anon', f);
+        execute format('revoke all on function public.%s from authenticated', f);
     end loop;
 end $$;
