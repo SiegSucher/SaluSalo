@@ -38,7 +38,7 @@ window.Pages.listings = (function () {
       open: (l) => window.App.go('#/listings/' + l.id),
       flag: (l) => l.openReports > 0,
       columns: [
-        { label: 'Food', className: 'cell-wide', cell: (l) => identity(thumb(l.category), l.name, l.category + (l.price ? ' · ' + fmt.unitPrice(l.price, l.unit) : ' · Free'), '#/listings/' + l.id) },
+        { label: 'Food', className: 'cell-wide', cell: (l) => identity(UI.photo(l.photoUrl, l.category), l.name, l.category + (l.price ? ' · ' + fmt.unitPrice(l.price, l.unit) : ' · Free'), '#/listings/' + l.id) },
         { label: 'Donor', cell: (l) => h('a', { class: 'row-link', href: '#/users/' + l.donor.id, style: { fontWeight: '500' } }, l.donor.name) },
         { label: 'Quantity', className: 'cell-num', cell: (l) => qtyText(l) },
         { label: 'Pickup', className: 'cell-muted', hide: 'tablet', cell: (l) => fmt.window(l.pickupStart, l.pickupEnd) },
@@ -47,7 +47,7 @@ window.Pages.listings = (function () {
         { label: h('span', { class: 'sr-only' }, 'Actions'), className: 'cell-actions', cell: (l) => rowMenu(l) }
       ],
       card: (l) => UI.rowCard({
-        visual: thumb(l.category), title: l.name, href: '#/listings/' + l.id,
+        visual: UI.photo(l.photoUrl, l.category), title: l.name, href: '#/listings/' + l.id,
         meta: { sub: l.donor.name, items: [{ icon: 'inventory2', text: qtyText(l) }, { icon: 'schedule', text: fmt.window(l.pickupStart, l.pickupEnd) }] },
         badges: [badge('listing', l.status), l.openReports ? flagBadge(l.openReports) : null, h('span', { class: 'badge badge--outline' }, l.price ? fmt.unitPrice(l.price, l.unit) : 'Free')]
       }),
@@ -142,9 +142,11 @@ window.Pages.listings = (function () {
     if (!l) { UI.openPanel({ label: 'Listing', title: 'Listing not found', body: empty({ iconName: 'lunchDining', title: 'This listing doesn’t exist', text: 'It may have been deleted by its donor.' }), onClose }); return; }
     s.detail = l;
     const openReports = l.reports.filter((r) => r.status === 'OPEN');
-    const photoLabel = l.photos ? fmt.plural(l.photos, 'photo') + ' · not shown in sample data' : 'No photo; the app shows a plain tile';
     const body = [
-      thumb(l.category, true, photoLabel),
+      l.photoUrls.length
+        ? h('div', { class: 'photo-strip' }, l.photoUrls.map((url, i) => h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Open photo ' + (i + 1) + ' of ' + l.photoUrls.length },
+          h('img', { src: url, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }))))
+        : thumb(l.category, true, l.photos ? 'The photos couldn’t be loaded' : 'No photo; the app shows a plain tile'),
       h('div', { class: 'badge-row' }, badge('listing', l.status), openReports.length ? flagBadge(openReports.length) : null,
         h('span', { class: 'badge badge--outline' }, icon('sell', 14), l.price ? fmt.unitPrice(l.price, l.unit) : 'Free')),
       openReports.length ? notice({ tone: 'warning', iconName: 'flag', title: fmt.plural(openReports.length, 'open report'),
@@ -175,7 +177,7 @@ window.Pages.listings = (function () {
         : h('p', { class: 'muted' }, 'No one has reserved this listing.')),
       l.reports.length ? section('Reports (' + l.reports.length + ')', h('ul', { class: 'list' }, l.reports.map((r) => h('li', null, h('a', { class: 'list__item list__item--button', href: '#/reports/' + r.id, style: { paddingInline: '0' } },
         h('span', { class: 'icon-bubble icon-bubble--error' }, icon('flag', 18)),
-        h('span', { class: 'list__main' }, h('span', { class: 'list__title' }, r.reasonLabel), h('span', { class: 'list__meta' }, r.id + ' · by ' + r.reporter.name + ' · ' + fmt.relative(r.createdAt))),
+        h('span', { class: 'list__main' }, h('span', { class: 'list__title' }, r.reasonLabel), h('span', { class: 'list__meta' }, fmt.ref(r.id) + ' · by ' + r.reporter.name + ' · ' + fmt.relative(r.createdAt))),
         h('span', { class: 'list__side' }, badge('report', r.status))))))) : null,
       h('p', { class: 'muted', style: { fontSize: 'var(--t-sm)' } }, 'Admins moderate listings; only the donor can edit the food details.')
     ];

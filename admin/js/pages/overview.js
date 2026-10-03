@@ -16,29 +16,12 @@ window.Pages.overview = (function () {
     const refresh = btn({ label: 'Refresh', icon: 'refresh', variant: 'secondary', onClick: () => load(refresh) });
     const stats = h('div', { class: 'stats' }, skeletonStats(4));
     const activityBody = h('div', null, skeletonList(6));
-    const verifBody = h('div', null, skeletonList(3));
     const reportsBody = h('div', null, skeletonList(2));
     const resBody = h('div', null, skeletonList(5));
     const rescueBody = h('div', { style: { display: 'grid', gap: '16px' } }, skeleton('50%', '40px'), skeleton('100%', '48px', 'skeleton--block'), skeleton('80%'), skeleton('70%'));
 
-    let sampleNote = null;
-    let dismissed = false;
-    try { dismissed = sessionStorage.getItem('salusalo-admin:overview-note') === '1'; } catch (e) { /* storage blocked */ }
-    if (!dismissed) {
-      const close = window.UI.iconBtn('close', 'Hide this note', () => {
-        sampleNote.remove();
-        try { sessionStorage.setItem('salusalo-admin:overview-note', '1'); } catch (e) { /* storage blocked */ }
-      }, { small: true });
-      sampleNote = notice({
-        tone: 'warning', title: 'Sample data',
-        text: 'This dashboard isn’t connected to Salu-Salo yet. Everything here is an example, and what you change lasts until you reload.',
-        action: close
-      });
-    }
-
     main.append(
       window.UI.pageHead({ title: 'Overview', sub: 'What’s happening in Salu-Salo right now · ' + fmt.weekday(Date.now()), actions: [refresh] }),
-      sampleNote,
       stats,
       h('div', { class: 'grid' },
         h('div', { class: 'span-8 stack' },
@@ -46,13 +29,10 @@ window.Pages.overview = (function () {
           card({ title: 'Reservation activity', sub: 'The latest reservations and where they stand', className: 'card--flush', body: resBody,
             actions: h('a', { class: 'btn btn--ghost btn--sm', href: '#/reservations' }, 'All reservations', icon('chevronRight', 18)) })),
         h('div', { class: 'span-4 stack' },
-          card({ title: 'Verification requests', sub: 'Waiting for a decision', className: 'card--flush', body: verifBody,
-            actions: h('a', { class: 'btn btn--ghost btn--sm', href: '#/users/requests' }, 'All', icon('chevronRight', 18)) }),
           card({ title: 'Reports to review', className: 'card--flush', body: reportsBody,
             actions: h('a', { class: 'btn btn--ghost btn--sm', href: '#/reports' }, 'All', icon('chevronRight', 18)) }),
-          card({ title: 'Food rescue', sub: 'The last 30 days', body: rescueBody,
-            actions: h('a', { class: 'btn btn--ghost btn--sm', href: '#/analytics' }, 'Analytics', icon('chevronRight', 18)) }))));
-    refs = { stats, activityBody, verifBody, reportsBody, resBody, rescueBody };
+          card({ title: 'Food rescue', sub: 'The last 30 days', body: rescueBody }))));
+    refs = { stats, activityBody, reportsBody, resBody, rescueBody };
     load();
   }
 
@@ -64,7 +44,7 @@ window.Pages.overview = (function () {
     } catch (err) {
       if (refs !== r) return;
       clear(r.stats).append(h('div', { class: 'card', style: { gridColumn: '1 / -1' } }, errorState(() => load(), 'the overview')));
-      [r.activityBody, r.verifBody, r.reportsBody, r.resBody, r.rescueBody].forEach((b) => clear(b).append(h('p', { class: 'muted', style: { padding: '12px 20px' } }, 'Not loaded.')));
+      [r.activityBody, r.reportsBody, r.resBody, r.rescueBody].forEach((b) => clear(b).append(h('p', { class: 'muted', style: { padding: '12px 20px' } }, 'Not loaded.')));
       return;
     }
     if (refs !== r) return;
@@ -80,7 +60,6 @@ window.Pages.overview = (function () {
         meta: c.pendingReports ? [h('strong', null, fmt.num(c.reportsToday)), ' new today · need review'] : 'Nothing to review' }));
 
     renderActivity(r.activityBody, res.activity);
-    renderVerification(r.verifBody, res.verification);
     renderReports(r.reportsBody, res.reports);
     renderReservations(r.resBody, res.reservations);
     renderRescue(r.rescueBody, res.rescue);
@@ -104,19 +83,6 @@ window.Pages.overview = (function () {
           h('span', { class: 'list__meta' }, ev.meta + ' · ' + fmt.relative(ev.at)))));
     })));
   }
-  function renderVerification(body, rows) {
-    clear(body);
-    if (!rows.length) {
-      body.append(empty({ iconName: 'verified', title: 'No requests waiting', text: 'When a donor sends documents to get verified, the request appears here.' }));
-      return;
-    }
-    body.append(h('ul', { class: 'list' }, rows.slice(0, 4).map((u) => h('li', { class: 'list__item' },
-      avatar(u),
-      h('span', { class: 'list__main' },
-        h('span', { class: 'list__title' }, h('strong', null, u.name)),
-        h('span', { class: 'list__meta' }, u.requestType + ' · ' + fmt.relative(u.submittedAt))),
-      h('a', { class: 'btn btn--secondary btn--sm', href: '#/users/' + u.id + '/verify', 'aria-label': 'Review ' + u.name + '’s request' }, 'Review')))));
-  }
   function renderReports(body, rows) {
     clear(body);
     if (!rows.length) {
@@ -137,7 +103,7 @@ window.Pages.overview = (function () {
       return;
     }
     body.append(h('ul', { class: 'list' }, rows.map((r) => h('li', null, h('a', { class: 'list__item list__item--button', href: '#/reservations/' + r.id },
-      thumb(r.listing.category),
+      window.UI.photo(r.listing.photoUrl, r.listing.category),
       h('span', { class: 'list__main' },
         h('span', { class: 'list__title' }, h('strong', null, r.recipient.name), ' reserved ' + fmt.qty(r.quantity, r.listing.unit)),
         h('span', { class: 'list__meta' }, r.listing.name + ' · from ' + r.donor.name + ' · ' + fmt.relative(r.createdAt))),
