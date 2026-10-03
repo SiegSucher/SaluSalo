@@ -1,5 +1,14 @@
 package com.example.salusalo
 
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -235,6 +244,7 @@ fun ChatScreen(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .foodDoodleWallpaper()
                 ) {
                     when {
                         opening -> CircularProgressIndicator(
@@ -531,4 +541,47 @@ private fun formatChatTime(value: String?): String {
 private fun formatBubbleTime(value: String?): String {
     val instant = parseTimestamp(value) ?: return ""
     return DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH).withZone(ZoneId.systemDefault()).format(instant)
+}
+
+/** Decorative vector wallpaper: cached paths, white base, no touch or accessibility nodes. */
+private fun Modifier.foodDoodleWallpaper(): Modifier = drawWithCache {
+    val outlines = listOf(
+        "M12 39 L12 22 C3 20 6 7 17 9 C21 4 29 4 33 9 C44 7 47 20 38 22 L38 39 Z M18 25 L18 33 M25 24 L25 33 M32 25 L32 33",
+        "M25 15 C12 5 5 18 10 30 C14 41 20 43 25 39 C31 44 38 38 41 27 C45 13 33 9 25 15 Z M25 15 C24 9 26 5 29 3 M28 9 C33 2 39 4 40 5 C36 12 31 12 28 9",
+        "M12 22 C10 24 9 29 7 41 C19 37 29 30 32 22 C32 16 20 13 12 22 Z M29 16 C25 8 28 4 31 5 L33 14 C37 5 41 6 40 10 L36 17 C44 13 46 16 42 19 L34 21 M14 25 L19 28 M11 32 L15 34 M22 21 L26 24",
+        "M5 23 L43 23 C41 33 36 39 24 39 C12 39 7 33 5 23 Z M16 42 L32 42 M15 18 C8 13 20 10 14 5 M25 18 C18 13 30 10 24 5 M35 18 C28 13 40 10 34 5",
+        "M11 5 L11 17 C11 24 21 24 21 17 L21 5 M16 5 L16 42 M34 23 L34 42 M34 23 C23 23 27 5 34 5 C41 5 45 23 34 23 Z",
+        "M7 19 C12 7 36 7 41 19 L24 42 Z M7 19 C15 23 33 23 41 19 M12 14 C20 17 29 17 36 14 M19 27 C19 24 23 24 23 27 C23 30 19 30 19 27 M27 32 C27 29 31 29 31 32 C31 35 27 35 27 32",
+        "M12 32 C3 24 10 10 20 13 C23 3 36 7 36 17 C48 21 39 35 29 32 L28 43 L19 43 L19 33 M24 34 L24 24 M24 29 L17 24 M24 26 L30 21",
+        "M24 40 C18 33 7 28 7 18 C7 8 18 6 24 15 C30 6 41 8 41 18 C41 28 30 33 24 40 Z"
+    ).map { PathParser().parsePathString(it).toPath() }
+    val cell = 60.dp.toPx()
+    val iconScale = 40.dp.toPx() / 48f
+    val line = Stroke(width = 1.3f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val ink = Brush.linearGradient(
+        colors = listOf(Color(0xFFACD7B5), Color(0xFFC5DA9F), Color(0xFFF0DA98)),
+        start = Offset.Zero,
+        end = Offset(48f, 48f)
+    )
+    onDrawBehind {
+        drawRect(Color.White)
+        clipRect {
+            val rows = (size.height / cell).toInt() + 2
+            val columns = (size.width / cell).toInt() + 2
+            for (row in 0 until rows) {
+                for (column in -1 until columns) {
+                    val index = Math.floorMod(row * 3 + column, outlines.size)
+                    val x = column * cell + (if (row % 2 == 0) 8.dp.toPx() else 38.dp.toPx())
+                    val y = row * cell + 8.dp.toPx()
+                    withTransform({
+                        translate(x, y)
+                        scale(iconScale, iconScale, pivot = Offset.Zero)
+                        rotate(if (index % 2 == 0) -13f else 12f, pivot = Offset(24f, 24f))
+                    }) {
+                        drawPath(outlines[index], brush = ink, style = line)
+                    }
+                }
+            }
+        }
+    }
 }
