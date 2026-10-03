@@ -2622,7 +2622,10 @@ The developer ran the 13 steps on two phones: **all passed.** During step 7 "Lim
 
 See `supabase/README.md` → 20261012: run the migration, `tests/admin_dashboard_check.sql`, set the admin role, then `tests/admin_dashboard_live_safety_check.sql` (expect 20 passed).
 
-### 25.4 Manual test (not yet run)
+### 25.4 Manual test
+
+**Part 1, 2026-10-03 (PC, http://localhost:8080 with `npx http-server`): passed** (reported as "went perfectly good"): the Sign In screen and the wrong-password message, a non-admin refused with "This account doesn't have admin access.", the admin signed in to Overview with real numbers and names and no sample data. Part 2 (a reported listing removed, the alerts in the app, the role taken back, deploying and the phone) not yet run.
+
 
 The plan's Task 9: M1 sign-in screen and wrong password; M2 a non-admin refused; M3 Overview numbers; M4–M6 a reported test listing reviewed, noted and removed, with both alerts in the app and the Audit log entries; M7 admin role taken back while signed in; M8 on the phone at https://salusalo.web.app.
 
