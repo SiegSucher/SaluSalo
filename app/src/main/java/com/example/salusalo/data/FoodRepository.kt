@@ -132,7 +132,8 @@ class FoodRepository(
             storageNotes = draft.storageNotes.trim().ifBlank { null },
             extraImagePaths = paths.drop(1),
             pickupLatitude = pin.latitude,
-            pickupLongitude = pin.longitude
+            pickupLongitude = pin.longitude,
+            maxPerRecipient = draft.maxPerRecipient
         )
 
         return publishOnce(

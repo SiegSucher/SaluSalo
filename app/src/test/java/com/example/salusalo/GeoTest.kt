@@ -119,10 +119,13 @@ class GeoTest {
             id = "p", donorId = "d", name = "Bread", category = "Bakery", quantity = 1, unit = "pcs",
             pickupLocation = "Plaza", expirationDate = "2026-10-01T00:00:00Z", price = 0.0,
             pickupStart = null, pickupEnd = null, handover = null, allergens = null, storageNotes = null,
-            extraImagePaths = emptyList(), pickupLatitude = 9.647812, pickupLongitude = 123.854012
+            extraImagePaths = emptyList(), pickupLatitude = 9.647812, pickupLongitude = 123.854012,
+            maxPerRecipient = null
         )
         val sent = json.encodeToJsonElement(NewFoodPost.serializer(), post).jsonObject
         assertEquals(9.647812, sent.getValue("pickup_latitude").jsonPrimitive.double, 0.0)
         assertEquals(123.854012, sent.getValue("pickup_longitude").jsonPrimitive.double, 0.0)
+        // No limit is still sent, as null (supabase-kt drops values equal to a default).
+        assertTrue(sent.containsKey("max_per_recipient"))
     }
 }

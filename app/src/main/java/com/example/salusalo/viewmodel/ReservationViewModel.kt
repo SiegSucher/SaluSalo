@@ -107,16 +107,25 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
         if (SystemClock.elapsedRealtime() - refreshRequestedAt >= 10_000L) refresh()
     }
 
+    /** The details page's per-person count; null when it can't be read (the server still checks). */
+    suspend fun heldQuantity(foodPostId: String): Int? = try {
+        repository.heldQuantity(foodPostId)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        null
+    }
+
     /**
      * Reserves [quantity] of a listing at [unitPrice], the price shown (the
-     * server refuses if it has changed), then sends [note] (if not blank) in
+     * server refuses if it has changed), held for [holdMinutes], then sends [note] (if not blank) in
      * the reservation's chat. Returns false when ignored because another write
      * has not finished yet.
      */
-    fun reserve(foodPostId: String, quantity: Int, unitPrice: Double, note: String): Boolean = launchWrite {
+    fun reserve(foodPostId: String, quantity: Int, unitPrice: Double, note: String, holdMinutes: Int): Boolean = launchWrite {
         _reserveResult.value = null
         _reserveResult.value = try {
-            val reservation = repository.createReservation(foodPostId, quantity, unitPrice)
+            val reservation = repository.createReservation(foodPostId, quantity, unitPrice, holdMinutes)
             refreshPending = true
             val text = note.trim()
             val noteSent = if (text.isEmpty()) null else try {

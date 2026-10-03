@@ -34,6 +34,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Bug fix pass after the full bug audit (not part of the six phases) | Groups A–E of the 2026-09-29 audit: #1 cancel/claim without a profile, #10 photo reads, #11 listing checks, #2–#6 Home refresh, failure states, photo URLs and post retries, #8 price, #9 release, #23 pickup end, #7 rotation, #14 alerts on resume, #15 re-created accounts, #21 ended sessions, #17–#20 and #22 (§21) | **Passed on one phone (2026-09-30); committed as `5429e6e`, merged into `master` through PR #17 on 2026-09-30 (`8ed8eef`).** Built and unit-tested (51 of 51), migrations applied. Branch `claude/bugfix-pass-1` (from `master` at `fa95fff`), 2026-09-29. Three new migrations (`20261005`–`20261007`), dry-run on a local PostgreSQL 16 (§21.3) and applied to the live project on 2026-09-30; live safety checks 22 of 23 (the one failure was the check itself, now corrected, §21), 15 of 15, 9 of 9. |
 | Bug fix pass, round 2 (not part of the six phases) | The rest of the 34 findings: #12 one rating per reviewer, #13 friendly errors, #16 photo cache keys, #24 bucket limits and an orphan list, #25 rate limits, #26 bookmark race, #27 photo sampling, #29 fewer requests, #30 backup rules, #31 release config, #32 `anon` grants, #34 clean-ups; #28 deferred (§22) | **Passed on one phone (2026-09-30); committed as `a2412eb` (docs `2562de6`), merged into `master` through PR #18 on 2026-09-30 (`65d5f6a`).** Built and unit-tested (54 of 54), migrations applied. Branch `claude/bugfix-pass-2` (from `claude/bugfix-pass-1` at `5429e6e`), 2026-09-30. Three new migrations (`20261008`–`20261010`), dry-run on a local PostgreSQL 16 (§22.4) and applied to the live project on 2026-09-30; live checks 5 of 5, 5 of 5, 3 of 3. |
 | Bug fix pass, round 3 (not part of the six phases) | What the verification audit of 2026-09-30 found still open: #35 sign-in lost to a rotation, #17 listing pages when reservations fail, #22 details after a listing leaves the feed, #7 pages closed by rotation, #4 Post's My posts, #18 feed reload after cancel, #14 Realtime reconnects, #2 feed every minute, R1 alert-settings errors, #29 and #34 leftovers, #33 docs (§23) | **Passed on one phone (2026-10-03).** Built and unit-tested (57 of 57). Branch `claude/bugfix-pass-3` (from `master` at `65d5f6a`), committed for its pull request. No SQL. |
+| Reservation limits and pickup deadlines (Mika's idea from PR #16, rebuilt; not part of the six phases) | A per-person limit set on Post; a pickup time chosen when reserving (15 min to 2 h); reservations not picked up in time expire by themselves through a Supabase Cron job, with alerts; countdowns and "Expired" in Activity (§24) | **Built and unit-tested (68 of 68), lint 0 errors, on branch `claude/reservation-limits` (from `master` at `10270e7`). Migration `20261011_reservation_limits_and_expiry.sql` applied on 2026-10-03 (check 9/9, live safety check 20/20, Cron job running); the two-phone test passed on 2026-10-03; not committed.** |
 | Phase 6: Admin and Final Release | ID verification and the admin screen (the Email verified badge moved to Phase 5 part 1) | **Not started** on the server. The web dashboard in `admin/` shows sample data until the server work exists (§20.5). |
 
 - The roadmap has six phases (confirmed by the developer on 2026-09-25); earlier versions of this document went only up to Phase 4. Phases 1–3 are described in §1–§3 and Phase 4 in §8.
@@ -102,7 +103,7 @@ Still unresolved on 2026-09-30:
   - The password-reset email (no test record).
 - **Round 3 (§23)** passed on one phone and its two-phone checks (#2, #8, #14) on 2026-10-03; merged through PR #19.
 - **Audit findings still open after round 3** (details in §23.1; each needs a decision or work outside the app code):
-  - #9: reservations never expire by themselves, and one person can reserve a listing's whole quantity (the app's design says "part or all").
+  - #9: reservations never expire by themselves, and one person can reserve a listing's whole quantity (the app's design says "part or all"). **Addressed in §24** (per-person limit, pickup deadlines, automatic expiry): applied and passed its two-phone test on 2026-10-03.
   - #10: donors' Firebase UIDs are the first folder of listing photo paths, so anyone who may see a listing can read its donor's UID.
   - #11: the database accepts any category or unit text (up to 80/30 characters) and any future expiry on a new listing; the app sends only its own lists.
   - #12: a friendly second account still adds one rating (each reviewer now counts once).
@@ -2507,3 +2508,88 @@ The developer ran §23.4 steps 1–15 on one phone, plus five regression steps a
 - #2: the feed reloads every minute only while it is on screen and the app is in front; each reload is one listing request, one donor-profile request and one signing request.
 - #14: a rejoin is noticed from the channel's status; if a reconnect were too fast for the app to see the status change, the next return to the app still reloads.
 - #35: if a sign-in fails while the screen is being rebuilt, its error message is lost (the form shows no message); signing in again works.
+
+## 24. Reservation limits and pickup deadlines (2026-10-03)
+
+### 24.0 Status
+
+**Built on branch `claude/reservation-limits` (from `master` at `10270e7`, the PR #19 merge) on 2026-10-03: `assembleDebug` passed, `testDebugUnitTest` passed 68 of 68 (57 before, plus 11 in `ReservationLimitsTest`; `GeoTest` also checks that a new listing always sends `max_per_recipient`), `lintDebug` 0 errors (39 warnings, as before). On 2026-10-03 the developer applied `20261011_reservation_limits_and_expiry.sql` to the live project (without the optional trial run): `cron.schedule` returned job 1; `reservation_limits_check.sql` 9 of 9 true; the job `salusalo-expire-reservations` succeeded at 06:40 and 06:41 UTC; `reservation_limits_live_safety_check.sql` passed 20 of 20 (donor PASTOR, recipient Mika Suarez). The 13-step two-phone test (§24.5) passed on 2026-10-03; not committed yet.** Design: `docs/superpowers/specs/2026-10-02-reservation-limits-design.md`; plan: `docs/superpowers/plans/2026-10-03-reservation-limits.md`.
+
+It rebuilds the idea of Mika's PR #16, which could not be merged (based on `f27ee47`, 7 conflicts, its expiry migration in no branch, its `create_reservation` without the rate limit and pickup-end check). A read-only check on 2026-10-02 found none of PR #16's SQL on the live project. It addresses audit finding #9.
+
+### 24.1 What it does
+
+| | |
+|---|---|
+| Per-person limit | Optional "Maximum per person" on Post (1 to the quantity; blank = no limit). The person's open and picked-up quantity on the listing counts; cancelled and expired don't. It can't be changed later; Edit Listing shows it. Older listings have none. |
+| Pickup time | On Review reservation the recipient picks 15 min, 30 min (first), 1 hour or 2 hours. The clock starts at the later of now and the pickup start, and the deadline never passes the end of pickup (or the expiry, for listings without a pickup window). |
+| Expiry | A Supabase Cron job runs every minute: an open reservation past its deadline becomes `CANCELLED` with reason `PICKUP_EXPIRED`, its quantity goes back on the listing (a removed listing stays removed), and both people get a "Reservation expired" alert. Mark as picked up is refused after the deadline. |
+| Activity | Open reservations show "Pick up by 5:30 PM · 12 min left" (red under 10 minutes; "pickup starts …" before it starts; "Time's up" after), updated once a minute; Activity reloads once about 70 seconds after a deadline it shows. Expired reservations have an "Expired" badge and their own note. |
+
+### 24.2 Database (`20261011_reservation_limits_and_expiry.sql`)
+
+- `food_posts.max_per_recipient` (check: NULL or 1–10,000; at most the quantity, on insert only, in `food_posts_check_values()`).
+- `reservations.pickup_deadline`, a partial index for the job, and `PICKUP_EXPIRED` added to `reservations_cancel_reason_check`.
+- `create_reservation`: the 20261009 version plus the limit check (before the rate limit). `create_reservation_at_price` unchanged.
+- `create_reservation_with_hold(listing, quantity, price, minutes)`: authenticated only; the price check and every reservation check, then the deadline.
+- `claim_reservation`: refuses after the deadline ("The pickup time for this reservation has passed.").
+- `expire_overdue_reservations()`: no client may run it; up to 500 per run, `skip locked`.
+- `notify_reservation_change()`: the expiry alerts (type `RESERVATION_CANCELLED`).
+- `get_donor_reservations()`: also returns `pickup_deadline`.
+- `pg_cron` turned on and the job `salusalo-expire-reservations` (`* * * * *`) scheduled.
+- Checks: `supabase/tests/reservation_limits_live_safety_check.sql` (20 checks, always rolls back) and `supabase/tests/reservation_limits_check.sql` (read-only).
+
+Older builds keep working: they reserve without a deadline, the limit applies to them, and an expired reservation looks to them like an ordinary cancelled one. Existing open reservations never expire.
+
+### 24.3 App changes
+
+- `model/FoodPost.kt`: `maxPerRecipient` on `FoodPost`, `NewFoodPost` (always sent) and `FoodPostDraft`; `HOLD_MINUTES`, `DEFAULT_HOLD_MINUTES`, `pickupDeadlineEstimate()`, `reservableNow()`.
+- `model/Reservation.kt`: `pickupDeadline`, `CANCEL_REASON_PICKUP_EXPIRED`, `expiredUnpicked`.
+- `UiText.kt`: `pickUpByTime()`, `holdEstimateText()`, `deadlineLine()`, `deadlineUrgent()`.
+- `data/ReservationRepository.kt`: Reserve through `create_reservation_with_hold`; `heldQuantity()`. `data/FoodRepository.kt`: sends the limit.
+- `viewmodel/ReservationViewModel.kt`: `reserve(…, holdMinutes)`, `heldQuantity()`.
+- `PostScreen.kt`: the field, its check, "Check your listing", the Edit Listing note.
+- `MainActivity.kt`: the details page's limit line, the stepper capped by the person's allowance, "You've reserved the most this listing allows per person (N)."
+- `FoodActions.kt`: "Pick up within" with the estimate; the receipt's "Pick up by".
+- `ActivityScreen.kt`: deadline lines, the minute ticker, the one reload, "Expired" badges and notes, "The pickup time has passed." instead of Mark as picked up.
+
+### 24.4 Database steps (the developer, in the SQL Editor)
+
+Run **before** installing the build that reserves with a pickup time (`create_reservation_with_hold`). Older builds keep working.
+
+1. **Trial run (nothing is kept):** paste this migration and, below it, `tests/reservation_limits_live_safety_check.sql` into one SQL Editor query and run it. It ends with "SAFETY CHECK FINISHED: …" on purpose. Then run `tests/reservation_limits_check.sql`: every row should be false (nothing stayed). If rows are true, the editor committed the migration; that is harmless and counts as step 2.
+2. **Apply:** run this file alone. It also turns on Supabase Cron (`pg_cron`) and schedules the job `salusalo-expire-reservations` (every minute). If the extension is refused, switch on Integrations → Cron in the dashboard and run the file again.
+3. **Check:** run `tests/reservation_limits_check.sql` (every row true), then the two commented queries at its end (the job is active and has succeeded at least once), then `tests/reservation_limits_live_safety_check.sql` alone (all PASS).
+
+Never grant EXECUTE on `expire_overdue_reservations()` to any client role; keep the limit check and the rate limit in `create_reservation`.
+
+### 24.5 Two-phone test
+
+Phone 1 = A (donor), phone 2 = B. Preconditions: migration applied, read-only check all true, the Cron job has run; new build on both phones.
+
+1. [New] A: Post "Limit test": free, quantity 5, Maximum per person 2, pickup start "Start now", pickup end **6 minutes from now**, expiry later today. "Check your listing" shows "Maximum per person: 2.". Post: "Listing published".
+2. [New] A: Post "Bad limit": quantity 3, Maximum per person 4 → "Enter a maximum per person from 1 to the quantity, or leave it blank." Don't post it.
+3. [New] B: open "Limit test": "Limit: 2 per person"; the stepper stops at 2. Reserve 1: Review reservation shows "Pick up within" with 30 min selected and "Pick up by <end time>, when pickup ends." Choose 15 min (same text). Confirm: the receipt shows "Pick up by <end time>".
+4. [New] B: open "Limit test" again: the stepper stops at 1. Reserve 1 more → receipt. Open it again: "You've reserved the most this listing allows per person (2)." instead of Reserve.
+5. [New] B: Activity → My Reservations: both show "Pick up by <end time> · N min left", red under 10 minutes.
+6. [New] A: Activity → "Limit test" → Manage reservations: B's two reservations with the same line.
+7. [New] Wait until the end time passes, both apps on Activity. Within about 2 minutes, without touching anything: B's reservations move to History with the "Expired" badge; A's Manage reservations shows them as Expired. Both phones get "Reservation expired" alerts (B: "Your reservation of Limit test expired because it wasn't picked up in time."; A: "<B>'s reservation of Limit test expired because it wasn't picked up in time. The quantity is available again.").
+8. [New] B: open an expired reservation: "You didn't pick up in time, so the reservation expired and the food went back on the listing." A: "<B> didn't pick up in time, so the reservation expired."
+9. [New] A: Edit "Limit test": the notice ends "Maximum per person: 2 (can't be changed)."
+10. [New] A: post "Hold test": free, 3 packs, no limit, pickup start "Start now", pickup end in 2 hours. B: reserve 1 with 15 min: "Pick up by <now + 15 min>." Wait 15 minutes (do steps 11–13 meanwhile). Before it expires, A sees "Mark as picked up"; after the time passes A sees "The pickup time has passed." instead (if still shown before the reload); then it expires as in step 7.
+11. [Regression] B: reserve 1 of an unlimited listing with 1 hour; A marks it picked up: "Marked as picked up. You'll find it under Completed."; B gets "Reservation claimed".
+12. [Regression] B: reserve and cancel: "Reservation cancelled. The quantity is available again."; A releases another B reservation: "Reservation released. The quantity is available again, and the recipient was told."
+13. [Regression] Chat message both ways; Home pull to refresh; Post a listing with a photo and delete it ("Listing deleted.").
+
+### 24.5a Result (2026-10-03)
+
+The developer ran the 13 steps on two phones: **all passed.** During step 7 "Limit test" left Home once its pickup ended while staying in A's My Listings; that is the existing rule (Home lists only listings that can still be reserved), not a defect, and the expired quantity went back onto that ended listing as §24.6 describes.
+
+### 24.6 Known limits
+
+- Expiry happens up to about a minute after the deadline; longer if more than 500 are overdue at once or a listing is busy at that moment.
+- If Cron is turned off, nothing expires (late claims are still refused).
+- A donor who hands food over but doesn't tap Mark as picked up before the deadline sees it expire and the quantity come back; Edit can't change the quantity.
+- Deadlines are fixed when reserving; editing the pickup window later doesn't move them.
+- The limit is per account, and can't be changed after posting.
+- The details page's allowance is read when it opens; the server decides at Reserve.

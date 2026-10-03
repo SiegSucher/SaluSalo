@@ -125,6 +125,7 @@ fun PostScreen(
     var category by rememberSaveable { mutableStateOf("") }
     var price by rememberSaveable { mutableStateOf("") }
     var quantity by rememberSaveable { mutableStateOf("") }
+    var maxPerPerson by rememberSaveable { mutableStateOf("") }
     var unit by rememberSaveable { mutableStateOf("") }
     var location by rememberSaveable { mutableStateOf("") }
     var pickupPin by rememberSaveable(stateSaver = PinSaver) { mutableStateOf<GeoPin?>(null) }
@@ -232,6 +233,9 @@ fun PostScreen(
             count == null || count <= 0 -> "Enter a whole quantity greater than zero."
             // The database refuses more (food_posts_check_values).
             count > 10_000 -> "Enter a quantity of at most 10,000."
+            // The database checks the same (food_posts_max_per_recipient_check and the insert trigger).
+            maxPerPerson.isNotBlank() && maxPerPerson.trim().toIntOrNull().let { it == null || it < 1 || it > count } ->
+                "Enter a maximum per person from 1 to the quantity, or leave it blank."
             unit.isBlank() -> "Select a unit."
             !donation && (
                     amount == null ||
@@ -413,6 +417,15 @@ fun PostScreen(
                         }
                     }
 
+                    PostField(
+                        label = "Maximum per person",
+                        value = maxPerPerson,
+                        onChange = { maxPerPerson = it },
+                        example = "e.g., 3",
+                        hint = "Optional. Leave blank for no limit.",
+                        keyboard = KeyboardType.Number
+                    )
+
                     PostChoice(
                         label = "Unit",
                         selected = unit,
@@ -564,7 +577,8 @@ fun PostScreen(
                                     handover = ListingHandover.fromLabel(distribution),
                                     allergens = allergens,
                                     storageNotes = storage,
-                                    pickupPin = pin
+                                    pickupPin = pin,
+                                    maxPerRecipient = maxPerPerson.trim().toIntOrNull()
                                 ),
                                 photos.map { Uri.parse(it) }
                             )
@@ -681,6 +695,19 @@ fun PostScreen(
                 listOf(
                     if (count == null || count <= 0) "Enter a quantity greater than zero."
                     else "Available: $count ${unit.ifBlank { "units" }}."
+                )
+            )
+
+            CheckSection(
+                "Maximum per person",
+                listOf(
+                    when {
+                        maxPerPerson.isBlank() -> "No limit."
+                        maxPerPerson.trim().toIntOrNull()
+                            .let { it == null || it < 1 || count == null || it > count } ->
+                            "Enter a maximum per person from 1 to the quantity, or leave it blank."
+                        else -> "Maximum per person: ${maxPerPerson.trim()}."
+                    }
                 )
             )
 
@@ -973,7 +1000,8 @@ fun EditListingDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 InlineNotice(
-                    text = "Quantity, unit and photos can't be changed.",
+                    text = "Quantity, unit and photos can't be changed." +
+                        (post.maxPerRecipient?.let { " Maximum per person: $it (can't be changed)." } ?: ""),
                     icon = Icons.Outlined.Info
                 )
 
