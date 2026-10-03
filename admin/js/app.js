@@ -60,8 +60,8 @@
       n ? h('span', { class: 'nav__count' + (item.soft ? ' nav__count--soft' : '') }, h('span', { 'aria-hidden': 'true' }, String(n)), h('span', { class: 'sr-only' }, ', ' + item.countLabel(n))) : null,
       showDot ? h('span', { class: 'nav__dot' }, h('span', { class: 'sr-only' }, ', ' + item.dotLabel)) : null)));
     }
-    bellDot.hidden = !c.unreadAlerts;
-    bell.setAttribute('aria-label', c.unreadAlerts ? 'Your alerts, ' + c.unreadAlerts + ' unread' : 'Your alerts');
+    bellDot.hidden = !c.openReports;
+    bell.setAttribute('aria-label', c.openReports ? 'Reports, ' + c.openReports + ' open' : 'Reports');
   }
   function renderProfile() {
     const me = data.me();
@@ -152,24 +152,12 @@
   desktop.addEventListener('change', applyMode);
   phone.addEventListener('change', applyMode);
 
-  /* ---------- Sample data explanation ---------- */
-  document.getElementById('sample-chip').addEventListener('click', () => {
-    window.UI.info({
-      title: 'You’re looking at sample data',
-      body: [
-        h('p', null, 'This dashboard isn’t connected to Salu-Salo yet. The people, businesses, listings, reservations, reports and numbers here are generated examples. Their fields and statuses match the real app.'),
-        h('p', null, 'What you do here, such as approving, removing, suspending or sending, changes only this page and is undone when you reload. Nothing reaches the app, the database or anyone’s phone.'),
-        h('p', null, 'Real data needs admin-only functions on Salu-Salo’s server (planned for Phase 6). This dashboard doesn’t add any.')
-      ],
-      closeLabel: 'Got it'
-    });
-  });
-
   /* ---------- Pages and the address bar ---------- */
   let current = { key: null, page: null };
   let prevHash = null;
   let currHash = location.hash;
   let firstRoute = true;
+  let started = false;
 
   function parse() {
     const raw = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
@@ -197,7 +185,7 @@
     firstRoute = false;
     if (current.page.update) current.page.update(r);
   }
-  window.addEventListener('hashchange', () => { prevHash = currHash; currHash = location.hash; route(); });
+  window.addEventListener('hashchange', () => { prevHash = currHash; currHash = location.hash; if (started) route(); });
 
   const norm = (hash) => (hash || '').replace(/^#\/?/, '');
   window.App = {
@@ -214,7 +202,11 @@
     intent: {}
   };
 
-  renderProfile();
   applyMode();
-  route();
+  /** Called by auth.js once the signed-in account passed the admin check. */
+  window.App.start = function () {
+    started = true;
+    renderProfile();
+    route();
+  };
 })();

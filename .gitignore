@@ -21,3 +21,8 @@ salusalo-*.json
 keystore.properties
 *.jks
 *.keystore
+
+# Admin dashboard settings (Supabase URL and key, Firebase web config).
+/admin/js/config.js
+# Firebase CLI cache.
+.firebase/
