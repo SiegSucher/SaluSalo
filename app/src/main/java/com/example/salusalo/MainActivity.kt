@@ -276,6 +276,16 @@ private fun SaluSaloApp() {
     // start with a saved session ("Keep me signed in") until its setup has finished:
     // the branded loading screen then shows instead of a form.
     var setupPending by remember { mutableStateOf(firebaseAuth.currentUser != null) }
+    // Opening the app shows the loading screen for at least STARTUP_INTRO_MS, also
+    // when no one is signed in. Saved, so rotation and Android restoring the app
+    // don't show it again.
+    var introDone by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!introDone) {
+            delay(STARTUP_INTRO_MS)
+            introDone = true
+        }
+    }
     var setupJob by remember { mutableStateOf<Job?>(null) }
     fun openAuthenticatedHome(displayNameOverride: String? = null) {
         isAuthenticating = true
@@ -424,8 +434,9 @@ private fun SaluSaloApp() {
         // comes first because Firebase's user is not Compose state: only the flag
         // can re-run this check once a sign-in has finished. (A new UID restarts the
         // LaunchedEffect above; openAuthenticatedHome runs one setup at a time.)
-        val showStartup = setupPending && screen != "home" && currentProfile == null &&
-                !canRetrySetup && firebaseAuth.currentUser != null
+        // When the app opens, it shows first in any case (introDone).
+        val showStartup = !introDone || (setupPending && screen != "home" && currentProfile == null &&
+                !canRetrySetup && firebaseAuth.currentUser != null)
         val shownScreen = if (showStartup) "loading" else screen
 
         // Under Home's white bottom bar, the system navigation area is white too.
@@ -739,10 +750,13 @@ private val welcomePages = listOf(
     )
 )
 
+/** How long the loading screen shows at least when the app opens. */
+private const val STARTUP_INTRO_MS = 1200L
+
 /**
- * The loading screen while a signed-in account is set up: the original Salu-Salo
- * logo and name on the app's cream, with a thin green progress bar. The logo
- * settles in once, then breathes gently while the account loads.
+ * The loading screen when the app opens and while a signed-in account is set up:
+ * the Salu-Salo logo and name on the app's cream, with a thin green progress bar.
+ * The logo settles in once, then breathes gently while the app loads.
  */
 @Composable
 private fun StartupScreen() {

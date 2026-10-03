@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.SaluSalo" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- The app's cream behind the starting window (and Android 12+'s splash icon), so opening the app flows into the loading screen. -->
+    <style name="Theme.SaluSalo" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/salu_cream</item>
+    </style>
 </resources>
