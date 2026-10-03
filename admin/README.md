@@ -9,7 +9,7 @@ A responsive admin dashboard for Salu-Salo: Overview, Users (with verification r
 1. Run `supabase/migrations/20261012_admin_dashboard.sql` in the Supabase SQL Editor, then `supabase/tests/admin_dashboard_check.sql` and `supabase/tests/admin_dashboard_live_safety_check.sql` (see `supabase/README.md`).
 2. Make your account an admin (it must have signed into the app once): `update public.users set role = 'ADMIN' where email = 'you@example.com';`
 3. Firebase console → Project settings → Your apps → Add app → Web (no Firebase Hosting setup needed there). Copy `apiKey` and `appId`.
-4. Copy `admin/js/config.example.js` to `admin/js/config.js` (git-ignored) and fill in the Supabase URL and publishable key (the same values as `local.properties`) and the Firebase values. Keep `authDomain: 'salusalo.web.app'`.
+4. Copy `admin/js/config.example.js` to `admin/js/config.js` (git-ignored) and fill in the Supabase URL and publishable key (the same values as `local.properties`) and the Firebase values. Keep `authDomain: 'salusalo.firebaseapp.com'` (Google sign-in's registered return address; `salusalo.web.app` would need an extra redirect URI in Google Cloud).
 5. Authentication → Settings → Authorized domains: `salusalo.web.app` and `localhost` are there by default; keep them.
 
 ## Try it on this computer
@@ -33,7 +33,8 @@ Give: `update public.users set role = 'ADMIN' where email = '…';` Take back: `
 | `js/icons.js` | Material Symbols Outlined line icons (Apache 2.0), the family the app's icons come from |
 | `js/config.example.js` | The shape of `js/config.js` (git-ignored): Supabase URL and publishable key, Firebase web config |
 | `js/auth.js` | The Sign In screen: Firebase Auth, the Supabase client, the admin check, Log out |
-| `js/timeline.js` | A reservation's timeline steps (tested by `tests/timeline.test.js`: `node admin/tests/timeline.test.js`) |
+| `js/timeline.js` | A reservation's timeline steps |
+| `tests/*.test.js` | Node checks for the timeline, the sign-in messages and the data layer: `for t in admin/tests/*.test.js; do node $t; done` |
 | `js/data.js` | The only way pages get data: one admin function per call, photos signed for 1 hour |
 | `js/ui.js`, `js/list-view.js`, `js/charts.js` | Shared pieces: badges, tables that become cards on phones, filters, pagination, the details panel, confirmation dialogs, toasts, skeletons, empty and error states, SVG charts with a table view |
 | `js/pages/*.js` | One file per page |

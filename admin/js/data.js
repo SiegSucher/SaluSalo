@@ -71,6 +71,8 @@ window.SaluData = (function () {
     openReports = c.openReports;
     emit();
   }
+  /** After an action that worked: a failed count reload must not report the action as failed. */
+  const refreshCountsAfterAction = () => refreshCounts().catch(() => {});
 
   return {
     text, DataError, AccessError,
@@ -123,12 +125,12 @@ window.SaluData = (function () {
     },
     async removeListing(id, reason) {
       const r = await rpc('admin_remove_listing', { p_post: id, p_reason: reason });
-      await refreshCounts();
+      await refreshCountsAfterAction();
       return r;
     },
     async dismissListingReports(id, note) {
       const r = await rpc('admin_dismiss_listing_reports', { p_post: id, p_note: note || null });
-      await refreshCounts();
+      await refreshCountsAfterAction();
       return r;
     },
     markListingReviewed(id, note) { return rpc('admin_mark_listing_reviewed', { p_post: id, p_note: note || null }); },
@@ -163,7 +165,7 @@ window.SaluData = (function () {
     },
     async dismissReport(id, note) {
       const r = await rpc('admin_dismiss_report', { p_report: id, p_note: note || null });
-      await refreshCounts();
+      await refreshCountsAfterAction();
       return r;
     },
     addReportNote(id, note) { return rpc('admin_add_report_note', { p_report: id, p_note: note }); },

@@ -40,7 +40,9 @@
   });
   let started = false;
 
-  window.SaluAuth = { signOut: () => auth.signOut().then(() => { location.hash = ''; location.reload(); }) };
+  // A fresh page without the #/… address, so no page asks for data while signed out.
+  const reloadClean = () => location.replace(location.pathname + location.search);
+  window.SaluAuth = { signOut: () => auth.signOut().then(reloadClean) };
 
   function authError(e) {
     const c = e && e.code;
@@ -73,7 +75,13 @@
   auth.getRedirectResult().catch((e) => show(authError(e)));
 
   auth.onAuthStateChanged(async (user) => {
-    if (!user) { show(recall()); return; }
+    if (!user) {
+      // Signed out while the dashboard ran (Log out, lost access, another tab): the reload
+      // shows Sign In and any remembered message, so don't read it here.
+      if (started) { reloadClean(); return; }
+      show(recall());
+      return;
+    }
     if (started) return;
     setBusy(true);
     try {

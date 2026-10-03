@@ -7,7 +7,7 @@ window.SaluConfig = {
   supabaseKey: 'YOUR-PUBLISHABLE-KEY',
   firebase: {
     apiKey: 'FROM-FIREBASE-CONSOLE',
-    authDomain: 'salusalo.web.app',
+    authDomain: 'salusalo.firebaseapp.com',
     projectId: 'salusalo',
     appId: 'FROM-FIREBASE-CONSOLE'
   }

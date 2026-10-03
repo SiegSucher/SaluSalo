@@ -2611,7 +2611,8 @@ The developer ran the 13 steps on two phones: **all passed.** During step 7 "Lim
 
 - A local PostgreSQL 16.4 with stand-ins for Supabase's roles, `auth.jwt()`, Storage and Cron: all 21 migrations applied (the new one twice). `admin_dashboard_live_safety_check.sql` failed first (1 passed, 14 failed, 5 skipped) and passes **20 of 20** after the migration; `admin_dashboard_check.sql` rows 1–6 true (the "an admin exists" row false, as no admin was set); `bugfix_anon_grants_check.sql` 3 of 3. Earlier checks still pass: `phase3_live_safety_check` 14/14, `bugfix_security_live_safety_check` 21 passed 2 skipped, `reservation_limits_live_safety_check` 20/20, `phase5_maps_live_safety_check` 22/22, `bugfix_reservations_live_safety_check` 15/15, `phase5_live_safety_check` 3 passed 24 skipped (the seed has no claimed reservations).
 - Local read checks: search text with `%` or `_` matches literally; a page past the end gives the last page; page size is capped at 50; a non-admin is refused.
-- `node admin/tests/timeline.test.js` passed; `node --check` on every script.
+- The Node checks in `admin/tests/` passed (timeline; sign-in messages, including the "Your admin access ended" message surviving the reload; the data layer, including an action reported as done when only the count reload fails); `node --check` on every script.
+- A fresh-context review of the whole branch found no critical problem; its two important findings (that message, and Google sign-in needing `authDomain: salusalo.firebaseapp.com`) and two re-graded ones (an action reported as failed when only the count reload failed; two CLAUDE.md rules contradicting the admin functions) were fixed.
 - **Not done:** the dashboard has not run in a browser against Supabase (no local PostgREST); that is the developer's manual test (§25.4).
 
 ### 25.3 Database (run by hand)
