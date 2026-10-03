@@ -178,6 +178,9 @@ window.SaluData = (function () {
       res.rows.forEach((a) => { a.action = text.actions[a.action] || a.action; markYou(a.admin); });
       return res;
     },
+    /** Analytics for the last 4, 8 or 12 weeks (admin_analytics, 20261013). */
+    analytics({ weeks }) { return rpc('admin_analytics', { p_weeks: weeks }); },
+
     auditFilters() {
       return { admins: admins.map((a) => Object.assign({ isYou: a.id === me.id }, a)), actions: Object.values(text.actions) };
     }

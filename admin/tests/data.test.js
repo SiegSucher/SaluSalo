@@ -61,5 +61,19 @@ function load(answers) {
     assert.strictEqual(lost, 1);
   }
 
+  // Analytics asks the server for the chosen number of weeks and hands its answer to the page.
+  {
+    const answer = { weekStarts: [1, 2, 3, 4], kpis: { listings: 3 }, previous: null, series: {}, statusCounts: {} };
+    let asked = null;
+    const t = load({
+      admin_whoami: () => ({ data: { me: { id: 'a1', name: 'Ada', email: 'ada@example.com' }, admins: [] }, error: null }),
+      admin_counts: () => ({ data: { openReports: 0 }, error: null }),
+      admin_analytics: (args) => { asked = args; return { data: answer, error: null }; }
+    });
+    await t.data.start(t.sb, () => {});
+    assert.deepStrictEqual(await t.data.analytics({ weeks: 4 }), answer);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(asked)), { p_weeks: 4 }); // built inside the sandbox
+  }
+
   console.log('data: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });
