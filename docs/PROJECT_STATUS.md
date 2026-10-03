@@ -98,10 +98,9 @@ This summarizes the app as it is on branch `claude/bugfix-pass-3`: `master` at `
 Still unresolved on 2026-09-30:
 
 - **Not tested on a phone:**
-  - Things that need two phones at once: Home picking up another account's new listing by itself (#2), and the app's "The price changed…" message (#8; the server refusal passed its live check).
   - The optional checks for #5 (photo links older than an hour), #21 (a disabled or deleted account) and #15 (restoring a re-created account's profile).
   - The password-reset email (no test record).
-- **Round 3 (§23)** passed on one phone on 2026-10-03; its pull request is open. The two-phone checks for #2 and #14 are still open.
+- **Round 3 (§23)** passed on one phone and its two-phone checks (#2, #8, #14) on 2026-10-03; merged through PR #19.
 - **Audit findings still open after round 3** (details in §23.1; each needs a decision or work outside the app code):
   - #9: reservations never expire by themselves, and one person can reserve a listing's whole quantity (the app's design says "part or all").
   - #10: donors' Firebase UIDs are the first folder of listing photo paths, so anyone who may see a listing can read its donor's UID.
@@ -2497,7 +2496,9 @@ Not covered on one phone (both need two phones): #14, an alert sent by the other
 
 ### 23.4a Result (2026-10-03)
 
-The developer ran §23.4 steps 1–15 on one phone, plus five regression steps added on 2026-10-02: deleting "Round 3 test" ("Listing deleted."); B seeing A's "Round 3 check" message with the unread count and reserving 1; A's "New reservation" alert and Mark as picked up ("Marked as picked up. You'll find it under Completed."); B's "Reservation claimed" alert and the reservation under History → Completed. **All passed.** Before the test, on 2026-10-02, `testDebugUnitTest` (forced re-run) passed 57 of 57 and `assembleDebug` passed on the same working tree. Not covered: the two-phone checks for #2 and #14, and the optional new-account step (not reported).
+The developer ran §23.4 steps 1–15 on one phone, plus five regression steps added on 2026-10-02: deleting "Round 3 test" ("Listing deleted."); B seeing A's "Round 3 check" message with the unread count and reserving 1; A's "New reservation" alert and Mark as picked up ("Marked as picked up. You'll find it under Completed."); B's "Reservation claimed" alert and the reservation under History → Completed. **All passed.** Before the test, on 2026-10-02, `testDebugUnitTest` (forced re-run) passed 57 of 57 and `assembleDebug` passed on the same working tree. Not covered: the optional new-account step (not reported).
+
+**Two-phone checks (2026-10-03), all passed:** #2, a listing posted on phone 2 appeared on phone 1's Home within about a minute without a pull; #14, a message alert sent while phone 1 was in airplane mode appeared on its Alerts page within about 30 seconds of reconnecting, without leaving the page; #8, a price changed from ₱20.00 to ₱25.00 while phone 1 was on Review reservation was refused with "The price changed to ₱25.00 per unit. Check the details before reserving." and nothing was reserved. Both test listings were deleted.
 
 ### 23.5 Known limits of round 3
 
