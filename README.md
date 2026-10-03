@@ -2,7 +2,7 @@
 
 Salu-Salo is an Android app for sharing surplus food within a community to reduce food waste. Donors post surplus food with a photo, quantity, pickup location and expiry date. Recipients browse the available listings and reserve some or all of a listing for pickup. The UI uses Philippine pesos (₱) and Philippine sample locations.
 
-**Status (2026-09-30):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and signed off. Both parts of Phase 5 (ratings, reviews, reports and an "Email verified" badge; maps) passed on two phones and are merged into `master`, as are the demo fixes to Phases 1–4, a Profile redesign, the clean-ups after the second demo audit, automatic Supabase roles for new accounts (PR #13), a UI/UX refresh (PRs #14 and #15) and a web admin dashboard with sample data (`admin/`, PR #15). A bug fix pass after a full bug audit (security of reservations and photos, Home refresh and error states, safe posting, price and pickup-time checks, donor release, rotation and session handling) passed a manual test on one phone and was merged through PR #17 on 2026-09-30; its database migrations are applied to the live project. A second round of fixes for the rest of that audit (fairer ratings, friendly error texts, photo caching and decoding, Storage and rate limits, backup rules, release configuration, database privileges) is on branch `claude/bugfix-pass-2`: built and unit-tested, its database migrations applied to the live project on 2026-09-30 (their checks passed), and it passed a manual test on one phone the same day; it is in PR #18, not merged yet. Phase 6 (admin and final release) has not started. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status, the current state and the known issues.
+**Status (2026-09-30):** Phases 1–4 of 6 (backend foundation, food listings, reservations, and messaging and notifications) are complete and signed off. Both parts of Phase 5 (ratings, reviews, reports and an "Email verified" badge; maps) passed on two phones and are merged into `master`, as are the demo fixes to Phases 1–4, a Profile redesign, the clean-ups after the second demo audit, automatic Supabase roles for new accounts (PR #13), a UI/UX refresh (PRs #14 and #15) and a web admin dashboard with sample data (`admin/`, PR #15). A bug fix pass after a full bug audit (security of reservations and photos, Home refresh and error states, safe posting, price and pickup-time checks, donor release, rotation and session handling) passed a manual test on one phone and was merged through PR #17 on 2026-09-30; its database migrations are applied to the live project. A second round of fixes for the rest of that audit (fairer ratings, friendly error texts, photo caching and decoding, Storage and rate limits, backup rules, release configuration, database privileges) passed a manual test on one phone and was merged through PR #18 on 2026-09-30; its database migrations are applied too. A third round, after re-checking every finding (sign-in during a rotation, pages that stay open through rotation, correct states when reservations fail to load, the feed reloading every minute while shown, alerts reloading after a lost connection), is on branch `claude/bugfix-pass-3`: built and unit-tested, not yet tested on a phone. Phase 6 (admin and final release) has not started. Parts of the UI still show demo data. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for the detailed status, the current state and the known issues.
 
 ## Features
 
@@ -27,7 +27,7 @@ Since PRs #14 and #15 (UI/UX refresh): one design in Salu-Salo's original colour
 
 Since PR #17 (bug fix pass, merged on 2026-09-30), besides the reservation changes above: failed loads keep what is on screen and offer Try again instead of showing "nothing here", expired photo links are renewed, posting again after a failed or unclear post never creates a duplicate, rotation and dark mode keep you on Home, a disabled or deleted account returns to Sign In with a message, alerts reload when you come back to the app, and an account that was deleted and created again with the same email can restore its earlier profile after confirming that email.
 
-On branch `claude/bugfix-pass-2` (round 2, migrations applied, passed a one-phone test on 2026-09-30):
+Since PR #18 (round 2, merged on 2026-09-30):
 - A donor's rating counts each reviewer's latest review once.
 - Chat, alert and Google sign-in errors show short, friendly texts.
 - Photos are cached by their storage path, so refreshing doesn't download them again, and large camera photos are shrunk without loading them fully into memory.
@@ -37,6 +37,14 @@ On branch `claude/bugfix-pass-2` (round 2, migrations applied, passed a one-phon
 - Android backups no longer carry the Firebase sign-in to another phone.
 - Release signing can be configured without committing keys.
 - No database function can be called without signing in.
+
+On branch `claude/bugfix-pass-3` (round 3, no database changes, passed on one phone on 2026-10-03):
+- Rotating the phone right after tapping Sign in or Create account still opens Home.
+- Food details, Edit listing and the Rate page stay open through rotation.
+- A listing that is no longer available shows "Unavailable" instead of Reserve, also when its pickup time ends while the page is open.
+- While Home is on screen, the feed reloads every minute; cancelling or releasing a reservation reloads it even if you leave Activity at once.
+- After the connection drops for a moment, alerts, the inbox and an open chat reload what they missed.
+- Pages never say "No reservations yet" or "You have no food posts yet" when the data failed to load.
 
 There are no push notifications yet. Most settings are saved only on the device; the profile name and photo and the notification preferences come from Supabase.
 
@@ -140,7 +148,7 @@ Both the app and the SQL are tied to the Firebase project `salusalo`: `app/googl
 
 ## Testing
 
-The automated tests are the Android Studio templates `ExampleUnitTest` and `ExampleInstrumentedTest`, and the JVM tests `GeoTest` (distances and pins), `PhotoSigningTest` (signing a list of photos), `PickupStartTest` (the pickup-start rule), `SupabaseRoleTest` (when the app calls the role function), `UiTextTest` (expiry and "posted" labels), in PR #17 `PublishOnceTest` (posting never twice, photos kept when unsure) and `ReserveBlockerTest` (why a listing can't be reserved), and in round 2 `PhotoSampleTest` (how much a camera photo is shrunk while decoding). On 2026-09-30 `testDebugUnitTest` passed all 54 tests; `lintDebug` found 0 errors on 2026-09-29. The Edge Function has Deno tests: `deno test supabase/functions/tests/set-firebase-role-test.ts` (needs [Deno](https://deno.com); not part of the Android build).
+The automated tests are the Android Studio templates `ExampleUnitTest` and `ExampleInstrumentedTest`, and the JVM tests `GeoTest` (distances and pins), `PhotoSigningTest` (signing a list of photos), `PickupStartTest` (the pickup-start rule), `SupabaseRoleTest` (when the app calls the role function), `UiTextTest` (expiry and "posted" labels), in PR #17 `PublishOnceTest` (posting never twice, photos kept when unsure) and `ReserveBlockerTest` (why a listing can't be reserved), in round 2 `PhotoSampleTest` (how much a camera photo is shrunk while decoding), and in round 3 `RealtimeRejoinTest` (when a lost Realtime connection needs a reload). On 2026-09-30 `testDebugUnitTest` passed all 57 tests and `lintDebug` found 0 errors. The Edge Function has Deno tests: `deno test supabase/functions/tests/set-firebase-role-test.ts` (needs [Deno](https://deno.com); not part of the Android build).
 
 ```bash
 ./gradlew testDebugUnitTest           # JVM unit tests

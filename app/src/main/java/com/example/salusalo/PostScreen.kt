@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.AddAPhoto
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -110,6 +111,8 @@ fun PostScreen(
 ) {
     val context = LocalContext.current
     val myPosts by foodViewModel.myPosts.collectAsStateWithLifecycle()
+    val myPostsLoaded by foodViewModel.myPostsLoaded.collectAsStateWithLifecycle()
+    val myPostsError by foodViewModel.myPostsError.collectAsStateWithLifecycle()
     val postResult by foodViewModel.postResult.collectAsStateWithLifecycle()
     val postingDraftId by foodViewModel.postingDraftId.collectAsStateWithLifecycle()
     val publishedDraftIds by foodViewModel.publishedDraftIds.collectAsStateWithLifecycle()
@@ -151,7 +154,16 @@ fun PostScreen(
     val posting = postingDraftId == draftId
     var showLocal by rememberSaveable { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<com.example.salusalo.model.FoodPost?>(null) }
-    var editing by remember { mutableStateOf<com.example.salusalo.model.FoodPost?>(null) }
+    // The Edit Listing dialog stays open through rotation.
+    var editingPostId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // The photo picker's read access is kept (persisted) so a draft survives the
+    // app being closed; it is given back once a photo leaves the draft or is posted.
+    fun releasePhotoAccess(uri: String) {
+        runCatching {
+            context.contentResolver.releasePersistableUriPermission(Uri.parse(uri), Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
 
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
@@ -246,7 +258,11 @@ fun PostScreen(
 
     // Published, also when Home showed the result while this form was not open.
     LaunchedEffect(publishedDraftIds) {
-        if (draftId in publishedDraftIds) savedId = draftId
+        if (draftId in publishedDraftIds) {
+            savedId = draftId
+            // Uploaded: the phone's copies are no longer needed.
+            photos.forEach(::releasePhotoAccess)
+        }
     }
     LaunchedEffect(postResult) {
         val result = postResult
@@ -350,7 +366,11 @@ fun PostScreen(
                     PhotoPicker(
                         photos = photos,
                         onAdd = { photoPicker.launch(arrayOf("image/*")) },
-                        onRemove = { uri -> photos = ArrayList(photos.filter { it != uri }) }
+                        onRemove = { uri ->
+                            photos = ArrayList(photos.filter { it != uri })
+                            // Not while posting: the photos being read may include it.
+                            if (!posting) releasePhotoAccess(uri)
+                        }
                     )
 
                     PostField(
@@ -575,7 +595,8 @@ fun PostScreen(
                     Icon(Icons.Outlined.Inventory2, contentDescription = null, tint = SaluColors.Green)
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        "My posts (${myPosts.size})",
+                        // No count until the list has loaded: 0 would say "none".
+                        if (myPostsLoaded) "My posts (${myPosts.size})" else "My posts",
                         style = SaluText.FoodTitle,
                         color = SaluColors.DarkGreen,
                         modifier = Modifier.weight(1f)
@@ -590,7 +611,23 @@ fun PostScreen(
 
             AnimatedVisibility(visible = showLocal) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (myPosts.isEmpty()) {
+                    // A failed load is never shown as "no posts"; a failed reload keeps the list.
+                    if (myPostsError != null) {
+                        InlineNotice(
+                            text = if (myPostsLoaded) {
+                                "Couldn't refresh your posts. These may be out of date."
+                            } else {
+                                "Could not load your posts. Check your internet connection, then try again."
+                            },
+                            icon = Icons.Outlined.CloudOff,
+                            tone = NoticeTone.Error,
+                            actionLabel = "Try again",
+                            onAction = { foodViewModel.loadMyPosts() }
+                        )
+                    } else if (!myPostsLoaded) {
+                        Text("Loading your posts…", style = SaluText.Body, color = SaluColors.Gray)
+                    }
+                    if (myPostsLoaded && myPosts.isEmpty()) {
                         Text(
                             "You have no food posts yet.",
                             style = SaluText.Body,
@@ -602,7 +639,7 @@ fun PostScreen(
                         MyPostCard(
                             post = post,
                             onDetails = { info = post.description ?: "No description provided." },
-                            onEdit = { editing = post },
+                            onEdit = { editingPostId = post.id },
                             onDelete = { pendingDelete = post }
                         )
                     }
@@ -720,12 +757,12 @@ fun PostScreen(
         )
     }
     DeleteResultDialog(foodViewModel = foodViewModel)
-    editing?.let { post ->
+    myPosts.firstOrNull { it.id == editingPostId }?.let { post ->
         EditListingDialog(
             post = post,
             foodViewModel = foodViewModel,
             onClose = { message ->
-                editing = null
+                editingPostId = null
                 if (message != null) info = message
             }
         )

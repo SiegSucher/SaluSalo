@@ -30,6 +30,13 @@ sealed interface PostResult {
     data class Failed(override val draftId: String, val message: String) : PostResult
 }
 
+/**
+ * The listing whose details page is open. [listed] is true when the feed listed
+ * it as the page opened: if a later feed no longer does, it has been fully
+ * reserved, removed or has ended since, and the page must not offer Reserve.
+ */
+data class OpenedListing(val post: FoodPost, val listed: Boolean)
+
 /** The outcome of an edit, for the Edit Listing dialog. */
 sealed interface EditResult {
     data object Updated : EditResult
@@ -88,6 +95,10 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
     val editResult = _editResult.asStateFlow()
     private val _deleteResult = MutableStateFlow<DeleteResult?>(null)
     val deleteResult = _deleteResult.asStateFlow()
+    // Held here, not in the screen, so the details page stays open through
+    // rotation and other configuration changes.
+    private val _openedListing = MutableStateFlow<OpenedListing?>(null)
+    val openedListing = _openedListing.asStateFlow()
 
     /** True from the moment a create, edit or delete is accepted until it has finished. */
     private val _saving = MutableStateFlow(false)
@@ -217,6 +228,12 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun openListing(post: FoodPost) {
+        _openedListing.value = OpenedListing(post, listed = _availablePosts.value.any { it.id == post.id })
+    }
+
+    fun closeListing() { _openedListing.value = null }
+
     /** Signed URLs for a listing's photos 2–4, for the details gallery; a photo that can't be signed is null. */
     suspend fun extraPhotoUrls(post: FoodPost): List<String?> = repository.signedExtraPhotoUrls(post)
 
@@ -235,6 +252,7 @@ class FoodViewModel(application: Application) : AndroidViewModel(application) {
         _publishedDraftIds.value = emptySet()
         _editResult.value = null
         _deleteResult.value = null
+        _openedListing.value = null
     }
 
     fun clearPostResult() { _postResult.value = null }

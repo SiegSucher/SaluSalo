@@ -12,8 +12,10 @@ import com.example.salusalo.model.MyReview
 import com.example.salusalo.model.Reservation
 import com.example.salusalo.model.ReservationDisplay
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -80,6 +82,11 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     /** True from the moment a reserve, cancel, claim or review is accepted until it has finished. */
     private val _saving = MutableStateFlow(false)
     val saving = _saving.asStateFlow()
+    // A cancel or release gave quantity back to a listing, so the Home feed is
+    // out of date. Home reloads it, whichever screen is open; one pending signal
+    // waits while no one listens (for example during a rotation).
+    private val _quantityReturned = Channel<Unit>(Channel.CONFLATED)
+    val quantityReturned = _quantityReturned.receiveAsFlow()
 
     // Requests run one at a time. A write asked for while a load runs waits for
     // it. A load asked for while a request runs or waits is queued and runs
@@ -136,6 +143,7 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
         _actionResult.value = try {
             repository.cancelReservation(reservationId)
             refreshPending = true
+            _quantityReturned.trySend(Unit)
             ReservationAction.Cancelled
         } catch (error: CancellationException) {
             throw error
@@ -168,6 +176,7 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
         _actionResult.value = try {
             repository.releaseReservation(reservationId)
             refreshPending = true
+            _quantityReturned.trySend(Unit)
             ReservationAction.Released
         } catch (error: CancellationException) {
             throw error

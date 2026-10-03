@@ -64,12 +64,13 @@ class MessageRepository {
         postgrest.rpc("mark_conversation_read", buildJsonObject { put("p_conversation_id", conversationId) })
     }
 
-    /** New messages in one thread while it is open. */
-    fun messageInserts(conversationId: String): Flow<ChatMessage> =
-        realtimeInserts("messages", "conversation_id", conversationId)
+    /** New messages in one thread while it is open; [onRejoined] after a lost connection. */
+    fun messageInserts(conversationId: String, onRejoined: suspend () -> Unit): Flow<ChatMessage> =
+        realtimeInserts("messages", "conversation_id", conversationId, onRejoined)
 
     /** New messages in all of the caller's threads (the messages RLS lets only those through). */
-    fun allMessageInserts(): Flow<ChatMessage> = realtimeInserts("messages")
+    fun allMessageInserts(onRejoined: suspend () -> Unit): Flow<ChatMessage> =
+        realtimeInserts("messages", onRejoined = onRejoined)
 
     private suspend fun ConversationSummary.withSignedImage() =
         copy(displayImageUrl = bucket.signedUrlOrNull(foodImagePath))
