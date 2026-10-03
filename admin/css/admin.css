@@ -422,16 +422,6 @@ a.stat:hover { border-color: var(--green); color: var(--ink); }
 .notice--neutral { background: var(--neutral); }
 .notice--neutral > svg { color: var(--ink-2); }
 
-.sample-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 32px; padding: 0 12px;
-  border-radius: var(--r-md);
-  background: var(--orange-soft); color: var(--ink);
-  border: 0; font-size: var(--t-sm); font-weight: 600; cursor: pointer;
-}
-.sample-chip svg { color: var(--orange); }
-.sample-chip:hover { background: #fbe4ca; }
-
 /* ---------- Tabs ---------- */
 .tabs { position: relative; display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
@@ -882,8 +872,6 @@ a.list__item:hover { color: inherit; }
   .nav__link { min-height: 48px; }
   .topbar .topbar__menu { display: inline-grid; margin-left: -8px; }
   .topbar { gap: 8px; }
-  .sample-chip__label { display: none; }
-  .sample-chip { width: 40px; padding: 0; justify-content: center; }
   .content { padding-top: 20px; gap: 20px; }
   .page-title { font-size: 1.375rem; }
   .page-head { align-items: stretch; }
@@ -946,3 +934,21 @@ a.list__item:hover { color: inherit; }
 @media (forced-colors: active) {
   .badge, .btn, .stat, .card, .nav__link[aria-current="page"] { border: 1px solid CanvasText; }
 }
+
+/* ---------- Listing photos (signed URLs) ---------- */
+.thumb--photo { padding: 0; overflow: hidden; }
+.thumb--photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.photo-strip a { display: block; border-radius: var(--r-md); overflow: hidden; background: var(--neutral); }
+.photo-strip img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+
+/* ---------- Sign in ---------- */
+.signin { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); }
+.signin__card { width: 100%; max-width: 400px; display: grid; gap: 14px; padding: 32px 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-md); }
+.signin__logo { justify-self: center; width: 56px; height: 56px; }
+.signin__title { margin: 0; text-align: center; font-size: var(--t-2xl); color: var(--ink); }
+.signin__sub { margin: 0 0 4px; text-align: center; color: var(--ink-2); }
+.signin__msg { margin: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--error-soft); color: var(--error); font-size: var(--t-sm); }
+.signin__or { display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: var(--t-sm); }
+.signin__or::before, .signin__or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.signin .btn { width: 100%; justify-content: center; }

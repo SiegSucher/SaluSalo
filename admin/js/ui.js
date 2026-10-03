@@ -57,6 +57,8 @@ window.UI = (function () {
   const weekdayFmt = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const startOfDay = (t) => new Date(t).setHours(0, 0, 0, 0);
   const fmt = {
+    /** A short reference for a UUID, like "#3F2A9C01". */
+    ref: (id) => '#' + String(id || '').slice(0, 8).toUpperCase(),
     num: (n) => Number(n).toLocaleString('en-US'),
     compact: (n) => (n >= 10000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K' : Number(n).toLocaleString('en-US')),
     peso: (n) => '₱' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -144,6 +146,12 @@ window.UI = (function () {
         h('div', { class: 'thumb__inner' }, icon(CATEGORY_ICON[category] || 'restaurant', 40), h('span', { class: 'thumb__label' }, label || category)));
     }
     return h('span', { class: 'thumb', 'aria-hidden': 'true' }, icon(CATEGORY_ICON[category] || 'restaurant', 22));
+  }
+  /** A listing photo from a signed URL, or the category tile when there is none. */
+  function photo(url, category, big, label) {
+    if (!url) return thumb(category, big, label);
+    const img = h('img', { src: url, alt: big ? (label || category) : '', loading: 'lazy', referrerpolicy: 'no-referrer' });
+    return big ? h('div', { class: 'thumb thumb--lg thumb--photo' }, img) : h('span', { class: 'thumb thumb--photo', 'aria-hidden': 'true' }, img);
   }
   function identity(visual, name, meta, href) {
     return h('div', { class: 'identity' }, visual,
@@ -683,7 +691,7 @@ window.UI = (function () {
   }
 
   return {
-    h, append, clear, icon, fmt, badge, flagBadge, avatar, thumb, identity, btn, iconBtn, busy,
+    h, append, clear, icon, fmt, badge, flagBadge, avatar, thumb, photo, identity, btn, iconBtn, busy,
     pageHead, card, stat, notice, dl, section, timeline, empty, errorState, skeleton, skeletonRows,
     skeletonStats, skeletonList, skeletonPanel, filters, dataView, rowCard, pager, tabs,
     openPanel, closePanel, panelIsOpen, confirm, info, menu, menuButton, closeMenu, toast, field, switchRow,

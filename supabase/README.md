@@ -413,3 +413,16 @@ Run **before** installing the build that reserves with a pickup time (`create_re
 3. **Check:** run `tests/reservation_limits_check.sql` (every row true), then the two commented queries at its end (the job is active and has succeeded at least once), then `tests/reservation_limits_live_safety_check.sql` alone (all PASS).
 
 Never grant EXECUTE on `expire_overdue_reservations()` to any client role; keep the limit check and the rate limit in `create_reservation`.
+
+### 20261012_admin_dashboard.sql (admin dashboard, first slice, PROJECT_STATUS.md §25)
+
+Run after `20261011`. Safe to run again; app builds are unaffected (nothing they call changes, and the only alert type used is the existing `RESERVATION_REMOVED`).
+
+It adds `is_salusalo_admin()` and admin-only SECURITY DEFINER functions for the web dashboard in `admin/`: reads (`admin_whoami`, `admin_counts`, `admin_overview`, `admin_users`, `admin_user`, `admin_listings`, `admin_listing`, `admin_reservations`, `admin_reservation`, `admin_reports`, `admin_report`, `admin_audit`) and actions (`admin_remove_listing`, `admin_dismiss_listing_reports`, `admin_dismiss_report`, `admin_add_report_note`, `admin_mark_listing_reviewed`). Each one first refuses anyone whose own `users.role` isn't `ADMIN`. Reports can now be `RESOLVED` or `DISMISSED` (with who, when, the action and a note); `report_notes` and the insert-only `admin_audit_log` are new, with no client privileges. `can_read_food_image` also lets admins read listing photos. An admin removal keeps the listing as `REMOVED` (never deletes it), cancels its open reservations (`LISTING_REMOVED`), alerts each recipient ("Listing removed") and the donor ("Your listing was removed"), and resolves its open reports.
+
+1. **Apply:** run this file alone ("Success. No rows returned").
+2. **Check:** run `tests/admin_dashboard_check.sql`: rows 1–6 true, the last ("At least one admin account exists") false until step 3.
+3. **Make an admin** (the account must have signed into the app once): `update public.users set role = 'ADMIN' where email = 'you@example.com';` Take it back with `role = 'RECIPIENT'`. Run the check again: every row true.
+4. **Safety check:** run `tests/admin_dashboard_live_safety_check.sql` alone. It ends with "SAFETY CHECK FINISHED: 20 passed, 0 failed, 0 skipped." on purpose and undoes everything, including the roles it sets. Check 14 skips if the donor or recipient it picks has Reservation updates turned off.
+
+Never grant table privileges on `report_notes`, `admin_audit_log` or `reports`, and never let an admin function take the caller or a role from its arguments.

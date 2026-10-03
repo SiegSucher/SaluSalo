@@ -39,19 +39,19 @@ window.Pages.reports = (function () {
       open: (r) => window.App.go('#/reports/' + r.id),
       avatars: false,
       columns: [
-        { label: 'Report', cell: (r) => h('div', { class: 'identity__text' }, h('a', { class: 'row-link mono', href: '#/reports/' + r.id }, r.id), h('span', { class: 'identity__meta' }, data.text.sources[r.source])) },
+        { label: 'Report', cell: (r) => h('div', { class: 'identity__text' }, h('a', { class: 'row-link mono', href: '#/reports/' + r.id }, fmt.ref(r.id)), h('span', { class: 'identity__meta' }, data.text.sources[r.source])) },
         { label: 'Reporter', cell: (r) => h('a', { class: 'row-link', href: '#/users/' + r.reporter.id, style: { fontWeight: '500' } }, r.reporter.name) },
         { label: 'Reported', className: 'cell-wide', cell: targetCell },
         { label: 'Reason', cell: (r) => r.reasonLabel },
         { label: 'Date', className: 'cell-muted', cell: (r) => fmt.moment(r.createdAt) },
         { label: 'Status', cell: (r) => badge('report', r.status) },
-        { label: h('span', { class: 'sr-only' }, 'Action'), className: 'cell-actions', cell: (r) => h('a', { class: 'btn btn--' + (r.status === 'OPEN' ? 'primary' : 'secondary') + ' btn--sm', href: '#/reports/' + r.id, 'aria-label': (r.status === 'OPEN' ? 'Review ' : 'View ') + r.id }, r.status === 'OPEN' ? 'Review' : 'View') }
+        { label: h('span', { class: 'sr-only' }, 'Action'), className: 'cell-actions', cell: (r) => h('a', { class: 'btn btn--' + (r.status === 'OPEN' ? 'primary' : 'secondary') + ' btn--sm', href: '#/reports/' + r.id, 'aria-label': (r.status === 'OPEN' ? 'Review report ' : 'View report ') + fmt.ref(r.id) }, r.status === 'OPEN' ? 'Review' : 'View') }
       ],
       card: (r) => UI.rowCard({
         visual: h('span', { class: 'icon-bubble icon-bubble--error', 'aria-hidden': 'true' }, icon(r.targetType === 'LISTING' ? 'lunchDining' : 'person', 18)),
         title: r.reasonLabel, href: '#/reports/' + r.id,
         meta: { sub: (r.targetType === 'LISTING' ? 'Listing: ' : 'Person: ') + r.target.name, items: [{ icon: 'person', text: 'By ' + r.reporter.name }, { icon: 'schedule', text: fmt.relative(r.createdAt) }] },
-        badges: [badge('report', r.status), h('span', { class: 'badge badge--outline mono' }, r.id)]
+        badges: [badge('report', r.status), h('span', { class: 'badge badge--outline mono' }, fmt.ref(r.id))]
       }),
       emptyState: (q, filtered) => {
         if (filtered) return { iconName: 'search', title: 'No reports match', text: 'Try another search or clear the filters.' };
@@ -110,21 +110,6 @@ window.Pages.reports = (function () {
       refreshAfterAction();
     }
   }
-  async function suspend(r, person) {
-    let result = null;
-    const ok = await confirm({
-      title: 'Suspend this account?',
-      text: 'Are you sure you want to suspend this account? ' + person.name + ' won’t be able to sign in or use Salu-Salo until an admin restores it.',
-      confirmLabel: 'Suspend user', tone: 'danger', iconName: 'block',
-      reason: { label: 'Reason', required: true, placeholder: 'For example: asked for payment before pickup' },
-      errorText: 'Unable to suspend this account. Please try again.',
-      action: async (reason) => { result = await data.suspendUser(person.id, reason, r.id); }
-    });
-    if (ok) {
-      toast('Account suspended.', { sub: result && result.closedReports ? fmt.plural(result.closedReports, 'report') + ' marked resolved.' : null });
-      refreshAfterAction();
-    }
-  }
   async function addNote(r, textarea, button) {
     const text = textarea.value.trim();
     if (!text) { textarea.focus(); return; }
@@ -158,18 +143,18 @@ window.Pages.reports = (function () {
 
     const isListing = r.targetType === 'LISTING';
     const t = r.targetDetail;
-    const noteInput = h('textarea', { class: 'textarea', id: 'report-note', rows: '3', maxlength: '500', placeholder: 'Only admins see notes' });
+    const noteInput = h('textarea', { class: 'textarea', id: 'report-note', rows: '3', maxlength: '1000', placeholder: 'Only admins see notes' });
     const noteBtn = btn({ label: 'Add note', icon: 'editNote', variant: 'secondary', size: 'sm' });
     noteBtn.addEventListener('click', () => addNote(r, noteInput, noteBtn));
 
     const targetBlock = isListing
       ? (t ? h('div', { class: 'card', style: { padding: '14px 16px', display: 'grid', gap: '10px', boxShadow: 'none' } },
-        identity(thumb(t.category), t.name, 'From ' + t.donor.name + ' · posted ' + fmt.relative(t.createdAt), '#/listings/' + t.id),
-        h('div', { class: 'badge-row' }, badge('listing', t.status), badge('account', t.donorAccountStatus, t.donorAccountStatus === 'ACTIVE' ? 'Donor active' : 'Donor suspended')))
+        identity(UI.photo(t.photoUrl, t.category), t.name, 'From ' + t.donor.name + ' · posted ' + fmt.relative(t.createdAt), '#/listings/' + t.id),
+        h('div', { class: 'badge-row' }, badge('listing', t.status)))
         : notice({ tone: 'neutral', text: 'The listing “' + (r.listingName || 'unknown') + '” was deleted by its donor.' }))
       : h('div', { class: 'card', style: { padding: '14px 16px', display: 'grid', gap: '10px', boxShadow: 'none' } },
         identity(avatar(t), t.name, t.email, '#/users/' + t.id),
-        h('div', { class: 'badge-row' }, badge('role', t.role), badge('verification', t.verification), badge('account', t.accountStatus)));
+        h('div', { class: 'badge-row' }, badge('role', t.role)));
 
     const body = [
       r.status !== 'OPEN' && r.resolution ? notice({
@@ -188,7 +173,7 @@ window.Pages.reports = (function () {
         identity(avatar(r.reporterDetail), r.reporterDetail.name, r.reporterDetail.email, '#/users/' + r.reporterDetail.id),
         h('p', { class: 'muted', style: { fontSize: 'var(--t-sm)' } }, 'Joined ' + fmt.date(r.reporterDetail.joinedAt) + ' · ' + fmt.plural(r.reporterDetail.reportsFiled, 'report') + ' sent in total')),
       r.otherReports.length ? section('Other reports about this ' + (isListing ? 'listing' : 'person'), h('ul', { class: 'list' }, r.otherReports.map((o) => h('li', null, h('a', { class: 'list__item list__item--button', href: '#/reports/' + o.id, style: { paddingInline: '0' } },
-        h('span', { class: 'list__main' }, h('span', { class: 'list__title' }, o.reasonLabel), h('span', { class: 'list__meta' }, o.id + ' · ' + fmt.relative(o.createdAt))),
+        h('span', { class: 'list__main' }, h('span', { class: 'list__title' }, o.reasonLabel), h('span', { class: 'list__meta' }, fmt.ref(o.id) + ' · ' + fmt.relative(o.createdAt))),
         h('span', { class: 'list__side' }, badge('report', o.status))))))) : null,
       section('Admin notes',
         r.notes.length ? h('ul', { class: 'list' }, r.notes.map((n) => h('li', { class: 'list__item', style: { paddingInline: '0', alignItems: 'flex-start' } },
@@ -203,15 +188,12 @@ window.Pages.reports = (function () {
       foot.push(btn({ label: 'Dismiss report', icon: 'doNotDisturbOn', variant: 'secondary', onClick: () => dismiss(r) }));
       foot.push(h('span', { class: 'spacer' }));
       if (isListing && t && t.status !== 'REMOVED') foot.push(btn({ label: 'Remove listing', icon: 'delete', variant: 'danger', onClick: () => removeListing(r, t) }));
-      const person = isListing ? (t ? t.donor : null) : t;
-      const personActive = isListing ? t && t.donorAccountStatus === 'ACTIVE' : t && t.accountStatus === 'ACTIVE' && t.role !== 'ADMIN';
-      if (person && personActive) foot.push(btn({ label: isListing ? 'Suspend donor' : 'Suspend user', icon: 'block', variant: 'danger-outline', onClick: () => suspend(r, person) }));
     } else if (isListing && t) {
       foot.push(btn({ label: 'View listing', icon: 'lunchDining', variant: 'secondary', href: '#/listings/' + t.id }));
-    } else if (!isListing) {
+    } else if (!isListing && t) {
       foot.push(btn({ label: 'View user', icon: 'person', variant: 'secondary', href: '#/users/' + t.id }));
     }
-    UI.openPanel({ label: 'Report ' + r.id, title: r.reasonLabel, sub: (isListing ? 'Listing: ' : 'Person: ') + r.target.name, body, foot, onClose });
+    UI.openPanel({ label: 'Report ' + fmt.ref(r.id), title: r.reasonLabel, sub: (isListing ? 'Listing: ' : 'Person: ') + r.target.name, body, foot, onClose });
   }
 
   function update(route) {

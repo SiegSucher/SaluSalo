@@ -9,7 +9,7 @@ window.Pages.audit = (function () {
   const ACTION_ICON = {
     'Approved verification': 'verified', 'Rejected verification': 'highlightOff', 'Verified account': 'verified',
     'Suspended account': 'block', 'Restored account': 'restartAlt', 'Removed listing': 'delete',
-    'Dismissed report': 'doNotDisturbOn', 'Reviewed listing': 'taskAlt', 'Sent notification': 'send',
+    'Dismissed report': 'doNotDisturbOn', 'Reviewed listing': 'taskAlt', 'Added note': 'editNote', 'Sent notification': 'send',
     'Scheduled notification': 'schedule', 'Cancelled notification': 'block', 'Changed setting': 'settings'
   };
   const DANGER = new Set(['Suspended account', 'Removed listing', 'Rejected verification']);
@@ -34,7 +34,7 @@ window.Pages.audit = (function () {
       what: 'the audit log', noun: 'entry', nounPlural: 'entries', caption: 'Audit log', pageSize: 12,
       defaults: { q: '', adminId: 'ALL', action: 'ALL', range: 'ANY' },
       filters: [
-        { key: 'q', type: 'search', label: 'Search the log', placeholder: 'Search a person, listing, report or detail' },
+        { key: 'q', type: 'search', label: 'Search the log', placeholder: 'Search a listing, report, admin or detail' },
         { key: 'adminId', type: 'select', label: 'Admin', options: [['ALL', 'All admins']].concat(f.admins.map((a) => [a.id, a.isYou ? 'You (' + a.name + ')' : a.name])) },
         { key: 'action', type: 'select', label: 'Action', options: [['ALL', 'All actions']].concat(f.actions.map((a) => [a, a])) },
         { key: 'range', type: 'select', label: 'When', options: [['ANY', 'Any time'], ['TODAY', 'Today'], ['7D', 'Last 7 days'], ['30D', 'Last 30 days']] }
@@ -59,11 +59,10 @@ window.Pages.audit = (function () {
       ],
       emptyState: (q, filtered) => filtered
         ? { iconName: 'search', title: 'No entries match', text: 'Try another admin, action or time range.' }
-        : { iconName: 'history', title: 'Nothing logged yet', text: 'Each admin action (approving, suspending, removing, sending, changing settings) is recorded here.' }
+        : { iconName: 'history', title: 'Nothing logged yet', text: 'Each admin action (removing a listing, dismissing a report, adding a note, marking a listing reviewed) is recorded here, and nobody can edit or delete an entry.' }
     });
     main.append(
       UI.pageHead({ title: 'Audit log', sub: 'Who did what, and when. Every admin action is recorded here.' }),
-      notice({ tone: 'neutral', iconName: 'info', text: 'Sample log. When connected, entries would come from the server, so nobody could edit or delete them.' }),
       list.el);
     list.load();
   }

@@ -25,7 +25,7 @@ window.Pages.reservations = (function () {
       fetch: (q) => data.reservations(q),
       open: (r) => window.App.go('#/reservations/' + r.id),
       columns: [
-        { label: 'Food', className: 'cell-wide', cell: (r) => identity(thumb(r.listing.category), r.listing.name, r.id, '#/reservations/' + r.id) },
+        { label: 'Food', className: 'cell-wide', cell: (r) => identity(UI.photo(r.listing.photoUrl, r.listing.category), r.listing.name, r.id, '#/reservations/' + r.id) },
         { label: 'Donor', cell: (r) => h('a', { class: 'row-link', href: '#/users/' + r.donor.id, style: { fontWeight: '500' } }, r.donor.name) },
         { label: 'Recipient', cell: (r) => h('a', { class: 'row-link', href: '#/users/' + r.recipient.id, style: { fontWeight: '500' } }, r.recipient.name) },
         { label: 'Quantity', className: 'cell-num', cell: amount },
@@ -33,7 +33,7 @@ window.Pages.reservations = (function () {
         { label: 'Status', cell: (r) => badge('reservation', r.status) }
       ],
       card: (r) => UI.rowCard({
-        visual: thumb(r.listing.category), title: r.listing.name, href: '#/reservations/' + r.id,
+        visual: UI.photo(r.listing.photoUrl, r.listing.category), title: r.listing.name, href: '#/reservations/' + r.id,
         meta: { sub: r.recipient.name + ' · from ' + r.donor.name, items: [{ icon: 'inventory2', text: amount(r) }, { icon: 'schedule', text: fmt.moment(r.createdAt) }] },
         badges: [badge('reservation', r.status)]
       }),
@@ -60,7 +60,7 @@ window.Pages.reservations = (function () {
     if (!s || s.panelFor !== id) return;
     if (!r) { UI.openPanel({ label: 'Reservation', title: 'Reservation not found', body: empty({ iconName: 'bookmark', title: 'This reservation doesn’t exist', text: 'Check the link and try again.' }), onClose }); return; }
     const body = [
-      h('div', { class: 'panel-hero' }, thumb(r.listing.category),
+      h('div', { class: 'panel-hero' }, UI.photo(r.listing.photoUrl, r.listing.category),
         h('div', { class: 'panel-hero__text' },
           h('span', { class: 'panel-hero__name' }, r.listing.name),
           h('div', { class: 'badge-row' }, badge('reservation', r.status), r.listingStatus === 'REMOVED' ? badge('listing', 'REMOVED', 'Listing removed') : null))),
@@ -70,14 +70,15 @@ window.Pages.reservations = (function () {
         ['Quantity', fmt.qty(r.quantity, r.listing.unit)],
         ['Cost', r.unitPrice ? fmt.peso(r.total) + ' (' + r.quantity + ' × ' + fmt.peso(r.unitPrice) + ') · pay at pickup' : 'Free'],
         ['Reserved', fmt.dateTime(r.createdAt)],
-        ['Status', ({ RESERVED: 'Reserved, waiting for pickup', CLAIMED: 'Claimed (picked up)', CANCELLED: 'Cancelled' })[r.status]],
+        ['Status', r.status === 'CANCELLED' ? r.timeline[r.timeline.length - 1].title : ({ RESERVED: 'Reserved, waiting for pickup', CLAIMED: 'Claimed (picked up)' })[r.status]],
+        ['Pick up by', r.pickupDeadline ? fmt.dateTime(r.pickupDeadline) : null],
         ['Pickup window', fmt.window(r.pickupStart, r.pickupEnd)],
         ['Pickup location', r.pickupLocation],
-        ['Handover', data.text.handover[r.handover]],
+        ['Handover', data.text.handover[r.handover] || null],
         ['Reservation ID', h('span', { class: 'mono' }, r.id)]
       ])),
       section('Timeline', UI.timeline(r.timeline)),
-      h('p', { class: 'muted', style: { fontSize: 'var(--t-sm)' } }, 'Monitoring only. The recipient can cancel in the app while it’s reserved; the donor marks it picked up at the handover.')
+      h('p', { class: 'muted', style: { fontSize: 'var(--t-sm)' } }, 'Monitoring only. The recipient can cancel in the app while it’s reserved; the donor marks it picked up or releases it, and it expires by itself after its pickup time.')
     ];
     const foot = [
       btn({ label: 'View listing', icon: 'lunchDining', variant: 'secondary', href: '#/listings/' + r.listing.id }),
