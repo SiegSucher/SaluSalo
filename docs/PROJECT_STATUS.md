@@ -2617,6 +2617,9 @@ The developer ran the 13 steps on two phones: **all passed.** During step 7 "Lim
 
 ### 25.3 Database (run by hand)
 
+**Applied to the live project on 2026-10-03** (developer, SQL Editor): the migration ("Success. No rows returned"); `admin_dashboard_check.sql` rows 1–6 true, then true for every row after the developer's account was set to `ADMIN`; `admin_dashboard_live_safety_check.sql` **20 passed, 0 failed, 0 skipped** (donor, recipient and admin were three existing accounts; 12 users, 5 open reports at the time).
+
+
 See `supabase/README.md` → 20261012: run the migration, `tests/admin_dashboard_check.sql`, set the admin role, then `tests/admin_dashboard_live_safety_check.sql` (expect 20 passed).
 
 ### 25.4 Manual test (not yet run)
