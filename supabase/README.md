@@ -435,3 +435,12 @@ It adds the admin-only `admin_analytics(p_weeks)` (4, 8 or 12 weeks; counts only
 
 1. **Apply:** run this file alone ("Success. No rows returned").
 2. **Safety check:** run `tests/admin_analytics_live_safety_check.sql` alone. It ends with "SAFETY CHECK FINISHED: 10 passed, 0 failed, 0 skipped." on purpose and undoes everything (a test listing, a reservation of 2 and its pickup, and the roles it sets).
+
+### 20261014_admin_announcements.sql (admin announcements, PROJECT_STATUS.md §27)
+
+Run after `20261013_admin_analytics.sql`, **and only once every phone has the app build from §27**: older builds can't load Alerts once they have an announcement. Safe to run again.
+
+It adds the `ANNOUNCEMENT` alert type, the `announcements` table (no client privileges), the audit action `ANNOUNCEMENT_SENT`, and the admin-only `admin_audience_sizes`, `admin_send_announcement`, `admin_announcements` and `admin_announcement`.
+
+1. **Apply:** run this file alone ("Success. No rows returned").
+2. **Safety check:** run `tests/admin_announcements_live_safety_check.sql` alone, before anyone sends a real announcement. It ends with "SAFETY CHECK FINISHED: 14 passed, 0 failed, 0 skipped." on purpose and undoes everything (test announcements, their alerts, audit rows and the roles it sets); no phone gets them.

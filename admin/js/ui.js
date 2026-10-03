@@ -499,7 +499,7 @@ window.UI = (function () {
   /* ---------- Confirmation dialog ---------- */
   /**
    * confirm({ title, text, confirmLabel, tone: 'danger'|'primary', iconName, reason: { label,
-   * required, placeholder, hint }, action: async (reason) => {}, errorText })
+   * required, placeholder, hint }, action: async (reason) => {}, errorText: string | (err) => string })
    * Resolves true once the action succeeded, false if cancelled.
    */
   function confirm(o) {
@@ -559,7 +559,8 @@ window.UI = (function () {
         } catch (err) {
           console.warn(err);
           errorBox.hidden = false;
-          errorBox.append(notice({ tone: 'error', text: o.errorText || 'That didn’t work. Please try again.' }));
+          const errorText = typeof o.errorText === 'function' ? o.errorText(err) : o.errorText;
+          errorBox.append(notice({ tone: 'error', text: errorText || 'That didn’t work. Please try again.' }));
           okBtn.focus();
         }
       }

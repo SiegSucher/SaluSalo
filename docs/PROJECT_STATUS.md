@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-10-03. Phases 1–4 are complete and both parts of Phase 5 passed on two phones; all of them are merged into `master`, together with the demo fixes (§9–§13), the Profile redesign (§16), the clean-ups after the second audit (§17), the automatic Supabase role (§18, PR #13), the UI/UX refresh (§19, PRs #14 and #15) and a web admin dashboard with sample data (§20, PR #15). The bug fix pass after the full audit of 2026-09-29 (§21) passed a one-phone test and was merged into `master` through PR #17 on 2026-09-30 (`8ed8eef`); its three migrations are applied to the live project. A second round (§22: the rest of the 34 findings) passed a one-phone test and was merged into `master` through PR #18 on 2026-09-30 (`65d5f6a`); its three migrations are applied too (live checks 5/5, 5/5, 3/3). A third round (§23: what the verification audit of 2026-09-30 found still open; no SQL) passed a one-phone test and two-phone checks and was merged through PR #19 on 2026-10-03 (`10270e7`). Reservation limits and pickup deadlines (§24, Mika's idea from PR #16, rebuilt) passed a two-phone test and were merged through PR #20 on 2026-10-03 (`a3dcd98`); its migration is applied and its Cron job runs. Phase 6 has started: its first slice, the admin dashboard on real data (§25), was built on branch `claude/admin-real`, its migration applied to the live project (safety check 20/20), deployed to https://salusalo.web.app and tested on the PC and the phone on 2026-10-03, and merged into `master` through PR #23 (merge commit `a60b315`). Analytics (§26) on branch `claude/admin-analytics`: applied, deployed and tested on the phone (2026-10-03), not yet merged. [Current state](#current-state-2026-09-30) summarizes the architecture and [Current known issues](#current-known-issues) what is still open; the numbered sections are the history of each phase, with later changes marked. Manual test results are in the [results log](#results-log)._
+_Last updated: 2026-10-04. Phases 1–4 are complete and both parts of Phase 5 passed on two phones; all of them are merged into `master`, together with the demo fixes (§9–§13), the Profile redesign (§16), the clean-ups after the second audit (§17), the automatic Supabase role (§18, PR #13), the UI/UX refresh (§19, PRs #14 and #15) and a web admin dashboard with sample data (§20, PR #15). The bug fix pass after the full audit of 2026-09-29 (§21) passed a one-phone test and was merged into `master` through PR #17 on 2026-09-30 (`8ed8eef`); its three migrations are applied to the live project. A second round (§22: the rest of the 34 findings) passed a one-phone test and was merged into `master` through PR #18 on 2026-09-30 (`65d5f6a`); its three migrations are applied too (live checks 5/5, 5/5, 3/3). A third round (§23: what the verification audit of 2026-09-30 found still open; no SQL) passed a one-phone test and two-phone checks and was merged through PR #19 on 2026-10-03 (`10270e7`). Reservation limits and pickup deadlines (§24, Mika's idea from PR #16, rebuilt) passed a two-phone test and were merged through PR #20 on 2026-10-03 (`a3dcd98`); its migration is applied and its Cron job runs. Phase 6 has started: its first slice, the admin dashboard on real data (§25), was built on branch `claude/admin-real`, its migration applied to the live project (safety check 20/20), deployed to https://salusalo.web.app and tested on the PC and the phone on 2026-10-03, and merged into `master` through PR #23 (merge commit `a60b315`). Analytics (§26) applied, deployed, tested on the phone and merged through PR #24 (`c240f48`, 2026-10-03). Announcements (§27) on branch `claude/admin-announcements`: migration applied (live safety check 14/14), deployed, and the one-phone test passed (2026-10-04); not yet merged. [Current state](#current-state-2026-09-30) summarizes the architecture and [Current known issues](#current-known-issues) what is still open; the numbered sections are the history of each phase, with later changes marked. Manual test results are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -35,7 +35,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Bug fix pass, round 2 (not part of the six phases) | The rest of the 34 findings: #12 one rating per reviewer, #13 friendly errors, #16 photo cache keys, #24 bucket limits and an orphan list, #25 rate limits, #26 bookmark race, #27 photo sampling, #29 fewer requests, #30 backup rules, #31 release config, #32 `anon` grants, #34 clean-ups; #28 deferred (§22) | **Passed on one phone (2026-09-30); committed as `a2412eb` (docs `2562de6`), merged into `master` through PR #18 on 2026-09-30 (`65d5f6a`).** Built and unit-tested (54 of 54), migrations applied. Branch `claude/bugfix-pass-2` (from `claude/bugfix-pass-1` at `5429e6e`), 2026-09-30. Three new migrations (`20261008`–`20261010`), dry-run on a local PostgreSQL 16 (§22.4) and applied to the live project on 2026-09-30; live checks 5 of 5, 5 of 5, 3 of 3. |
 | Bug fix pass, round 3 (not part of the six phases) | What the verification audit of 2026-09-30 found still open: #35 sign-in lost to a rotation, #17 listing pages when reservations fail, #22 details after a listing leaves the feed, #7 pages closed by rotation, #4 Post's My posts, #18 feed reload after cancel, #14 Realtime reconnects, #2 feed every minute, R1 alert-settings errors, #29 and #34 leftovers, #33 docs (§23) | **Passed on one phone and two-phone checks (2026-10-03); merged into `master` through PR #19 (`10270e7`).** Built and unit-tested (57 of 57). Branch `claude/bugfix-pass-3` (from `master` at `65d5f6a`). No SQL. |
 | Reservation limits and pickup deadlines (Mika's idea from PR #16, rebuilt; not part of the six phases) | A per-person limit set on Post; a pickup time chosen when reserving (15 min to 2 h); reservations not picked up in time expire by themselves through a Supabase Cron job, with alerts; countdowns and "Expired" in Activity (§24) | **Built and unit-tested (68 of 68), lint 0 errors, on branch `claude/reservation-limits` (from `master` at `10270e7`). Migration `20261011_reservation_limits_and_expiry.sql` applied on 2026-10-03 (check 9/9, live safety check 20/20, Cron job running); the two-phone test passed on 2026-10-03; committed as `cc235a1`, merged into `master` through PR #20 on 2026-10-03 (`a3dcd98`).** |
-| Phase 6: Admin and Final Release | ID verification and the admin screen (the Email verified badge moved to Phase 5 part 1) | **Started: first slice (§25), the web admin dashboard on real data, on branch `claude/admin-real`: migration applied (live safety check 20/20), deployed to https://salusalo.web.app, and the manual test passed on the PC and the phone (2026-10-03); merged into `master` through PR #23 (`a60b315`).** Analytics (§26) on branch `claude/admin-analytics`: applied, deployed and tested on the phone (2026-10-03), not yet merged. ID verification, suspending accounts, announcements and analytics are later slices. |
+| Phase 6: Admin and Final Release | ID verification and the admin screen (the Email verified badge moved to Phase 5 part 1) | **Started: first slice (§25), the web admin dashboard on real data, on branch `claude/admin-real`: migration applied (live safety check 20/20), deployed to https://salusalo.web.app, and the manual test passed on the PC and the phone (2026-10-03); merged into `master` through PR #23 (`a60b315`).** Analytics (§26) applied, deployed, tested on the phone and merged through PR #24 (`c240f48`, 2026-10-03). Announcements (§27) on branch `claude/admin-announcements`: migration applied (live safety check 14/14), deployed, and the one-phone test passed (2026-10-04); not yet merged. ID verification and suspending accounts are later slices. |
 
 - The roadmap has six phases (confirmed by the developer on 2026-09-25); earlier versions of this document went only up to Phase 4. Phases 1–3 are described in §1–§3 and Phase 4 in §8.
 
@@ -112,7 +112,7 @@ Still unresolved on 2026-09-30:
   - #28: no feed pagination (PostgREST would cap the feed at 1000 rows); the chat Realtime channel is unfiltered and checked by RLS per row.
   - #29: every Activity open still reloads its lists (kept on purpose: an alert opening Activity needs fresh lists).
   - #31: not ready for Play: R8 off, no real keystore, `applicationId` `com.example.salusalo` (Play refuses `com.example.*`), no in-app account deletion or web deletion link, Play Console forms not done; Google sign-in works only with registered SHA-1s; `googleid` pinned to 1.2.0.
-  - #34: `users.role` always `RECIPIENT` (kept for Phase 6); an unknown server enum value breaks a whole list; a discarded draft's photo-picker grants are left to Android to prune; Post's "My posts" duplicates Activity.
+  - #34: `users.role` always `RECIPIENT` (kept for Phase 6); an unknown server enum value breaks a whole list (alert types only: fixed by the §27 build, which skips unknown types); a discarded draft's photo-picker grants are left to Android to prune; Post's "My posts" duplicates Activity.
 - **Design limits:**
   - Only chats and alerts are live; the feed reloads every minute while it is on screen (round 3).
   - A published listing photo is never replaced by the app, but the Storage policy lets a donor overwrite their own file through the API; other phones would keep showing their cached copy (§23.1, #16).
@@ -124,7 +124,7 @@ Still unresolved on 2026-09-30:
   - Google sign-in with the email of an unverified email/password account makes that account Google-only (§10.5).
   - The automatic role's limits (§18.6): the claim write is not atomic and the key doesn't expire.
   - OpenStreetMap's free tile servers suit testing and a small user base only (§15.5).
-- **Phase 6** (admin and final release): first slice (§25) on branch `claude/admin-real`: the `admin/` dashboard on real data through admin-only functions, Firebase Hosting. Migration applied, deployed, tested on the PC and the phone and merged through PR #23 (2026-10-03). Analytics (§26) on branch `claude/admin-analytics`.
+- **Phase 6** (admin and final release): first slice (§25) on branch `claude/admin-real`: the `admin/` dashboard on real data through admin-only functions, Firebase Hosting. Migration applied, deployed, tested on the PC and the phone and merged through PR #23 (2026-10-03). Analytics (§26) applied, deployed, tested on the phone and merged through PR #24 (`c240f48`, 2026-10-03). Announcements (§27) on branch `claude/admin-announcements`: migration applied (live safety check 14/14), deployed, and the one-phone test passed (2026-10-04); not yet merged.
 
 ### Build verification
 
@@ -666,6 +666,7 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 | 2026-09-28 | `49ac319` (`master`) | Developer | Merged | Mika's Profile redesign and settings (§16) merged into `master` through PR #10 on 2026-09-28 (merge commit `49ac319`). |
 | 2026-09-30 | `claude/bugfix-pass-1` (the code committed as `5429e6e`); migrations `20261005`–`20261007` applied | Developer | Passed | Bug fix pass (§21) on one phone, switching accounts: live safety checks 22/23 (check 12 was stricter than the rule and was corrected), 15/15, 9/9; test Part 1 (10 steps) and Part 2 (the replacement step 11 and steps 12–17). Details and what was left out: §21.4. |
 | 2026-09-30 | `claude/bugfix-pass-2` (uncommitted, before the offline Google sign-in fix); migrations `20261008`–`20261010` applied | Developer | Passed | Bug fix pass round 2 (§22) on one phone, switching accounts: live checks 5/5, 5/5, 3/3; test Part 1 (steps 1–13, step 7 with email/password) and Part 2 (steps 14–19). Offline Google sign-in showed nothing; fixed afterwards and its 3-step check passed. Details: §22.5. |
+| 2026-10-04 | `claude/admin-announcements` (uncommitted); migration `20261014` applied | Developer | Passed | Admin announcements (§27): live safety check 14/14, then the one-phone test switching accounts A and B with the dashboard on the PC (§27.4). |
 
 - **Build:** the test phone's app code was deployed on 2026-09-25 at 10:37 (+08:00), after the last source change (10:04), so it matches the working tree above. That same code was committed on 2026-09-25, with no source changes after 10:04. The build on any second device was not checked.
 - **Phase 4 retest build:** `c7323b8`, built at 21:21 (+08:00) with no local source changes and installed from Android Studio. A's phone showed the new "Loading your alert settings…" text, so it ran this build; which build the second phone ran was not checked.
@@ -2436,7 +2437,7 @@ Not covered on the phone: the rate-limit messages and one person counting once (
 | #31 | PARTLY (§22) | Needs the developer's keystore, package name, Firebase release SHA-1 and Play Console work, and an account deletion feature (§23.3). |
 | #32 | FIXED (§22) | Unchanged. |
 | #33 | FIXED (round 3) | The docs recorded PR #18 as not merged, and made the photo-replacement claim (#16); both corrected. |
-| #34 | PARTLY (round 3) | Photo-picker grants are now released when a photo is removed from the draft (not while posting) and after the listing is published. Left: strict enum decoding, `users.role`, Post's "My posts" list (§23.3). |
+| #34 | PARTLY (round 3) | Photo-picker grants are now released when a photo is removed from the draft (not while posting) and after the listing is published. Left: strict enum decoding (alerts lenient since §27), `users.role`, Post's "My posts" list (§23.3). |
 | #35 | FIXED (round 3) | New in the verification audit: rotating right after tapping Sign in or Create account (or during Google sign-in) left the user on Sign In while signed in to Firebase, because the sign-in finished in the discarded screen and the new screen's `LaunchedEffect` read Firebase's user, which isn't Compose state. `SaluSaloApp` now keeps the user's UID as state (set by its `AuthStateListener`), the typed name is saved before Firebase answers, and `openAuthenticatedHome` runs one setup at a time, so the callback and the effect can't start two. |
 | R1 | FIXED (round 3) | Since §22 a failure loading or saving the alert settings said "Could not load alerts…". It now says "Could not load your alert settings…" or "Could not save your alert settings…". |
 
@@ -2641,7 +2642,7 @@ The plan's Task 9: M1 sign-in screen and wrong password; M2 a non-admin refused;
 
 ### 26.0 Status
 
-**Written on branch `claude/admin-analytics` (from `master` at `a60b315`, the PR #23 merge) on 2026-10-03. Migration applied to the live project (safety check 10/10), deployed to https://salusalo.web.app and tested on the phone on 2026-10-03. Not yet merged.**
+**Written on branch `claude/admin-analytics` (from `master` at `a60b315`, the PR #23 merge) on 2026-10-03. Migration applied to the live project (safety check 10/10), deployed to https://salusalo.web.app and tested on the phone on 2026-10-03. Merged into `master` through PR #24 on 2026-10-03 (merge commit `c240f48`).**
 
 ### 26.1 What changed
 
@@ -2672,3 +2673,67 @@ Deploy, then on the phone: Analytics shows seven numbers and five charts for 12 
 - Items rescued add up different units (pieces, packs, meals, boxes, kilograms), like the app's History totals.
 - A pickup counts in the week it was marked picked up, a cancellation in the week it was cancelled.
 - With only a few weeks of data, the comparison with the previous period is hidden for the longer ranges.
+
+## 27. Admin dashboard: announcements (Phase 6, third slice)
+
+### 27.0 Status
+
+**Written on branch `claude/admin-announcements` (from `master` at `c240f48`, the PR #24 merge) on 2026-10-04. Migration applied to the live project on 2026-10-04 (live safety check 14/14: 12 accounts, 6 donors, 6 recipients). Deployed, and the manual test (27.4) passed on one phone on 2026-10-04. Not yet merged.** Spec: `docs/superpowers/specs/2026-10-04-admin-announcements-design.md`; plan: `docs/superpowers/plans/2026-10-04-admin-announcements.md`.
+
+### 27.1 What changed
+
+- **App** (must be on every phone before the migration): `NotificationType` gains `ANNOUNCEMENT`. Alerts of a type the build doesn't know decode as `UNKNOWN` (`NotificationTypeSerializer`) and are dropped by `NotificationRepository` (the list and the live alerts), so a type added later never breaks Alerts again; before this build one unknown type made the whole list fail ("Could not load alerts"). Alerts shows announcements with a megaphone, the label "Announcement" and an "Announcements" filter chip; tapping one opens its whole text with "From Salu-Salo · <time>" (kept through rotation). They play the alert sound like other live alerts. The header reads "Messages, reservation updates and announcements".
+- **Database** (`20261014_admin_announcements.sql`): the `ANNOUNCEMENT` alert type; table `announcements` (title 1–80, message 1–500, audience, reach, admin and time; RLS on, no client privileges); audit action `ANNOUNCEMENT_SENT` (target type `ANNOUNCEMENT`); admin-only `admin_audience_sizes()`, `admin_send_announcement(title, message, audience)`, `admin_announcements(page, size)`, `admin_announcement(id)` and the internal `admin_announcement_json`. Sending trims spaces, tabs and line breaks around the title and message (so blank-looking text counts as empty), then inserts one alert per account in the audience directly, not through `notify_user()`: it ignores the alert switches and keeps the whole text. It refuses an empty audience ("No one is in this audience yet.") and allows at most 3 announcements per admin per 10 minutes, under a per-admin advisory lock; the alerts, the history row and the audit row ("To 12 people (everyone).") are written in one transaction. Audiences are the Users page's filters: Everyone (every account, admins included), Donors (has posted), Recipients (never posted, not an admin).
+- **Web**: the Notifications page is real: the history (paged) with each announcement's details, and "New announcement" with title and message counters, the audience with live counts, a preview drawn like the app's row (line breaks kept, cut after 3 lines) and "Send to N people?"; the details keep the message's line breaks. A refusal shows the server's own text (`DataError.code` P0001; `confirm()` takes the error text as a function too); any other failure may still have sent it (a lost answer), so it says "Couldn’t confirm it was sent. Close this form and check the list before sending it again." and reloads the list instead of inviting a retry. The Audit log's "Sent announcement" links to the announcement.
+
+### 27.2 Checks run (local only, 2026-10-04)
+
+- JVM unit tests 71 of 71 (`NotificationTypeTest`, 3 new, failed to compile before the change); `assembleDebug` passed; `lintDebug` 0 errors.
+- Local PostgreSQL 16: `admin_announcements_live_safety_check.sql` before the migration 0 passed, 12 failed, 2 skipped; after it (the migration run twice) **14 of 14**: the audience sizes; an empty audience refused; Everyone reaches every account once with the title trimmed of spaces, tabs and line breaks and the whole 500-character text, including an account with both alert switches off; Donors and Recipients reach exactly their accounts; seven wrong inputs refused with their texts (including a tab-only title and a message of line breaks, which a spaces-only trim let through: checks 3 and 6 failed with it); the fourth send in 10 minutes refused; the history, the announcement by ID and the audit row; the recipient reads its own announcement; a non-admin and `anon` refused by all four functions; no client privileges on `announcements`; the privileges; the earlier alert types still accepted and an unknown one refused. Still passing: `admin_dashboard_live_safety_check` 20/20, `admin_analytics_live_safety_check` 10/10, `bugfix_anon_grants_check` 3/3, `admin_dashboard_check` (every row true except "an admin exists"; the local seed has none).
+- Node checks in `admin/tests/` pass (`data.test.js` also checks the four announcement calls and that a refusal keeps its code); `node --check` on every script.
+- Headless Edge with a stand-in Supabase client (not committed): the page lists, opens the form with live counts, refuses an empty title, updates counters and preview (line breaks kept, cut after 3 lines), asks "Send to 5 people?", sends the trimmed fields to the chosen audience, shows "Announcement sent to 5 people.", shows the rate-limit text on a refusal, answers a lost reply with "Couldn’t confirm it was sent…" and a list reload, shows details (line breaks kept; HTML in a message stays text) and "Announcement not found"; no script errors.
+
+### 27.3 Order (by hand)
+
+1. Install the new app build on every phone that uses the live project.
+2. Run `supabase/migrations/20261014_admin_announcements.sql`, then `supabase/tests/admin_announcements_live_safety_check.sql` (expect 14 passed).
+3. Deploy: `npx firebase-tools deploy --only hosting`.
+4. The manual test (27.4).
+
+### 27.4 Manual test (passed 2026-10-04, one phone)
+
+**2026-10-04: passed** (reported as "all test passed"). Run on one phone, switching between accounts A and B, with the dashboard on the PC:
+- the new build installed, and Alerts showing its new header and chips;
+- the migration, the live safety check (14/14) and the deploy;
+- with A signed in: an announcement to Everyone (a message longer than 3 lines) arriving live with the sound; the full text, kept through rotation; the read state and the Announcements chip; the history, the details and the Audit log link; Donors and Recipients sends; the rate-limit text;
+- signed in as B: B's announcements in Alerts although B wasn't signed in when they were sent; B messages A and reserves 1 of A's listings;
+- back as A: the message alert opens the chat, the "New reservation" alert opens the reservations; A releases the reservation; the Reservation updates switch saves off and on.
+
+Not tested: two phones getting the same announcement live at once (the second account was checked by loading Alerts after signing in). The original two-phone checklist follows.
+
+
+Phone A and phone B have different accounts; the dashboard runs on the PC or a phone's browser with the admin account.
+
+Part 1, before the migration:
+1. (New) Install the new build on both phones. On A open Alerts: the header says "Messages, reservation updates and announcements", the chips are All, Messages, Reservations, Announcements, and the existing alerts load. The Announcements chip shows "No announcements".
+2. Run the migration ("Success. No rows returned"), then the safety check ("SAFETY CHECK FINISHED: 14 passed, 0 failed, 0 skipped."), then deploy.
+
+Part 2, sending:
+3. (New) Both phones on Home with the app open. Dashboard → Notifications: "No announcements yet". New announcement: the three audiences show their counts.
+4. (New) Title "Test announcement", a message longer than 3 lines, Everyone, Send → "Send to N people?" → Send → "Announcement sent to N people."
+5. (New) Both phones: the alert arrives live with the alert sound; in Alerts it has the megaphone and "Announcement", the text cut after 3 lines.
+6. (New) A: tap it → the whole text and "From Salu-Salo · <time>"; rotate → still open; OK. The row is read; the Announcements chip shows it, the Messages chip doesn't.
+7. (New) Dashboard: the history row (Everyone, N people, You); open it → the details; Audit log → "Sent announcement" → its link opens the same announcement.
+8. (New) Send one to Donors, then one to Recipients: each reaches the count shown (or, for an audience of 0 people, "No one is in this audience yet."). Then send another to Everyone until the dialog shows "You can send up to 3 announcements every 10 minutes. Please wait a few minutes."; Cancel.
+
+Part 3, regression:
+9. (Regression) B messages A about a listing: A's message alert opens the chat.
+10. (Regression) B reserves 1 of A's listings: A's "New reservation" alert opens the reservations; B cancels.
+11. (Regression) A: Alerts → settings, turn Reservation updates off, Save, reopen (off), turn it back on, Save.
+
+### 27.5 Known limits
+
+- In-app only: no push while the app is closed; it shows when the app opens or Alerts reloads.
+- No scheduling, drafts, unsend or per-person opt-out.
+- The reach counts accounts, not phones, at the moment of sending; accounts created later don't get it.
+- A phone on a build older than §27 shows "Could not load alerts" once it has an announcement, until it is updated.

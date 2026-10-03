@@ -1,6 +1,6 @@
 /*
  * The dashboard's only way to its data: admin-only Supabase functions
- * (supabase/migrations/20261012_admin_dashboard.sql). Each one refuses anyone who
+ * (supabase/migrations/20261012_admin_dashboard.sql, 20261013 (Analytics) and 20261014 (announcements)). Each one refuses anyone who
  * isn't an admin; this page holds only the publishable key, so it can't get around
  * that. Times are epoch milliseconds. Photos are signed here for 1 hour and never logged.
  */
@@ -16,7 +16,8 @@ window.SaluData = (function () {
     sources: { LISTING: 'From the listing page', DONOR_PAGE: 'From the donor’s page', CHAT: 'From a chat' },
     handover: { MEET_AT_PICKUP_LOCATION: 'Meet at pickup location', COLLECT_FROM_PROVIDER: 'Collect from provider' },
     roles: { DONOR: 'Donor', RECIPIENT: 'Recipient', ADMIN: 'Admin' },
-    actions: { LISTING_REMOVED: 'Removed listing', REPORTS_DISMISSED: 'Dismissed report', LISTING_REVIEWED: 'Reviewed listing', REPORT_NOTE_ADDED: 'Added note' }
+    actions: { LISTING_REMOVED: 'Removed listing', REPORTS_DISMISSED: 'Dismissed report', LISTING_REVIEWED: 'Reviewed listing', REPORT_NOTE_ADDED: 'Added note', ANNOUNCEMENT_SENT: 'Sent announcement' },
+    audience: { ALL: 'Everyone', DONORS: 'Donors', RECIPIENTS: 'Recipients' }
   };
 
   class DataError extends Error {}
@@ -39,7 +40,8 @@ window.SaluData = (function () {
         onLost(e);
         throw e;
       }
-      throw new DataError(error.message || 'Request failed'); // our own short texts; never details or hints
+      // Our own short texts; never details or hints. The code tells a refusal (P0001) from a failure.
+      throw Object.assign(new DataError(error.message || 'Request failed'), { code: error.code || null });
     }
     return data;
   }
@@ -180,6 +182,22 @@ window.SaluData = (function () {
     },
     /** Analytics for the last 4, 8 or 12 weeks (admin_analytics, 20261013). */
     analytics({ weeks }) { return rpc('admin_analytics', { p_weeks: weeks }); },
+
+    /** Announcements (20261014): the form's audience sizes, sending one, the history, one by ID. */
+    audienceSizes() { return rpc('admin_audience_sizes'); },
+    sendAnnouncement({ title, message, audience }) {
+      return rpc('admin_send_announcement', { p_title: title, p_message: message, p_audience: audience });
+    },
+    async announcements(q) {
+      const res = await rpc('admin_announcements', paging(q));
+      res.rows.forEach((a) => markYou(a.admin));
+      return res;
+    },
+    async announcement(id) {
+      const a = await rpc('admin_announcement', { p_id: id });
+      if (a) markYou(a.admin);
+      return a;
+    },
 
     auditFilters() {
       return { admins: admins.map((a) => Object.assign({ isYou: a.id === me.id }, a)), actions: Object.values(text.actions) };

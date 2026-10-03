@@ -75,5 +75,39 @@ function load(answers) {
     assert.deepStrictEqual(JSON.parse(JSON.stringify(asked)), { p_weeks: 4 }); // built inside the sandbox
   }
 
+  // Announcements: sending passes the form's fields; the history and one announcement mark the admin's own rows.
+  {
+    let asked = null;
+    const t = load({
+      admin_whoami: () => ({ data: { me: { id: 'a1', name: 'Ada', email: 'ada@example.com' }, admins: [] }, error: null }),
+      admin_counts: () => ({ data: { openReports: 0 }, error: null }),
+      admin_audience_sizes: () => ({ data: { ALL: 3, DONORS: 1, RECIPIENTS: 1 }, error: null }),
+      admin_send_announcement: (args) => { asked = args; return { data: { id: 'n1', reach: 1 }, error: null }; },
+      admin_announcements: () => ({ data: { rows: [{ id: 'n1', admin: { id: 'a1', name: 'Ada' } }], total: 1, page: 1, pageSize: 10, pages: 1 }, error: null }),
+      admin_announcement: () => ({ data: { id: 'n1', admin: { id: 'b2', name: 'Ben' } }, error: null })
+    });
+    await t.data.start(t.sb, () => {});
+    assert.deepStrictEqual(await t.data.audienceSizes(), { ALL: 3, DONORS: 1, RECIPIENTS: 1 });
+    assert.deepStrictEqual(await t.data.sendAnnouncement({ title: 'Hi', message: 'Hello', audience: 'DONORS' }), { id: 'n1', reach: 1 });
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(asked)), { p_title: 'Hi', p_message: 'Hello', p_audience: 'DONORS' });
+    assert.strictEqual((await t.data.announcements({ page: 1, pageSize: 10 })).rows[0].admin.isYou, true);
+    assert.strictEqual((await t.data.announcement('n1')).admin.isYou, undefined);
+    assert.strictEqual(t.data.text.audience.RECIPIENTS, 'Recipients');
+    assert.strictEqual(t.data.text.actions.ANNOUNCEMENT_SENT, 'Sent announcement');
+  }
+
+  // A refusal keeps the server's code, so the page can show the server's own text (the rate limit).
+  {
+    const limit = 'You can send up to 3 announcements every 10 minutes. Please wait a few minutes.';
+    const t = load({
+      admin_whoami: () => ({ data: { me: { id: 'a1', name: 'Ada', email: 'ada@example.com' }, admins: [] }, error: null }),
+      admin_counts: () => ({ data: { openReports: 0 }, error: null }),
+      admin_send_announcement: () => ({ data: null, error: { code: 'P0001', message: limit } })
+    });
+    await t.data.start(t.sb, () => {});
+    await assert.rejects(t.data.sendAnnouncement({ title: 'Hi', message: 'Hello', audience: 'ALL' }),
+      (e) => e instanceof t.data.DataError && e.code === 'P0001' && e.message === limit);
+  }
+
   console.log('data: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

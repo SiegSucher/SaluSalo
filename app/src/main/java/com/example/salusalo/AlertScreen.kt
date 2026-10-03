@@ -7,11 +7,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkAdded
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.EventBusy
@@ -48,6 +51,7 @@ import java.util.Locale
 /** Filter chip label for each alert type. */
 private fun NotificationType.category() = when (this) {
     NotificationType.MESSAGE -> "Messages"
+    NotificationType.ANNOUNCEMENT -> "Announcements"
     else -> "Reservations"
 }
 
@@ -74,6 +78,11 @@ private fun NotificationType.style(): AlertStyle = when (this) {
         AlertStyle(Icons.Outlined.TaskAlt, Color.White, SaluColors.Green, "Claimed", SaluColors.Green)
     NotificationType.RESERVATION_REMOVED ->
         AlertStyle(Icons.Outlined.RemoveCircleOutline, SaluColors.Gray, SaluColors.Neutral, "Listing removed")
+    NotificationType.ANNOUNCEMENT ->
+        AlertStyle(Icons.Outlined.Campaign, Color.White, SaluColors.DarkGreen, "Announcement", SaluColors.DarkGreen)
+    // Never shown: NotificationRepository drops alerts of unknown types.
+    NotificationType.UNKNOWN ->
+        AlertStyle(Icons.Outlined.NotificationsNone, SaluColors.Gray, SaluColors.Neutral, "Alert")
 }
 
 /**
@@ -100,6 +109,9 @@ fun AlertsScreen(
     var showSettings by rememberSaveable {
         mutableStateOf(false)
     }
+
+    // The announcement whose full text is open; by ID, so it stays open through rotation.
+    var openAnnouncementId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) { notificationViewModel.refresh() }
 
@@ -134,7 +146,7 @@ fun AlertsScreen(
                     )
 
                     Text(
-                        "Messages and updates on your reservations",
+                        "Messages, reservation updates and announcements",
                         style = SaluText.Supporting,
                         color = SaluColors.Gray
                     )
@@ -165,7 +177,8 @@ fun AlertsScreen(
                     listOf(
                         "All" to null,
                         "Messages" to Icons.Outlined.ChatBubbleOutline,
-                        "Reservations" to Icons.Outlined.BookmarkBorder
+                        "Reservations" to Icons.Outlined.BookmarkBorder,
+                        "Announcements" to Icons.Outlined.Campaign
                     ),
                     key = { it.first }
                 ) { (label, icon) ->
@@ -214,7 +227,11 @@ fun AlertsScreen(
             item(key = "empty") {
                 EmptyState(
                     icon = Icons.Outlined.NotificationsNone,
-                    title = if (filter == "All") "No alerts to show" else "No ${filter.lowercase(Locale.ENGLISH)} alerts",
+                    title = when (filter) {
+                        "All" -> "No alerts to show"
+                        "Announcements" -> "No announcements"
+                        else -> "No ${filter.lowercase(Locale.ENGLISH)} alerts"
+                    },
                     message = "You will be alerted here when someone messages you " +
                             "or a reservation on your listings changes."
                 )
@@ -252,6 +269,8 @@ fun AlertsScreen(
                                     onOpenClaimedReservation(alert.reservationId)
                                 NotificationType.RESERVATION_REMOVED ->
                                     onOpenRemovedReservation(alert.reservationId)
+                                NotificationType.ANNOUNCEMENT ->
+                                    openAnnouncementId = alert.id
                                 else ->
                                     onOpenListingReservation(alert.reservationId)
                             }
@@ -319,6 +338,25 @@ fun AlertsScreen(
                 ) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    alerts.firstOrNull { it.id == openAnnouncementId }?.let { alert ->
+        AlertDialog(
+            onDismissRequest = { openAnnouncementId = null },
+            icon = { Icon(Icons.Outlined.Campaign, contentDescription = null, tint = SaluColors.DarkGreen) },
+            title = { Text(alert.title) },
+            text = {
+                // Rows show 3 lines; the whole message (up to 500 characters) is here.
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(alert.body, style = SaluText.Body, color = SaluColors.DarkGreen)
+                    Spacer(Modifier.height(12.dp))
+                    Text("From Salu-Salo · " + formatAlertTime(alert.createdAt), style = SaluText.Meta, color = SaluColors.Gray)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { openAnnouncementId = null }) { Text("OK") }
             }
         )
     }

@@ -611,6 +611,7 @@ a.list__item:hover { color: inherit; }
   background: var(--bg); border: 1px solid var(--line);
   font-size: var(--t-md); line-height: 1.5; overflow-wrap: anywhere;
 }
+.quote--lines { white-space: pre-line; }
 .quote__source { display: block; margin-top: 6px; font-size: var(--t-xs); color: var(--ink-2); }
 
 .doc-list { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -803,7 +804,11 @@ a.list__item:hover { color: inherit; }
 .preview-alert { display: flex; gap: 12px; padding: 12px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); }
 .preview-alert__text { display: grid; gap: 2px; min-width: 0; }
 .preview-alert__title { font-weight: 700; overflow-wrap: anywhere; }
-.preview-alert__body { color: var(--ink-2); font-size: var(--t-sm); overflow-wrap: anywhere; }
+/* Like the app's Alerts row: line breaks kept, cut after 3 lines. */
+.preview-alert__body {
+  color: var(--ink-2); font-size: var(--t-sm); overflow-wrap: anywhere; white-space: pre-line;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+}
 .preview-alert__time { color: var(--ink-2); font-size: var(--t-xs); }
 
 .settings-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; align-items: start; }
