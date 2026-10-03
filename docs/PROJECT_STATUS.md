@@ -2641,7 +2641,7 @@ The plan's Task 9: M1 sign-in screen and wrong password; M2 a non-admin refused;
 
 ### 26.0 Status
 
-**Written on branch `claude/admin-analytics` (from `master` at `a60b315`, the PR #23 merge) on 2026-10-03. Checked locally only: not yet applied to the live project, deployed or tested.**
+**Written on branch `claude/admin-analytics` (from `master` at `a60b315`, the PR #23 merge) on 2026-10-03. Migration applied to the live project on 2026-10-03 (safety check 10/10); not yet deployed or tested on the phone.**
 
 ### 26.1 What changed
 
@@ -2657,6 +2657,8 @@ The plan's Task 9: M1 sign-in screen and wrong password; M2 a non-admin refused;
 ### 26.3 Database (run by hand)
 
 Run `supabase/migrations/20261013_admin_analytics.sql`, then `supabase/tests/admin_analytics_live_safety_check.sql` (expect 10 passed).
+
+**Applied to the live project on 2026-10-03** (developer, SQL Editor); `admin_analytics_live_safety_check.sql` **10 passed, 0 failed, 0 skipped** (12 weeks before the test: 31 listings, 45 reservations, 13 pickups, 15 items rescued, 8 expired, 6 active donors, 7 active recipients; each total moved by exactly the test's listing, reservation and pickup; first account 2026-09-21).
 
 ### 26.4 Manual test (not yet run)
 
