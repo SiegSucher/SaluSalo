@@ -39,7 +39,7 @@ Give: `update public.users set role = 'ADMIN' where email = '…';` Take back: `
 | `js/ui.js`, `js/list-view.js`, `js/charts.js` | Shared pieces: badges, tables that become cards on phones, filters, pagination, the details panel, confirmation dialogs, toasts, skeletons, empty and error states, SVG charts with a table view |
 | `js/pages/*.js` | One file per page |
 | `js/app.js` | Navigation and the address bar (`#/listings/<id>`) |
-| `assets/salusalo-logo.webp` | The launcher artwork, copied unchanged from `app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.webp` |
+| `assets/salusalo-logo-2.webp` | The app's logo, a copy of `app/src/main/res/drawable-nodpi/salu_logo.webp` (renamed from `salusalo-logo.webp` with the new logo, so browsers don't keep the old one) |
 
 ## Screen sizes
 

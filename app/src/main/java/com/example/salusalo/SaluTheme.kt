@@ -1,7 +1,5 @@
 package com.example.salusalo
 
-import android.graphics.drawable.BitmapDrawable
-import android.util.DisplayMetrics
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.CubicBezierEasing
@@ -41,13 +39,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -621,45 +615,20 @@ internal fun Avatar(
 }
 
 /**
- * Salu-Salo's logo: the original emblem of the app's launcher icon, shown round
- * like the round launcher icon. It is drawn from the launcher artwork itself
- * (R.mipmap.ic_launcher_foreground), unchanged: the emblem's green square fills
- * the middle 268 of the artwork's 432 px, so the artwork is enlarged until that
- * square fills the circle, which also leaves out its transparent margin.
+ * Salu-Salo's logo (the emblem of the launcher icon) on a white disc, like the
+ * round launcher icon. R.drawable.salu_logo is a 512 px file in drawable-nodpi,
+ * so it stays sharp at every size it is shown (up to 104 dp).
  */
 @Composable
 internal fun SaluLogo(size: Dp, modifier: Modifier = Modifier, contentDescription: String? = null) {
     Image(
-        painter = rememberLogoPainter(),
+        painter = painterResource(R.drawable.salu_logo),
         contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
         modifier = modifier
             .size(size)
             .clip(CircleShape)
-            .graphicsLayer {
-                scaleX = LOGO_ZOOM
-                scaleY = LOGO_ZOOM
-            }
     )
-}
-
-/** A little more than 432 / 268, so the square's soft edge stays outside the circle. */
-private const val LOGO_ZOOM = 432f / 262f
-
-/**
- * The launcher artwork at its sharpest (the xxxhdpi file): the logo is shown
- * larger than a launcher icon, and the phone's own density would blur it.
- */
-@Composable
-private fun rememberLogoPainter(): Painter {
-    val resources = LocalContext.current.resources
-    val sharp = remember(resources) {
-        val drawable = runCatching {
-            resources.getDrawableForDensity(R.mipmap.ic_launcher_foreground, DisplayMetrics.DENSITY_XXXHIGH, null)
-        }.getOrNull()
-        (drawable as? BitmapDrawable)?.bitmap?.let { BitmapPainter(it.asImageBitmap()) }
-    }
-    return sharp ?: painterResource(R.mipmap.ic_launcher_foreground)
 }
 
 /** The app's name as text, in the original dark green. */
