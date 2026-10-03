@@ -2,8 +2,13 @@ package com.example.salusalo.model
 
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 
 @Serializable
 data class AppNotification(
@@ -19,8 +24,31 @@ data class AppNotification(
     @SerialName("created_at") val createdAt: String
 )
 
-@Serializable
-enum class NotificationType { MESSAGE, RESERVATION_CREATED, RESERVATION_CANCELLED, RESERVATION_CLAIMED, RESERVATION_REMOVED }
+@Serializable(with = NotificationTypeSerializer::class)
+enum class NotificationType {
+    MESSAGE, RESERVATION_CREATED, RESERVATION_CANCELLED, RESERVATION_CLAIMED, RESERVATION_REMOVED,
+    /** An admin's announcement from the web dashboard (§27). */
+    ANNOUNCEMENT,
+    /** A type added on the server after this build; never shown (NotificationRepository drops it). */
+    UNKNOWN
+}
+
+/** False for an alert of a type this build doesn't know. */
+val AppNotification.isKnown: Boolean get() = type != NotificationType.UNKNOWN
+
+/**
+ * Decodes a type name this build doesn't know as UNKNOWN instead of failing, so one
+ * new alert type can't break the whole Alerts list or the live alerts (§27).
+ */
+object NotificationTypeSerializer : KSerializer<NotificationType> {
+    override val descriptor = PrimitiveSerialDescriptor("com.example.salusalo.model.NotificationType", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: NotificationType) = encoder.encodeString(value.name)
+    override fun deserialize(decoder: Decoder): NotificationType {
+        val name = decoder.decodeString()
+        return NotificationType.entries.firstOrNull { it.name == name && it != NotificationType.UNKNOWN }
+            ?: NotificationType.UNKNOWN
+    }
+}
 
 /**
  * A missing row on the server means every alert type is on, matching these defaults.

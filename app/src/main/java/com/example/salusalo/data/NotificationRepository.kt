@@ -2,17 +2,20 @@ package com.example.salusalo.data
 
 import com.example.salusalo.model.AppNotification
 import com.example.salusalo.model.NotificationPreferences
+import com.example.salusalo.model.isKnown
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.putJsonArray
 
 /**
- * In-app alerts. The database creates them (new messages and reservation
- * changes); the client can only read its own and mark them read.
+ * In-app alerts. The database creates them (new messages, reservation changes
+ * and, since §27, admins' announcements); the client can only read its own and
+ * mark them read. Alerts of a type this build doesn't know are dropped here.
  */
 class NotificationRepository(
     private val userRepository: UserRepository = UserRepository()
@@ -24,7 +27,7 @@ class NotificationRepository(
         supabase.from("notifications").select {
             order("created_at", Order.DESCENDING)
             limit(100)
-        }.decodeList()
+        }.decodeList<AppNotification>().filter { it.isKnown }
 
     /** Marks the given alerts read, or every unread alert when [ids] is null. */
     suspend fun markRead(ids: List<String>? = null) {
@@ -35,7 +38,7 @@ class NotificationRepository(
 
     /** New alerts for this profile while the app is open; [onRejoined] after a lost connection. */
     fun inserts(profileId: String, onRejoined: suspend () -> Unit): Flow<AppNotification> =
-        realtimeInserts("notifications", "user_id", profileId, onRejoined)
+        realtimeInserts<AppNotification>("notifications", "user_id", profileId, onRejoined).filter { it.isKnown }
 
     /** The caller's saved preferences, or the all-on defaults when none are saved yet. */
     suspend fun getPreferences(): NotificationPreferences {

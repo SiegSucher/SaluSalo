@@ -2,7 +2,7 @@
 
 A responsive admin dashboard for Salu-Salo: Overview, Users, Listings, Reservations, Reports, Analytics, Notifications, Audit log and Settings. It is a separate website for administrators, not part of the Android app.
 
-**It shows the live Salu-Salo data** to admins only. Every request goes to an admin-only Supabase function (`supabase/migrations/20261012_admin_dashboard.sql`) that checks the caller's Firebase token and `users.role = 'ADMIN'`; the page holds only the publishable key. What works: Overview, Users, Listings (with photos), Reservations, Reports (dismiss, notes, remove the listing), Analytics (`supabase/migrations/20261013_admin_analytics.sql`), Audit log, Settings (Log out). Not connected yet: Notifications (announcements), verification requests, suspending accounts.
+**It shows the live Salu-Salo data** to admins only. Every request goes to an admin-only Supabase function (`supabase/migrations/20261012_admin_dashboard.sql`) that checks the caller's Firebase token and `users.role = 'ADMIN'`; the page holds only the publishable key. What works: Overview, Users, Listings (with photos), Reservations, Reports (dismiss, notes, remove the listing), Analytics (`supabase/migrations/20261013_admin_analytics.sql`), Notifications (announcements, `supabase/migrations/20261014_admin_announcements.sql`; the app build from PROJECT_STATUS.md §27 must be on every phone first), Audit log, Settings (Log out). Not connected yet: verification requests, suspending accounts.
 
 ## One-time setup
 

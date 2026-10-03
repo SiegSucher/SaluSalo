@@ -9,13 +9,13 @@ window.Pages.audit = (function () {
   const ACTION_ICON = {
     'Approved verification': 'verified', 'Rejected verification': 'highlightOff', 'Verified account': 'verified',
     'Suspended account': 'block', 'Restored account': 'restartAlt', 'Removed listing': 'delete',
-    'Dismissed report': 'doNotDisturbOn', 'Reviewed listing': 'taskAlt', 'Added note': 'editNote', 'Sent notification': 'send',
+    'Dismissed report': 'doNotDisturbOn', 'Reviewed listing': 'taskAlt', 'Added note': 'editNote', 'Sent announcement': 'campaign',
     'Scheduled notification': 'schedule', 'Cancelled notification': 'block', 'Changed setting': 'settings'
   };
   const DANGER = new Set(['Suspended account', 'Removed listing', 'Rejected verification']);
 
   function targetLink(a) {
-    const href = { USER: '#/users/', LISTING: '#/listings/', REPORT: '#/reports/', NOTIFICATION: '#/notifications/', SETTING: '#/settings' }[a.targetType];
+    const href = { USER: '#/users/', LISTING: '#/listings/', REPORT: '#/reports/', NOTIFICATION: '#/notifications/', ANNOUNCEMENT: '#/notifications/', SETTING: '#/settings' }[a.targetType];
     const label = a.targetType === 'REPORT' ? 'Report ' + a.targetName : a.targetName;
     if (!href) return label;
     return h('a', { class: 'row-link', href: a.targetType === 'SETTING' ? href : href + a.targetId, style: { fontWeight: '500' } }, label);
@@ -59,7 +59,7 @@ window.Pages.audit = (function () {
       ],
       emptyState: (q, filtered) => filtered
         ? { iconName: 'search', title: 'No entries match', text: 'Try another admin, action or time range.' }
-        : { iconName: 'history', title: 'Nothing logged yet', text: 'Each admin action (removing a listing, dismissing a report, adding a note, marking a listing reviewed) is recorded here, and nobody can edit or delete an entry.' }
+        : { iconName: 'history', title: 'Nothing logged yet', text: 'Each admin action (removing a listing, dismissing a report, adding a note, marking a listing reviewed, sending an announcement) is recorded here, and nobody can edit or delete an entry.' }
     });
     main.append(
       UI.pageHead({ title: 'Audit log', sub: 'Who did what, and when. Every admin action is recorded here.' }),
