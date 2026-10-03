@@ -45,10 +45,12 @@ private val PhotoTileText = SaluColors.Gray
 /**
  * An image request for a 1-hour signed Storage URL, cached by the object's
  * path instead of the whole URL. Every signing gives the URL a new token, so
- * caching by URL downloaded each photo again after every reload. A path never
- * gets other bytes: listing photos can't be replaced (a retried post re-uploads
- * only while its listing doesn't exist yet), and each profile photo gets a new
- * path. Coil still decodes to the size shown; the file downloaded is the stored
+ * caching by URL downloaded each photo again after every reload. The app never
+ * gives a path other bytes once it is shown to anyone: a retried post re-uploads
+ * only while its listing doesn't exist yet, and each profile photo gets a new
+ * path. (The Storage policy would let a donor overwrite their own file through
+ * the API; other phones would then keep their cached copy.) Coil still decodes
+ * to the size shown; the file downloaded is the stored
  * one (up to 1600 px), once per phone while it stays in the disk cache.
  */
 internal fun signedImageRequest(context: PlatformContext, url: String): ImageRequest {

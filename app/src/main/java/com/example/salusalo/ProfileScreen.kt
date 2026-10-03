@@ -72,7 +72,8 @@ fun ProfileScreen(
     val reservationsFailed by reservationViewModel.loadFailed.collectAsStateWithLifecycle()
     val successfulClaims = myReservations.filter { it.reservation.status == ReservationStatus.CLAIMED }
     val successfulDonations = donorReservations.filter { it.reservation.status == ReservationStatus.CLAIMED }
-    LaunchedEffect(Unit) { reservationViewModel.refresh() }
+    // At most every 10 seconds, like Activity's tabs: only the counts come from these.
+    LaunchedEffect(Unit) { reservationViewModel.refreshIfStale() }
 
     // Name, photo and member-since date come only from the Supabase profile.
     val userRepository = remember { UserRepository() }

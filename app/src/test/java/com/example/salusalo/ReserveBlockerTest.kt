@@ -2,6 +2,7 @@ package com.example.salusalo
 
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostStatus
+import com.example.salusalo.model.nextReserveBlockerChange
 import com.example.salusalo.model.reserveBlocker
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -40,5 +41,22 @@ class ReserveBlockerTest {
             "Fully reserved: nothing is left to reserve.",
             post(status = FoodPostStatus.RESERVED, quantity = 0).reserveBlocker(now)
         )
+    }
+
+    /** An open details page re-checks when pickup ends or the listing expires, not only when reloaded. */
+    @Test
+    fun theNextCheckIsTheFirstBoundaryStillAhead() {
+        assertEquals(Instant.parse("2026-09-29T15:00:00Z"), post().nextReserveBlockerChange(now))
+        assertEquals(Instant.parse("2026-09-30T12:00:00Z"), post(pickupEnd = null).nextReserveBlockerChange(now))
+        assertEquals(
+            Instant.parse("2026-09-30T12:00:00Z"),
+            post(pickupEnd = "2026-09-29T11:00:00Z").nextReserveBlockerChange(now)
+        )
+        // Once both have passed, nothing is left to wait for.
+        assertNull(post(expires = "2026-09-29T11:00:00Z", pickupEnd = null).nextReserveBlockerChange(now))
+        // At the boundary itself the listing already counts as ended (reserveBlocker uses !isAfter).
+        val atEnd = post(pickupEnd = "2026-09-29T12:00:00Z")
+        assertEquals(Instant.parse("2026-09-30T12:00:00Z"), atEnd.nextReserveBlockerChange(now))
+        assertEquals("The pickup time for this listing has ended.", atEnd.reserveBlocker(now))
     }
 }

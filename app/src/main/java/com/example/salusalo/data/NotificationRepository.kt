@@ -33,9 +33,9 @@ class NotificationRepository(
         })
     }
 
-    /** New alerts for this profile while the app is open. */
-    fun inserts(profileId: String): Flow<AppNotification> =
-        realtimeInserts("notifications", "user_id", profileId)
+    /** New alerts for this profile while the app is open; [onRejoined] after a lost connection. */
+    fun inserts(profileId: String, onRejoined: suspend () -> Unit): Flow<AppNotification> =
+        realtimeInserts("notifications", "user_id", profileId, onRejoined)
 
     /** The caller's saved preferences, or the all-on defaults when none are saved yet. */
     suspend fun getPreferences(): NotificationPreferences {

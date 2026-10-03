@@ -182,6 +182,15 @@ fun FoodPost.reserveBlocker(now: java.time.Instant = java.time.Instant.now()): S
     else -> null
 }
 
+/**
+ * The next moment [reserveBlocker] can change by itself (the expiry or the end
+ * of pickup, whichever comes first after [now]), or null when both have passed.
+ */
+fun FoodPost.nextReserveBlockerChange(now: java.time.Instant): java.time.Instant? =
+    listOfNotNull(parseTimestamp(expirationDate), parseTimestamp(pickupEnd))
+        .filter { it.isAfter(now) }
+        .minOrNull()
+
 /** Formats pesos with two decimals, e.g. 45.1 -> "₱45.10". */
 fun formatPeso(amount: BigDecimal): String =
     "₱" + amount.setScale(2, RoundingMode.HALF_UP).toPlainString()

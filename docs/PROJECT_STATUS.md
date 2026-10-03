@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-09-30. Phases 1–4 are complete and both parts of Phase 5 passed on two phones; all of them are merged into `master`, together with the demo fixes (§9–§13), the Profile redesign (§16), the clean-ups after the second audit (§17), the automatic Supabase role (§18, PR #13), the UI/UX refresh (§19, PRs #14 and #15) and a web admin dashboard with sample data (§20, PR #15). The bug fix pass after the full audit of 2026-09-29 (§21) passed a one-phone test and was merged into `master` through PR #17 on 2026-09-30 (`8ed8eef`); its three migrations are applied to the live project. A second round (§22: the rest of the 34 findings) is on branch `claude/bugfix-pass-2` (`a2412eb`, PR #18, not merged yet): built and unit-tested, its three migrations applied to the live project on 2026-09-30 (live checks 5/5, 5/5, 3/3), and it passed a one-phone test the same day. Phase 6 has not started. [Current state](#current-state-2026-09-30) summarizes the architecture and [Current known issues](#current-known-issues) what is still open; the numbered sections are the history of each phase, with later changes marked. Manual test results are in the [results log](#results-log)._
+_Last updated: 2026-09-30. Phases 1–4 are complete and both parts of Phase 5 passed on two phones; all of them are merged into `master`, together with the demo fixes (§9–§13), the Profile redesign (§16), the clean-ups after the second audit (§17), the automatic Supabase role (§18, PR #13), the UI/UX refresh (§19, PRs #14 and #15) and a web admin dashboard with sample data (§20, PR #15). The bug fix pass after the full audit of 2026-09-29 (§21) passed a one-phone test and was merged into `master` through PR #17 on 2026-09-30 (`8ed8eef`); its three migrations are applied to the live project. A second round (§22: the rest of the 34 findings) passed a one-phone test and was merged into `master` through PR #18 on 2026-09-30 (`65d5f6a`); its three migrations are applied too (live checks 5/5, 5/5, 3/3). A third round (§23: what the verification audit of 2026-09-30 found still open) is on branch `claude/bugfix-pass-3`: built and unit-tested (57 of 57), no SQL, **not yet tested on a phone and not committed**. Phase 6 has not started. [Current state](#current-state-2026-09-30) summarizes the architecture and [Current known issues](#current-known-issues) what is still open; the numbered sections are the history of each phase, with later changes marked. Manual test results are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -32,16 +32,17 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | UI/UX refresh (not part of the six phases) | One design system (`SaluTheme.kt`) with Salu-Salo's original colours, type scale and shared components; a loading screen with the original logo at start; the bottom bar in its original order Home → Alerts → Post → Activity → Profile (Post in the middle), with slide transitions and swipes between tabs; restyled Welcome, Sign In, Home, food details, Post and Edit, Alerts, Messages and chat, Profile and Settings, with skeletons and empty states; Activity rebuilt from the developer's mockups as three tabs (My Listings, My Reservations, History) with Manage reservations, reservation and pickup pages. No SQL and no change to repositories, ViewModels or server logic (§19) | **Merged into `master` through PR #14 (`f27ee47`) and PR #15 (`fa95fff`) on 2026-09-29.** No separate test record; its code is part of the §21 build, which was built with AGP and passed a one-phone test on 2026-09-30. Branch `claude/focused-mayer-0aevp8` (from `master` at `b8aa7f9`), 2026-09-28. A kotlinc type check (0 errors) and the JVM tests (43 of 43) ran in the session (§19.2). |
 | Admin dashboard, web (not part of the six phases; a first look at Phase 6's admin screen) | A separate responsive website in `admin/`: Overview, Users and verification requests, Listings, Reservations, Reports, Analytics, Notifications, Audit log and Settings, in the app's colours and with its logo. Sample data only (§20) | **Merged into `master` through PR #15 on 2026-09-29; sample data, not connected.** Branch `claude/focused-mayer-0aevp8`, 2026-09-29. Checked in headless Chromium at phone, tablet and desktop sizes (§20.3). No change to the app, SQL, Supabase or Firebase. |
 | Bug fix pass after the full bug audit (not part of the six phases) | Groups A–E of the 2026-09-29 audit: #1 cancel/claim without a profile, #10 photo reads, #11 listing checks, #2–#6 Home refresh, failure states, photo URLs and post retries, #8 price, #9 release, #23 pickup end, #7 rotation, #14 alerts on resume, #15 re-created accounts, #21 ended sessions, #17–#20 and #22 (§21) | **Passed on one phone (2026-09-30); committed as `5429e6e`, merged into `master` through PR #17 on 2026-09-30 (`8ed8eef`).** Built and unit-tested (51 of 51), migrations applied. Branch `claude/bugfix-pass-1` (from `master` at `fa95fff`), 2026-09-29. Three new migrations (`20261005`–`20261007`), dry-run on a local PostgreSQL 16 (§21.3) and applied to the live project on 2026-09-30; live safety checks 22 of 23 (the one failure was the check itself, now corrected, §21), 15 of 15, 9 of 9. |
-| Bug fix pass, round 2 (not part of the six phases) | The rest of the 34 findings: #12 one rating per reviewer, #13 friendly errors, #16 photo cache keys, #24 bucket limits and an orphan list, #25 rate limits, #26 bookmark race, #27 photo sampling, #29 fewer requests, #30 backup rules, #31 release config, #32 `anon` grants, #34 clean-ups; #28 deferred (§22) | **Passed on one phone (2026-09-30); committed as `a2412eb`, PR #18 open, not merged yet.** Built and unit-tested (54 of 54), migrations applied. Branch `claude/bugfix-pass-2` (from `claude/bugfix-pass-1` at `5429e6e`), 2026-09-30. Three new migrations (`20261008`–`20261010`), dry-run on a local PostgreSQL 16 (§22.4) and applied to the live project on 2026-09-30; live checks 5 of 5, 5 of 5, 3 of 3. |
+| Bug fix pass, round 2 (not part of the six phases) | The rest of the 34 findings: #12 one rating per reviewer, #13 friendly errors, #16 photo cache keys, #24 bucket limits and an orphan list, #25 rate limits, #26 bookmark race, #27 photo sampling, #29 fewer requests, #30 backup rules, #31 release config, #32 `anon` grants, #34 clean-ups; #28 deferred (§22) | **Passed on one phone (2026-09-30); committed as `a2412eb` (docs `2562de6`), merged into `master` through PR #18 on 2026-09-30 (`65d5f6a`).** Built and unit-tested (54 of 54), migrations applied. Branch `claude/bugfix-pass-2` (from `claude/bugfix-pass-1` at `5429e6e`), 2026-09-30. Three new migrations (`20261008`–`20261010`), dry-run on a local PostgreSQL 16 (§22.4) and applied to the live project on 2026-09-30; live checks 5 of 5, 5 of 5, 3 of 3. |
+| Bug fix pass, round 3 (not part of the six phases) | What the verification audit of 2026-09-30 found still open: #35 sign-in lost to a rotation, #17 listing pages when reservations fail, #22 details after a listing leaves the feed, #7 pages closed by rotation, #4 Post's My posts, #18 feed reload after cancel, #14 Realtime reconnects, #2 feed every minute, R1 alert-settings errors, #29 and #34 leftovers, #33 docs (§23) | **Passed on one phone (2026-10-03).** Built and unit-tested (57 of 57). Branch `claude/bugfix-pass-3` (from `master` at `65d5f6a`), committed for its pull request. No SQL. |
 | Phase 6: Admin and Final Release | ID verification and the admin screen (the Email verified badge moved to Phase 5 part 1) | **Not started** on the server. The web dashboard in `admin/` shows sample data until the server work exists (§20.5). |
 
 - The roadmap has six phases (confirmed by the developer on 2026-09-25); earlier versions of this document went only up to Phase 4. Phases 1–3 are described in §1–§3 and Phase 4 in §8.
 
 ### Current state (2026-09-30)
 
-This summarizes the app as it is on branch `claude/bugfix-pass-2`: `master` at `8ed8eef` (which includes the §21 bug fix pass, PR #17), plus round 2 (§22, `a2412eb`, PR #18). The numbered sections below are the history of each phase; where a later change replaced something, it is marked there.
+This summarizes the app as it is on branch `claude/bugfix-pass-3`: `master` at `65d5f6a` (which includes the §21 and §22 bug fix passes, PRs #17 and #18), plus round 3 (§23, passed on one phone on 2026-10-03). The numbered sections below are the history of each phase; where a later change replaced something, it is marked there.
 
-- **Bugs fixed:** the full bug audit of 2026-09-29 had 34 findings. §21 fixed #1–#11, #14, #15 and #17–#23; round 2 (§22) fixed #12, #13, #25, #26, #27, #30, #32 and #33, and partly #16, #24, #29, #31 and #34; #28 is deferred. The per-finding table is §22.1.
+- **Bugs fixed:** the full bug audit of 2026-09-29 had 34 findings. §21 fixed #1–#11, #14, #15 and #17–#23; round 2 (§22) fixed #12, #13, #25, #26, #27, #30, #32 and #33, and partly #16, #24, #29, #31 and #34; #28 is deferred. The per-finding table is §22.1. A verification audit on 2026-09-30 found 17 of them only partly fixed, one regression (R1) and one new bug (#35); round 3 (§23) fixes what can be fixed in the app, and §23.1 lists every finding's state after it.
 - **Database migrations:** 19 files in `supabase/migrations/`, applied by hand in filename order (`supabase/README.md`).
   - Applied to the live project on 2026-09-30: `20261005_bugfix_security_integrity.sql` (the profile check in cancel and claim, the listing photo read rule, the listing checks trigger), `20261006_bugfix_reservations.sql` (`create_reservation_at_price`, `release_reservation`, the pickup-end check) and `20261007_bugfix_profile_relink.sql` (`relink_my_profile`).
   - Applied to the live project on 2026-09-30 (round 2): `20261008_bugfix_one_rating_per_reviewer.sql` (ratings count each reviewer's latest review), `20261009_bugfix_storage_and_rate_limits.sql` (bucket limits, message and reservation rate limits) and `20261010_bugfix_revoke_anon_execute.sql` (no function executable without a login).
@@ -53,6 +54,7 @@ This summarizes the app as it is on branch `claude/bugfix-pass-2`: `master` at `
   - The signed-in profile is saved with the screen state, so rotation, dark mode, font size and process recreation keep Home.
   - When Firebase reports the account disabled or deleted, or its sign-in revoked or expired, the app signs out and returns to Sign In with "Your session has ended. Please sign in again." A network failure never signs out. Only Profile's Log out signs out; Back on Home closes the app.
   - Round 2: sign-in errors show short texts (a network problem, too many attempts), never technical details. Android backup and phone-to-phone transfer leave out Firebase's saved sign-in, so a restored or new phone asks to sign in again.
+  - Round 3: a sign-in or sign-up that finishes after a rotation (or a dark-mode or font change) still opens Home: the app follows Firebase's user as Compose state, and runs one account setup at a time.
 - **Reservations:**
   - Every change goes through SECURITY DEFINER RPCs that take the caller from the token and refuse a token without a profile. Clients have SELECT only on `reservations`.
   - The current app reserves through `create_reservation_at_price` (refused when the price changed since the user saw it), which calls `create_reservation`. That function locks the listing, refuses your own, removed, expired and pickup-ended listings and asks for more than is left, and changes quantity and status in the same transaction. Older builds call `create_reservation` directly.
@@ -66,9 +68,10 @@ This summarizes the app as it is on branch `claude/bugfix-pass-2`: `master` at `
   - Round 2 (`20261008`): a donor's rating counts each reviewer's latest review only.
 - **Home feed refresh:**
   - The feed contains `AVAILABLE`, unexpired listings whose pickup time has not ended, newest first.
-  - It loads when Home starts, and reloads when Home or All listings is opened and when the app comes back, at most every 30 seconds (`refreshFeedIfStale`). It also reloads on pull to refresh (the spinner shows only for a pull), after a post, edit, delete, reservation, cancel, release or review, and after a refused reservation.
+  - It loads when Home starts, and reloads when Home or All listings is opened and when the app comes back, at most every 30 seconds (`refreshFeedIfStale`). Since round 3 it also reloads every minute while Home or All listings is on screen and the app is in front. It also reloads on pull to refresh (the spinner shows only for a pull), after a post, edit, delete, reservation, cancel, release or review, and after a refused reservation. Since round 3 the reload after a cancel or release no longer depends on Activity staying open (`ReservationViewModel.quantityReturned`).
   - A failed reload keeps the listings with "Couldn't refresh the listings. These may be out of date." and Try again. A failed first load shows "Could not load listings". The empty states appear only after a successful load.
-  - Nothing is pushed live: only chats and alerts use Realtime.
+  - Food details (round 3): the open listing is held by `FoodViewModel` (`openedListing`), so rotation keeps the page and its Review reservation page open; a listing the feed listed when the page opened but no longer lists shows "Unavailable" and "This listing is no longer available to reserve." instead of Reserve; the page re-checks by itself when the expiry or the end of pickup passes.
+  - Nothing is pushed live: only chats and alerts use Realtime. Since round 3, when Realtime reconnects after a lost connection, the alerts, the inbox and the open chat reload what they missed.
 - **Images and Storage:**
   - Private buckets `food-images` (`<Firebase UID>/<listing ID>/image.jpg`, `photo-2.jpg`…`photo-4.jpg`) and `profile-images` (owner only).
   - Photos are shown through 1-hour signed URLs, one signing request per list.
@@ -81,33 +84,37 @@ This summarizes the app as it is on branch `claude/bugfix-pass-2`: `master` at `
   - **My Reservations**: open reservations, filtered All, Free food or Purchases, with the reservation and pickup pages, Message and Cancel.
   - **History**: picked-up and cancelled reservations from both sides, with the Completed and Items rescued totals.
   - Results of cancel, claim and release show in a dialog. Reservation lists reload when Activity opens and when a tab is tapped (tab taps at most every 10 seconds since round 2).
-  - A failed first load shows "Could not load your listings" or "Could not load your reservations" with Try again, never an empty state. A failed reload keeps the lists with a note. Totals and reservation counts show only after the reservations have loaded.
+  - A failed first load shows "Could not load your listings" or "Could not load your reservations" with Try again, never an empty state. A failed reload keeps the lists with a note. Totals and reservation counts show only after the reservations have loaded; since round 3 that includes the "Your listing" and Manage reservations pages, which show the load error with Try again instead of "No reservations yet" or "No active reservations".
+  - Round 3: the Edit Listing and Rate pages stay open through rotation (Activity and Post). Post's "My posts" shows its loading and failure states instead of "(0)" and "You have no food posts yet.".
 - **Automated tests (2026-09-30):**
-  - `testDebugUnitTest` 54 of 54: `ExampleUnitTest` 1, `GeoTest` 11, `PhotoSigningTest` 8, `PickupStartTest` 6, `SupabaseRoleTest` 8, `UiTextTest` 9, `PublishOnceTest` 6, `ReserveBlockerTest` 2, `PhotoSampleTest` 3.
-  - `assembleDebug` and `assembleRelease` (unsigned) passed; `lintDebug` found 0 errors on 2026-09-30.
+  - `testDebugUnitTest` 57 of 57 (round 3): `ExampleUnitTest` 1, `GeoTest` 11, `PhotoSigningTest` 8, `PickupStartTest` 6, `SupabaseRoleTest` 8, `UiTextTest` 9, `PublishOnceTest` 6, `ReserveBlockerTest` 3, `PhotoSampleTest` 3, `RealtimeRejoinTest` 2.
+  - `assembleDebug` passed and `lintDebug` found 0 errors on 2026-09-30 (round 3); `assembleRelease` (unsigned) passed in round 2.
   - The Edge Function's Deno tests (21) last ran in §18.
-  - SQL live safety checks after the §21 migrations (2026-09-30): 22 of 23 (the one failure was the check itself, corrected), 15 of 15, 9 of 9. The round 2 checks have run only on a local PostgreSQL copy (§22.4).
-- **Manual testing completed:** every phase and fix set up to §18 passed on two phones (results log). §21 passed a test on one phone, switching accounts, on 2026-09-30 (§21.4). It covered posting, filters after posting, reserving through the price-checked function, cancel, release and its alert, mark as picked up, offline refresh and Activity notes, rotation and dark mode offline, posting offline and retrying, the Home dialog after leaving Post, the pickup-end note and feed, and delete.
+  - SQL live safety checks after the §21 migrations (2026-09-30): 22 of 23 (the one failure was the check itself, corrected), 15 of 15, 9 of 9. After the round 2 migrations (2026-09-30): 5 of 5, 5 of 5, 3 of 3 (§22.4). Round 3 has no SQL.
+- **Manual testing completed:** every phase and fix set up to §18 passed on two phones (results log). §21 passed a test on one phone, switching accounts, on 2026-09-30 (§21.4). It covered posting, filters after posting, reserving through the price-checked function, cancel, release and its alert, mark as picked up, offline refresh and Activity notes, rotation and dark mode offline, posting offline and retrying, the Home dialog after leaving Post, the pickup-end note and feed, and delete. §22 passed its one-phone test on 2026-09-30 (§22.5). Round 3 (§23) passed its one-phone test (§23.4, with regression steps 15–19) on 2026-10-03.
 
 ### Current known issues
 
 Still unresolved on 2026-09-30:
 
 - **Not tested on a phone:**
-  - Things that need two phones at once: Home picking up another account's new listing by itself (#2), and the app's "The price changed…" message (#8; the server refusal passed its live check).
   - The optional checks for #5 (photo links older than an hour), #21 (a disabled or deleted account) and #15 (restoring a re-created account's profile).
   - The password-reset email (no test record).
-- **Not merged:** round 2 (§22) is on branch `claude/bugfix-pass-2`, PR #18. Its migrations are applied, its live checks and the §22.5 one-phone test passed (including the later offline Google sign-in fix), and builds from `master` keep working with the migrations.
-- **Audit findings still open after round 2** (details in §22.1):
+- **Round 3 (§23)** passed on one phone and its two-phone checks (#2, #8, #14) on 2026-10-03; merged through PR #19.
+- **Audit findings still open after round 3** (details in §23.1; each needs a decision or work outside the app code):
+  - #9: reservations never expire by themselves, and one person can reserve a listing's whole quantity (the app's design says "part or all").
+  - #10: donors' Firebase UIDs are the first folder of listing photo paths, so anyone who may see a listing can read its donor's UID.
+  - #11: the database accepts any category or unit text (up to 80/30 characters) and any future expiry on a new listing; the app sends only its own lists.
   - #12: a friendly second account still adds one rating (each reviewer now counts once).
   - #16: cards download the stored 1600 px photo once per phone (no thumbnails; Supabase image transformations need a paid plan).
   - #24: orphaned Storage files are only listed (`storage_orphans_query.sql`), never deleted automatically.
   - #28: no feed pagination (PostgREST would cap the feed at 1000 rows); the chat Realtime channel is unfiltered and checked by RLS per row.
-  - #29: Home re-derives its filtered list on every recomposition.
+  - #29: every Activity open still reloads its lists (kept on purpose: an alert opening Activity needs fresh lists).
   - #31: not ready for Play: R8 off, no real keystore, `applicationId` `com.example.salusalo` (Play refuses `com.example.*`), no in-app account deletion or web deletion link, Play Console forms not done; Google sign-in works only with registered SHA-1s; `googleid` pinned to 1.2.0.
-  - #34: `users.role` always `RECIPIENT`; an unknown server enum value breaks a whole list in older builds; photo-picker grants aren't released; Post's "My posts" duplicates Activity.
+  - #34: `users.role` always `RECIPIENT` (kept for Phase 6); an unknown server enum value breaks a whole list; a discarded draft's photo-picker grants are left to Android to prune; Post's "My posts" duplicates Activity.
 - **Design limits:**
-  - Only chats and alerts are live.
+  - Only chats and alerts are live; the feed reloads every minute while it is on screen (round 3).
+  - A published listing photo is never replaced by the app, but the Storage policy lets a donor overwrite their own file through the API; other phones would keep showing their cached copy (§23.1, #16).
   - No automatic reservation expiry (no scheduler; the donor releases).
   - Rate limits (round 2): a person reserving more than 10 times in 10 minutes, or sending more than 20 messages a minute, waits.
   - A recipient keeps read access to a listing after cancelling (`is_reservation_recipient` ignores status).
@@ -149,7 +156,8 @@ Still unresolved on 2026-09-30:
 - **UI/UX refresh (branch `claude/focused-mayer-0aevp8`, §19):** not built with AGP: Google's Maven repository (`dl.google.com`) is blocked from the session. Only a kotlinc 2.2.10 type check (0 errors, 0 warnings) and the JVM tests (43 of 43) ran (§19.2). It was merged through PRs #14 and #15 and first built here with AGP as part of the §21 build.
 - **Bug fix pass (branch `claude/bugfix-pass-1`, §21):** `gradlew.bat :app:assembleDebug :app:testDebugUnitTest --offline` BUILD SUCCESSFUL after each of the five groups on 2026-09-29; the last run passed 51 of 51 tests; a forced `compileDebugKotlin` showed no warnings; `lintDebug` 0 errors (38 warnings, none on a changed line). Committed as `5429e6e`. The developer then installed it from Android Studio on one phone and ran the §21.4 test ([results log](#results-log)).
 - **Bug fix pass, round 2 (branch `claude/bugfix-pass-2`, §22):** `gradlew.bat :app:assembleDebug :app:testDebugUnitTest --offline` BUILD SUCCESSFUL after each group on 2026-09-30 (groups 2 and 3 built together, because the shell was unavailable after group 2); the last run, forced with `--rerun`, passed 54 of 54 tests; a forced `compileDebugKotlin` showed no warnings.
-- **Automated tests (2026-09-30):** 54 JVM tests, all run by `testDebugUnitTest` and all passing: the template `ExampleUnitTest` (1), `GeoTest` (11, §15), `PhotoSigningTest` (8) and `PickupStartTest` (6, §17), `SupabaseRoleTest` (8, §18), `UiTextTest` (9, §19), `PublishOnceTest` (6) and `ReserveBlockerTest` (2, §21), and `PhotoSampleTest` (3, §22). Also the instrumented template `ExampleInstrumentedTest` (not run) and the Edge Function's Deno tests (21, §18).
+- **Bug fix pass, round 3 (branch `claude/bugfix-pass-3`, §23):** `gradlew.bat :app:assembleDebug :app:testDebugUnitTest --offline` BUILD SUCCESSFUL on 2026-09-30 after the fixes and again after the last change; 57 of 57 tests; a forced `compileDebugKotlin --rerun` showed no warnings; `lintDebug` 0 errors (39 warnings, one more than round 2's 38: the new `Uri.parse` line in PostScreen gets the same `UseKtx` warning as the two `Uri.parse` lines already there; 7 hints). Not installed on a phone yet.
+- **Automated tests (2026-09-30, round 3):** 57 JVM tests, all run by `testDebugUnitTest` and all passing: the template `ExampleUnitTest` (1), `GeoTest` (11, §15), `PhotoSigningTest` (8) and `PickupStartTest` (6, §17), `SupabaseRoleTest` (8, §18), `UiTextTest` (9, §19), `PublishOnceTest` (6) and `ReserveBlockerTest` (3, §21 and §23), `PhotoSampleTest` (3, §22), and `RealtimeRejoinTest` (2, §23). Also the instrumented template `ExampleInstrumentedTest` (not run) and the Edge Function's Deno tests (21, §18).
 
 ### Phase 1: what exists (summary)
 
@@ -2388,3 +2396,114 @@ Not covered on the phone: the rate-limit messages and one person counting once (
 - #12: a second account still counts once. #16: cards download the full stored photo once per phone. #24: orphaned files are only listed. #28: no pagination, unfiltered chat channel. #29: Home recomputes its list on recomposition. #31: not Play-ready (R8, keystore, package name, account deletion, Play Console forms). #34: `users.role`, lenient enum decoding, photo-picker grants, Post's "My posts".
 - The rate limits count real recent activity, so a person reserving 10 times in 10 minutes (for example buying for a group) waits a few minutes for the 11th.
 - The backup rule names Firebase's file for this Firebase Android app; if the app ID in `google-services.json` changes, update both XML files.
+
+## 23. Bug fix pass, round 3 (2026-09-30)
+
+**Status (2026-09-30): written on branch `claude/bugfix-pass-3` (from `master` at `65d5f6a`, which has §21 and §22). `assembleDebug` passed, `testDebugUnitTest` passed 57 of 57 (54 before, plus 3 new), a forced `compileDebugKotlin` showed no warnings and `lintDebug` found 0 errors. No SQL: nothing needs to be run on Supabase. The one-phone test (§23.4) passed on 2026-10-03; committed on the branch for its pull request.** It follows the read-only verification audit of 2026-09-30, which checked each of the 34 findings again against `65d5f6a`: 16 fully fixed, 17 partly fixed, #28 not fixed, one regression caused by a fix (R1) and one new bug (#35). Round 3 fixes what can be fixed in the app without changing working parts; the rest needs a decision or work outside the app code (§23.3).
+
+### 23.1 Every finding after round 3
+
+| Bug | Status after round 3 | What happened |
+|---|---|---|
+| #1 | FIXED (§21) | Unchanged. |
+| #2 | FIXED (round 3); two-phone check open | Besides Home opening, the app coming back and a pull, the feed now reloads every minute while Home or All listings is on screen and the app is in front (through `refreshFeedIfStale`, so never more than once per 30 seconds). |
+| #3 | FIXED (§21) | Unchanged. |
+| #4 | FIXED (round 3) | Post's "My posts" had no load states: it said "My posts (0)" and "You have no food posts yet." while loading or after a failed load. It now shows "Loading your posts…", or the failure with Try again, and the count only after a load. |
+| #5 | FIXED (§21); 1-hour check open | Unchanged. |
+| #6 | FIXED (§21) | Unchanged. |
+| #7 | FIXED (round 3) | The open food details page (and its Review reservation page) closed on rotation, dark mode or a font change: it was held in `remember`. It is now held by `FoodViewModel.openedListing`. Activity's Edit Listing and Rate pages and Post's Edit Listing now use `rememberSaveable` (an ID, or the Rate page as JSON). The small confirm dialogs (cancel, release, mark as picked up, delete) still close; one tap reopens them. |
+| #8 | FIXED (§21); two-phone message check open | Unchanged. |
+| #9 | PARTLY (release, §21) | No automatic expiry and no per-person cap: both need decisions (§23.3). |
+| #10 | PARTLY (reads, §21) | Photo paths still start with the donor's Firebase UID (§23.3). |
+| #11 | PARTLY (§21) | Any category or unit text and any future expiry are still accepted on insert (§23.3). |
+| #12 | PARTLY (§22) | A friendly second account still adds one rating (Phase 6). |
+| #13 | FIXED (§22) | Its regression R1 is fixed in round 3. |
+| #14 | FIXED (round 3); two-phone check open | Alerts inserted while Realtime was reconnecting (app open, connection lost for a moment) never arrived. supabase-kt rejoins its channels after a reconnect but doesn't replay rows (checked in its 3.5.0 sources), so `realtimeInserts()` now reports each rejoin, and the alerts, the Messages inbox and the open chat reload quietly then (`RealtimeRejoinTest`). |
+| #15 | FIXED (§21); end-to-end restore not reported | Unchanged. |
+| #16 | PARTLY (§22) | Photos are cached by path; no thumbnails. The claim that listing photos "can't be replaced" was corrected: the app never replaces one, but the Storage policy would let a donor overwrite their own file through the API. |
+| #17 | FIXED (round 3) | "Your listing" said "No reservations yet" and "Reserved 0 …" and hid Manage reservations when the reservations had not loaded; Manage reservations said "No active reservations". Both now show the load failure with Try again (or "Loading reservations…") and no count until the reservations have loaded. |
+| #18 | FIXED (round 3) | The feed reload after a cancel or release ran in Activity's own effect, so leaving Activity before the result skipped it. `ReservationViewModel` now signals `quantityReturned`, and Home reloads the feed whichever page is open. |
+| #19, #20 | FIXED (§21) | Unchanged. |
+| #21 | FIXED (§21); disabled-account check open | Unchanged. |
+| #22 | FIXED (round 3) | The details page fell back to the copy it opened with when the listing left the feed (fully reserved, removed or ended since), so Reserve stayed. It now shows "Unavailable" and "This listing is no longer available to reserve.". It also re-checks by itself when the expiry or the end of pickup passes while it is open, and when the app comes back (`nextReserveBlockerChange()`, `ReserveBlockerTest`). |
+| #23 | FIXED (§21) | Unchanged. |
+| #24 | PARTLY (§22) | Bucket limits live; orphaned files are only listed (§23.3). |
+| #25–#27 | FIXED (§22) | Unchanged. |
+| #28 | DEFERRED | Unchanged (§23.3). |
+| #29 | MOSTLY FIXED (round 3) | Home's derived lists are `remember`ed with every value they read as a key, so an alert, a message or a badge no longer rebuilds them; Profile reloads the reservations at most every 10 seconds (`refreshIfStale`). Activity still reloads its lists every time it opens, on purpose: an alert that opens Activity needs fresh lists. |
+| #30 | FIXED (§22); restore check open | Unchanged. |
+| #31 | PARTLY (§22) | Needs the developer's keystore, package name, Firebase release SHA-1 and Play Console work, and an account deletion feature (§23.3). |
+| #32 | FIXED (§22) | Unchanged. |
+| #33 | FIXED (round 3) | The docs recorded PR #18 as not merged, and made the photo-replacement claim (#16); both corrected. |
+| #34 | PARTLY (round 3) | Photo-picker grants are now released when a photo is removed from the draft (not while posting) and after the listing is published. Left: strict enum decoding, `users.role`, Post's "My posts" list (§23.3). |
+| #35 | FIXED (round 3) | New in the verification audit: rotating right after tapping Sign in or Create account (or during Google sign-in) left the user on Sign In while signed in to Firebase, because the sign-in finished in the discarded screen and the new screen's `LaunchedEffect` read Firebase's user, which isn't Compose state. `SaluSaloApp` now keeps the user's UID as state (set by its `AuthStateListener`), the typed name is saved before Firebase answers, and `openAuthenticatedHome` runs one setup at a time, so the callback and the effect can't start two. |
+| R1 | FIXED (round 3) | Since §22 a failure loading or saving the alert settings said "Could not load alerts…". It now says "Could not load your alert settings…" or "Could not save your alert settings…". |
+
+### 23.2 What changed (code)
+
+- `MainActivity.kt`: `authUid` state, the setup guard and the name saved at tap time (#35); the details page from `FoodViewModel.openedListing`, with `noLongerListed` and a re-check at the next expiry or pickup end (#7, #22); the feed reload every minute while Home or All listings is shown (#2); the feed reload on `quantityReturned` (#18); `remember`ed Home lists (#29).
+- `viewmodel/FoodViewModel.kt`: `OpenedListing`, `openedListing`, `openListing()`, `closeListing()`; cleared with the session.
+- `viewmodel/ReservationViewModel.kt`: `quantityReturned` (a conflated channel, so a signal waits through a rotation) after a cancel or release.
+- `ActivityScreen.kt`: the feed reload removed from the result effect (#18); the Edit Listing and Rate pages saved (#7); `ListingDetailsPage` and `ManageReservationsPage` take whether the reservations are known and failed (#17).
+- `PostScreen.kt`: "My posts" load states (#4); Edit Listing saved by ID (#7); photo-picker grants released (#34).
+- `ProfileScreen.kt`: `refreshIfStale()` (#29).
+- `viewmodel/NotificationViewModel.kt`: the alert-settings error texts (R1); a quiet reload after a Realtime rejoin (#14).
+- `viewmodel/MessageViewModel.kt`, `data/MessageRepository.kt`, `data/NotificationRepository.kt`, `data/RealtimeInserts.kt`: the rejoin reloads (#14).
+- `model/FoodPost.kt`: `nextReserveBlockerChange()` (#22).
+- Tests: `RealtimeRejoinTest` (2), one more `ReserveBlockerTest`.
+- The `ListingPhotos.kt` comment, `CLAUDE.md`, `README.md` and this file (#33).
+
+### 23.3 Not changed, and why
+
+- **#9:** automatic expiry needs a server scheduler (for example `pg_cron`) and a rule for what an "expired" reservation means (the food may still be picked up late); a per-person cap contradicts "reserve part or all of the quantity". Both are product decisions.
+- **#10:** paths without the Firebase UID would change the upload paths, the Storage insert, update and delete rules, the `food_posts` insert policy and `can_read_food_image`, and old listings would keep their old paths. A Firebase UID is an identifier, not a credential.
+- **#11:** a database allow-list for category and unit would also refuse the test listings that 5 live check scripts insert ('Donation', 'Food', 'pack'), and would tie every new category to a migration; a free-text category can't do anything the free-text name and description can't already do. The app itself allows any future expiry (dry and canned food can last years). Needs the developer's rules first.
+- **#12:** needs identity checks (Phase 6).
+- **#16:** thumbnails need Supabase image transformations (a paid plan) or a second upload per photo, which changes the posting flow fixed in §21 (#6).
+- **#24:** deleting orphans needs the Storage API with a service key (never in the app), or a sweep in the app that could delete a draft's photos while it is being posted.
+- **#28:** paging would break Nearby, Nearest and the filters, which work on the whole list; a filtered chat channel would miss new conversations. No problem at the current size.
+- **#31:** needs the developer's keystore, a new package name registered in Firebase (a new `google-services.json`), the release SHA-1 and Play Console; account deletion is a feature of its own.
+- **#34:** lenient enum decoding needs a decision about how an unknown status or alert type should look; `users.role` is kept for Phase 6's admin role; removing Post's "My posts" would change the UI.
+
+### 23.4 Phone test (one phone; A = PASTOR, the donor; B = Mika Suarez)
+
+Auto-rotate on. "Rotate" means turn to landscape and back. Nothing needs to be run on Supabase first.
+
+**Account A**
+1. (Regression) Open the app (saved session). The loading screen, then Home with "Good …, <A's first name> 👋".
+2. (New, #7) Open any listing and rotate. The details page stays open on the same listing.
+3. (New, #7) Activity → My Listings → ⋮ on a listing → Edit listing. Change the description (don't save) and rotate. Edit Listing stays open with your change. Leave with the back arrow.
+4. (New, #4) Turn on airplane mode. Open Post and tap "My posts". Your posts are listed with "Couldn't refresh your posts. These may be out of date." and Try again. Turn airplane mode off and tap Try again: the note goes away.
+5. (Regression, #34) Post a free listing "Round 3 test": 5 packs, two photos (then remove one with its ×), pickup start "Start now", pickup end about 6 minutes from now, expiry later today. "Listing published". Note the time the pickup ends.
+6. (New, #35) Profile → Log out. On Sign In enter B's email and password, tap Sign in and rotate at once. The loading screen, then Home as B. (Before: it stayed on Sign In.)
+
+**Account B**
+7. (New, #22 and #2) Open "Round 3 test"; Reserve is shown. Keep the page open, with the screen on, until the pickup end passes. Without tapping anything, Reserve changes to "The pickup time for this listing has ended." and the badge to Expired; within about a minute more the badge says "Unavailable" and the text "This listing is no longer available to reserve.". Close it: "Round 3 test" is no longer on Home, without a pull.
+8. (New, #18) Reserve 1 of another listing of A's, and note its quantity on Home. Activity → My Reservations → open it → Cancel reservation → confirm, then tap Home at once. Within a few seconds, without a pull, the listing shows the quantity it had before you reserved. Back on Activity: "Reservation cancelled. The quantity is available again.". Then reserve 1 of it again and keep that reservation.
+9. (New, #7) Activity → History → a completed pickup → "Change your review". Tap a different number of stars and rotate. The Rate page stays open with your stars. Leave without sending.
+10. (New, R1) Profile → Notifications; wait until the switches show. Turn on airplane mode, change a switch and tap Save: "Could not save your alert settings. Check your connection and try again.". Turn airplane mode off and Save again: saved. Put the switch back and save.
+11. Profile → Log out.
+
+**Account A**
+12. (Regression) Sign in as A normally (no rotation): Home opens.
+13. (New, #17) Open Post once (it loads your listings), then turn on airplane mode and open Activity. My Listings shows your listings with "Couldn't refresh your listings. These may be out of date." and "Your reservations could not be loaded. Check your internet connection and try again.", each with Try again. Tap View listing on the listing B reserved in step 8. The page shows the same note with Try again, "Reserved —", no reservations chip and no Manage reservations button (before: "No reservations yet" and "Reserved 0 …"). Turn airplane mode off and tap Try again on the page: "1 active reservation", "Reserved 1 …" and Manage reservations appear.
+14. (Regression, #18) Manage reservations → B's reservation → Release reservation → confirm, then tap Home at once: the listing's quantity is back without a pull. Back on Activity: "Reservation released. The quantity is available again, and the recipient was told.".
+15. (Regression) Pull to refresh on Home; open a chat and send a message; open Alerts. Log out and sign in again.
+
+Optional: create a new test account and rotate right after tapping Create account. Home opens with the typed name in the greeting (#35).
+
+Not covered on one phone (both need two phones): #14, an alert sent by the other account while this phone's connection drops for a moment appears when the connection comes back, without leaving the screen; and #2 with a new listing posted from another phone.
+
+### 23.4a Result (2026-10-03)
+
+The developer ran §23.4 steps 1–15 on one phone, plus five regression steps added on 2026-10-02: deleting "Round 3 test" ("Listing deleted."); B seeing A's "Round 3 check" message with the unread count and reserving 1; A's "New reservation" alert and Mark as picked up ("Marked as picked up. You'll find it under Completed."); B's "Reservation claimed" alert and the reservation under History → Completed. **All passed.** Before the test, on 2026-10-02, `testDebugUnitTest` (forced re-run) passed 57 of 57 and `assembleDebug` passed on the same working tree. Not covered: the optional new-account step (not reported).
+
+**Two-phone checks (2026-10-03), all passed:** #2, a listing posted on phone 2 appeared on phone 1's Home within about a minute without a pull; #14, a message alert sent while phone 1 was in airplane mode appeared on its Alerts page within about 30 seconds of reconnecting, without leaving the page; #8, a price changed from ₱20.00 to ₱25.00 while phone 1 was on Review reservation was refused with "The price changed to ₱25.00 per unit. Check the details before reserving." and nothing was reserved. Both test listings were deleted.
+
+### 23.5 Known limits of round 3
+
+- #7: after Android ends the app in the background (not a rotation) the details page closes; the confirm dialogs close on rotation.
+- #22: a listing opened from Saved Listings that the feed did not list at that moment keeps the saved copy's status until Saved Listings reloads.
+- #2: the feed reloads every minute only while it is on screen and the app is in front; each reload is one listing request, one donor-profile request and one signing request.
+- #14: a rejoin is noticed from the channel's status; if a reconnect were too fast for the app to see the status change, the next return to the app still reloads.
+- #35: if a sign-in fails while the screen is being rebuilt, its error message is lost (the form shows no message); signing in again works.

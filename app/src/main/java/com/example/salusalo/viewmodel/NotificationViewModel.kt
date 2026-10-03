@@ -54,7 +54,8 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         sessionJob = viewModelScope.launch {
             launch { load() }
             launch {
-                repository.inserts(profileId)
+                // Alerts inserted while the connection was lost never arrive live.
+                repository.inserts(profileId, onRejoined = { load(quiet = true) })
                     .retryWhen { cause, attempt ->
                         if (cause is CancellationException) false
                         else { delay(minOf(30_000L, 2_000L shl attempt.toInt().coerceAtMost(4))); true }
@@ -107,7 +108,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             runCatching { repository.getPreferences() }
                 .onSuccess { _preferences.value = it }
-                .onFailure { _message.value = errorText(it) }
+                .onFailure { _message.value = errorText(it, SETTINGS_LOAD_FAILED) }
         }
     }
 
@@ -115,7 +116,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             runCatching { repository.savePreferences(preferences) }
                 .onSuccess { _preferences.value = it; onSaved() }
-                .onFailure { _message.value = errorText(it) }
+                .onFailure { _message.value = errorText(it, SETTINGS_SAVE_FAILED) }
         }
     }
 
@@ -136,6 +137,11 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     }
 
     // Only the server's short text: the exception's own message can include the URL and headers.
-    private fun errorText(error: Throwable) =
-        shortErrorText(error, "Could not load alerts. Check your connection and try again.")
+    private fun errorText(error: Throwable, fallback: String = "Could not load alerts. Check your connection and try again.") =
+        shortErrorText(error, fallback)
+
+    private companion object {
+        const val SETTINGS_LOAD_FAILED = "Could not load your alert settings. Check your connection and try again."
+        const val SETTINGS_SAVE_FAILED = "Could not save your alert settings. Check your connection and try again."
+    }
 }

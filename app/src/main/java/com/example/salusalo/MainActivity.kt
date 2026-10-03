@@ -3,6 +3,7 @@ package com.example.salusalo
 import android.os.Bundle
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostStatus
+import com.example.salusalo.model.nextReserveBlockerChange
 import com.example.salusalo.model.reserveBlocker
 import com.example.salusalo.model.ListingHandover
 import com.example.salusalo.model.ReportTarget
@@ -152,6 +153,7 @@ import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.userProfileChangeRequest
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -249,11 +251,16 @@ private fun SaluSaloApp() {
         appScope.launch { clearGoogleCredentialState(context) }
     }
 
+    // Firebase's signed-in user as Compose state. A sign-in that finishes after a
+    // rotation reports to the old, discarded screen; this lets the new one notice
+    // it and set the account up (the LaunchedEffect below).
+    var authUid by remember { mutableStateOf(firebaseAuth.currentUser?.uid) }
     // The Firebase session ended while the app was open: the account was
     // disabled or deleted, or its sign-in revoked (SupabaseClientProvider signs
     // out then). Back to Sign In, saying why. A network failure never ends it.
     DisposableEffect(firebaseAuth) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
+            authUid = auth.currentUser?.uid
             if (auth.currentUser == null && screen == "home") {
                 currentProfile = null
                 signUpName = null
@@ -268,10 +275,14 @@ private fun SaluSaloApp() {
     // start with a saved session ("Keep me signed in") until its setup has finished:
     // the branded loading screen then shows instead of a form.
     var setupPending by remember { mutableStateOf(firebaseAuth.currentUser != null) }
+    var setupJob by remember { mutableStateOf<Job?>(null) }
     fun openAuthenticatedHome(displayNameOverride: String? = null) {
         isAuthenticating = true
         setupPending = true
-        appScope.launch {
+        // A sign-in's own callback and the LaunchedEffect below can both ask;
+        // one setup at a time.
+        if (setupJob?.isActive == true) return
+        setupJob = appScope.launch {
             runCatching {
                 // Before the first Supabase call: a new account's token gets the
                 // role claim Supabase requires (the set-firebase-role Edge Function).
@@ -352,6 +363,8 @@ private fun SaluSaloApp() {
 
     fun signInWithGoogle(keep: Boolean) {
         isAuthenticating = true
+        // Cleared first, so a setup started after a rotation uses no typed name.
+        signUpName = null
         appScope.launch {
             try {
                 val idToken = requestGoogleIdToken(context)
@@ -360,7 +373,6 @@ private fun SaluSaloApp() {
                     .await()
                 setKeepSignedIn(context, keep)
                 isAuthenticating = false
-                signUpName = null
                 // A new Google user's profile is created with the Google name and email.
                 openAuthenticatedHome()
             } catch (error: GetCredentialCancellationException) {
@@ -389,7 +401,8 @@ private fun SaluSaloApp() {
         }
     }
 
-    LaunchedEffect(firebaseAuth.currentUser?.uid) {
+    // A saved session at start, or a sign-in that finished after a rotation.
+    LaunchedEffect(authUid) {
         if (firebaseAuth.currentUser != null && currentProfile == null) {
             openAuthenticatedHome(signUpName)
         }
@@ -408,9 +421,8 @@ private fun SaluSaloApp() {
         // While a signed-in account is set up (a saved session at start, or right
         // after a sign-in), the loading screen shows instead of a form. The flag
         // comes first because Firebase's user is not Compose state: only the flag
-        // can re-run this check once a sign-in has finished. The check sits here,
-        // not in SaluSaloApp's own body: re-running that body after a sign-in would
-        // restart the LaunchedEffect above with the new UID and start a second setup.
+        // can re-run this check once a sign-in has finished. (A new UID restarts the
+        // LaunchedEffect above; openAuthenticatedHome runs one setup at a time.)
         val showStartup = setupPending && screen != "home" && currentProfile == null &&
                 !canRetrySetup && firebaseAuth.currentUser != null
         val shownScreen = if (showStartup) "loading" else screen
@@ -512,6 +524,13 @@ private fun SaluSaloApp() {
                                 else -> {
                                     isAuthenticating = true
 
+                                    // Saved before Firebase answers: if the screen is rebuilt
+                                    // (rotation) meanwhile, the new one sets the account up
+                                    // with it (the LaunchedEffect on authUid).
+                                    if (currentScreen != "forgot") {
+                                        signUpName = if (currentScreen == "signup") name.trim() else null
+                                    }
+
                                     when (currentScreen) {
                                         "signup" -> firebaseAuth
                                             .createUserWithEmailAndPassword(
@@ -528,7 +547,6 @@ private fun SaluSaloApp() {
                                                             displayName = name.trim()
                                                         }
                                                     )
-                                                    signUpName = name.trim()
                                                     openAuthenticatedHome(name.trim())
                                                 } else {
                                                     message = authErrorMessage(
@@ -561,7 +579,6 @@ private fun SaluSaloApp() {
                                                 isAuthenticating = false
                                                 if (task.isSuccessful) {
                                                     setKeepSignedIn(context, keep)
-                                                    signUpName = null
                                                     openAuthenticatedHome()
                                                 } else {
                                                     message = authErrorMessage(
@@ -1487,7 +1504,6 @@ private fun HomeScreen(
     var page by rememberSaveable { mutableStateOf("home") }
     var filterHelp by remember { mutableStateOf(false) }
     var howItWorks by remember { mutableStateOf(false) }
-    var selectedFood by remember { mutableStateOf<HomeFood?>(null) }
     var sortMenu by remember { mutableStateOf(false) }
     var sort by rememberSaveable { mutableStateOf("Newest") }
     val sessionKey = currentProfile?.id ?: "signed-out"
@@ -1515,6 +1531,8 @@ private fun HomeScreen(
     val feedLoaded by foodViewModel.feedLoaded.collectAsStateWithLifecycle()
     val feedError by foodViewModel.feedError.collectAsStateWithLifecycle()
     val postResult by foodViewModel.postResult.collectAsStateWithLifecycle()
+    // The listing whose details page is open (kept through rotation).
+    val openedListing by foodViewModel.openedListing.collectAsStateWithLifecycle()
     val reserveResult by reservationViewModel.reserveResult.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -1644,12 +1662,16 @@ private fun HomeScreen(
         }
     }
 
-    // The feed arrives newest first (created_at).
-    val foods = remotePosts.map { it.toHomeFood(distanceTo(it)) }
+    // The feed arrives newest first (created_at). The lists below are rebuilt only
+    // when what they are made from changes, not on every recomposition (each
+    // alert, message or badge change); every value they read is a key.
+    val foods = remember(remotePosts, phonePin) { remotePosts.map { it.toHomeFood(distanceTo(it)) } }
     val discoveryPreferences = rememberDiscoveryPreferences(sessionKey)
-    val preferredFoods = remotePosts.filter { discoveryPreferences.matches(it) }.map { it.toHomeFood(distanceTo(it)) }
+    val preferredFoods = remember(remotePosts, phonePin, discoveryPreferences) {
+        remotePosts.filter { discoveryPreferences.matches(it) }.map { it.toHomeFood(distanceTo(it)) }
+    }
 
-    val visibleFoods = foods.filter { food ->
+    val visibleFoods = remember(foods, search, category, sort, phonePin) { foods.filter { food ->
         val matchesSearch =
             food.title.contains(search, ignoreCase = true) ||
                     food.donorName.contains(search, ignoreCase = true)
@@ -1677,7 +1699,7 @@ private fun HomeScreen(
             )
             else -> results.sortedWith(newestFirst)
         }
-    }
+    } }
     // One line under the chips while Nearby or Nearest is chosen.
     val locationLine = if (category != "Nearby" && sort != "Nearest") null else when {
         locationFinder.finding && phonePin == null -> "Finding your location…"
@@ -1706,10 +1728,26 @@ private fun HomeScreen(
     LaunchedEffect(page) {
         if (page == "home" || page == "all") foodViewModel.refreshFeedIfStale()
     }
+    // While Home or All listings is on screen and the app is in front, the feed
+    // also reloads every minute, so other phones' new listings and changes appear
+    // without a pull (nothing on the server pushes listing changes).
+    LaunchedEffect(page, appResumed) {
+        if ((page == "home" || page == "all") && appResumed) {
+            while (true) {
+                delay(60_000)
+                foodViewModel.refreshFeedIfStale()
+            }
+        }
+    }
     // A refused reservation (a new price, less left, pickup over) reloads the
     // feed, so the open details and review page show the listing as it is now.
     LaunchedEffect(reserveResult) {
         if (reserveResult is ReserveResult.Failed) foodViewModel.loadAvailablePosts()
+    }
+    // A cancel or release gave quantity back to a listing: reload the feed, even
+    // if the user left Activity before the result arrived.
+    LaunchedEffect(reservationViewModel) {
+        reservationViewModel.quantityReturned.collect { foodViewModel.loadAvailablePosts() }
     }
     // The pull-to-refresh spinner shows only for a pull, not for automatic reloads.
     var feedPulled by remember { mutableStateOf(false) }
@@ -1842,7 +1880,7 @@ private fun HomeScreen(
                         // Saved Listings and the Successful claims/donations records open
                         // a listing by its ID: the feed's copy if it has one, else the row's.
                         onOpenListing = { post ->
-                            selectedFood = (remotePosts.firstOrNull { it.id == post.id } ?: post).toHomeFood(null)
+                            foodViewModel.openListing(remotePosts.firstOrNull { it.id == post.id } ?: post)
                         }
                     )
 
@@ -1917,7 +1955,7 @@ private fun HomeScreen(
                                                     ?: "New listing"
                                             },
                                             loading = showFeedSkeleton,
-                                            onOpen = { food -> selectedFood = food },
+                                            onOpen = { food -> foodViewModel.openListing(food.post) },
                                             onBrowseAll = {
                                                 page = "all"
                                                 category = "All"
@@ -2000,7 +2038,7 @@ private fun HomeScreen(
                                             canSave = food.donorId != currentProfile?.id,
                                             saved = food.id in savedIds,
                                             onToggleSave = { savedListingViewModel.toggle(food.id) },
-                                            onClick = { selectedFood = food },
+                                            onClick = { foodViewModel.openListing(food.post) },
                                             onPhotoError = foodViewModel::refreshExpiredPhotoUrls,
                                             modifier = Modifier
                                                 .animateItem()
@@ -2054,12 +2092,13 @@ private fun HomeScreen(
         }
     }
 
-    selectedFood?.let { opened ->
+    openedListing?.let { opened ->
         // The feed's latest copy while it has one: fresh photo URLs, price,
         // quantity and status after a reload.
-        val food = remotePosts.firstOrNull { it.id == opened.id }?.toHomeFood(null) ?: opened
+        val latest = remotePosts.firstOrNull { it.id == opened.post.id }
+        val food = (latest ?: opened.post).toHomeFood(null)
         androidx.compose.ui.window.Dialog(
-            onDismissRequest = { selectedFood = null },
+            onDismissRequest = { foodViewModel.closeListing() },
             properties = androidx.compose.ui.window.DialogProperties(
                 usePlatformDefaultWidth = false
             )
@@ -2067,6 +2106,9 @@ private fun HomeScreen(
             FoodDetailsScreen(
                 // The distance follows the phone's latest position.
                 food = food.copy(distanceMeters = distanceTo(food.post)),
+                // Listed when the page opened but not by the feed now: the old
+                // copy would still offer Reserve.
+                noLongerListed = opened.listed && latest == null,
                 isOwnFood = currentProfile?.id != null && food.donorId == currentProfile.id,
                 saved = food.id in savedIds,
                 onToggleSave = { savedListingViewModel.toggle(food.id) },
@@ -2075,12 +2117,12 @@ private fun HomeScreen(
                 reservationViewModel = reservationViewModel,
                 onReserved = {
                     foodViewModel.loadAvailablePosts()
-                    selectedFood = null
+                    foodViewModel.closeListing()
                 },
                 onMessage = { draft -> messageViewModel.openForListing(food.id, draft) },
                 onMessageReservation = { reservationId -> messageViewModel.openForReservation(reservationId) },
                 onPhotoError = foodViewModel::refreshExpiredPhotoUrls,
-                onBack = { selectedFood = null }
+                onBack = { foodViewModel.closeListing() }
             )
         }
     }
@@ -3116,6 +3158,8 @@ private fun SaveToggleIcon(saved: Boolean, title: String, tint: Color = SaluColo
 @Composable
 private fun FoodDetailsScreen(
     food: HomeFood,
+    // The feed listed it when the page opened and no longer does.
+    noLongerListed: Boolean,
     isOwnFood: Boolean,
     saved: Boolean,
     onToggleSave: () -> Unit,
@@ -3139,9 +3183,25 @@ private fun FoodDetailsScreen(
     }
     // A reload may leave less than the amount chosen.
     LaunchedEffect(available) { if (quantity > available) quantity = available.coerceAtLeast(1) }
+    // Re-checked when the expiry or the end of pickup passes while the page is
+    // open, and when the app comes back (a delay doesn't count while the phone sleeps).
+    var clockTick by remember { mutableStateOf(Instant.now()) }
+    LaunchedEffect(food.post.expirationDate, food.post.pickupEnd, clockTick) {
+        val next = food.post.nextReserveBlockerChange(clockTick) ?: return@LaunchedEffect
+        delay(java.time.Duration.between(Instant.now(), next).toMillis().coerceAtLeast(0L) + 1L)
+        clockTick = Instant.now()
+    }
+    LifecycleResumeEffect(Unit) {
+        clockTick = Instant.now()
+        onPauseOrDispose { }
+    }
     // Why a reservation would be refused now (a saved or older copy may be
     // removed, expired, past its pickup time or fully reserved); null if it wouldn't.
-    val blocker = food.post.reserveBlocker()
+    val blocker = if (noLongerListed) {
+        "This listing is no longer available to reserve."
+    } else {
+        food.post.reserveBlocker(maxOf(clockTick, Instant.now()))
+    }
     var expanded by rememberSaveable(food.id) {
         mutableStateOf(false)
     }
@@ -3403,7 +3463,9 @@ private fun FoodDetailsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        StatusBadge(
+                        if (noLongerListed) {
+                            StatusBadge(SaluStatus.Removed, label = "Unavailable")
+                        } else StatusBadge(
                             when {
                                 food.post.status == FoodPostStatus.REMOVED -> SaluStatus.Removed
                                 blocker == null -> if (food.urgent) SaluStatus.ExpiresSoon else SaluStatus.Available

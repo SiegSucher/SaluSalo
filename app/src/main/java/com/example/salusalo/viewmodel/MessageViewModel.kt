@@ -58,7 +58,8 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
         sessionProfileId = profileId
         loadConversations(quiet = true)
         sessionJob = viewModelScope.launch {
-            repository.allMessageInserts()
+            // Messages sent while the connection was lost never arrive live.
+            repository.allMessageInserts(onRejoined = { loadConversations(quiet = true) })
                 .retryWhen { cause, attempt ->
                     if (cause is CancellationException) false
                     else { delay(minOf(30_000L, 2_000L shl attempt.toInt().coerceAtMost(4))); true }
@@ -169,7 +170,12 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
             }
             if (id == null) return@launch
             markActiveRead()
-            repository.messageInserts(id)
+            repository.messageInserts(id, onRejoined = {
+                runCatching { repository.getMessages(id) }.getOrNull()?.let { loaded ->
+                    loaded.forEach(::addMessage)
+                    if (_active.value?.id == id) markActiveRead()
+                }
+            })
                 .retryWhen { cause, attempt ->
                     if (cause is CancellationException) false
                     else { delay(minOf(30_000L, 2_000L shl attempt.toInt().coerceAtMost(4))); true }
