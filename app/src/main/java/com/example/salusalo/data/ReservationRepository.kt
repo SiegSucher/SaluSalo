@@ -7,6 +7,7 @@ import com.example.salusalo.model.ReservationDisplay
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
+import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.storage.storage
 import kotlinx.serialization.json.buildJsonObject
@@ -21,14 +22,28 @@ class ReservationRepository(
     private val bucket = supabase.storage.from("food-images")
 
     /**
-     * Reserves at [unitPrice], the price the recipient saw. The server refuses
-     * if the listing's price has changed since, and records its own price.
+     * Reserves at [unitPrice], the price the recipient saw, held for
+     * [holdMinutes] (15, 30, 60 or 120). The server refuses if the price has
+     * changed, records its own price and sets the pickup deadline.
      */
-    suspend fun createReservation(foodPostId: String, quantity: Int, unitPrice: Double): Reservation {
+    suspend fun createReservation(foodPostId: String, quantity: Int, unitPrice: Double, holdMinutes: Int): Reservation {
         require(quantity > 0) { "Choose a quantity greater than zero." }
-        return postgrest.rpc("create_reservation_at_price", buildJsonObject {
+        return postgrest.rpc("create_reservation_with_hold", buildJsonObject {
             put("p_food_post_id", foodPostId); put("p_quantity", quantity); put("p_unit_price", unitPrice)
+            put("p_hold_minutes", holdMinutes)
         }).decodeAs()
+    }
+
+    /** How much of a listing this account holds or has picked up (counts toward its per-person limit). */
+    suspend fun heldQuantity(foodPostId: String): Int {
+        val profileId = userRepository.getCurrentProfileId()
+        return supabase.from("reservations").select(Columns.list("quantity")) {
+            filter {
+                filter("food_post_id", FilterOperator.EQ, foodPostId)
+                filter("recipient_id", FilterOperator.EQ, profileId)
+                isIn("status", listOf("RESERVED", "CLAIMED"))
+            }
+        }.decodeList<HeldRow>().sumOf { it.quantity }
     }
 
     suspend fun cancelReservation(reservationId: String): Reservation =
@@ -85,5 +100,5 @@ class ReservationRepository(
     }
 }
 
-
-
+@kotlinx.serialization.Serializable
+private data class HeldRow(val quantity: Int)

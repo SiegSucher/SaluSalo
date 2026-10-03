@@ -126,3 +126,46 @@ internal fun momentLabel(instant: Instant?, now: Instant, zone: ZoneId = ZoneId.
         val at = it.atZone(zone)
         dayLabel(at.toLocalDate(), now.atZone(zone).toLocalDate()) + ", " + clockTime.format(at)
     }
+
+/** A pickup deadline: "5:30 PM" today, otherwise "Tomorrow, 9:30 AM" or "Oct 5, 9:30 AM". */
+internal fun pickUpByTime(deadline: Instant, now: Instant, zone: ZoneId = ZoneId.systemDefault()): String {
+    val at = deadline.atZone(zone)
+    return if (at.toLocalDate() == now.atZone(zone).toLocalDate()) clockTime.format(at)
+    else dayLabel(at.toLocalDate(), now.atZone(zone).toLocalDate()) + ", " + clockTime.format(at)
+}
+
+/** Review reservation: the estimated deadline and why it is that time. */
+internal fun holdEstimateText(
+    deadline: Instant,
+    pickupStart: Instant?,
+    pickupEnd: Instant?,
+    expiration: Instant,
+    now: Instant,
+    zone: ZoneId = ZoneId.systemDefault()
+): String {
+    val by = pickUpByTime(deadline, now, zone)
+    return when {
+        pickupEnd != null && deadline == pickupEnd -> "Pick up by $by, when pickup ends."
+        deadline == expiration -> "Pick up by $by, when the food expires."
+        pickupStart != null && pickupStart.isAfter(now) ->
+            "Pickup starts at ${pickUpByTime(pickupStart, now, zone)}, so pick up by $by."
+        else -> "Pick up by $by."
+    }
+}
+
+/** Activity: "Pick up by 5:30 PM · 12 min left", "… · pickup starts 5:00 PM" or "… · Time's up". */
+internal fun deadlineLine(deadline: Instant, pickupStart: Instant?, now: Instant, zone: ZoneId = ZoneId.systemDefault()): String {
+    val head = "Pick up by " + pickUpByTime(deadline, now, zone)
+    if (!deadline.isAfter(now)) return "$head · Time's up"
+    if (pickupStart != null && pickupStart.isAfter(now)) return "$head · pickup starts ${pickUpByTime(pickupStart, now, zone)}"
+    val minutes = Duration.between(now, deadline).toMinutes()
+    return head + " · " + when {
+        minutes < 1 -> "less than a minute left"
+        minutes < 60 -> "$minutes min left"
+        else -> "${minutes / 60} h ${minutes % 60} min left"
+    }
+}
+
+/** True under 10 minutes before the deadline, and after it. */
+internal fun deadlineUrgent(deadline: Instant, now: Instant): Boolean =
+    Duration.between(now, deadline).toMinutes() < 10

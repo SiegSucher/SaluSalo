@@ -44,6 +44,10 @@ import com.example.salusalo.model.ReviewItem
 import com.example.salusalo.model.formatPeso
 import com.example.salusalo.model.formatRatingAverage
 import com.example.salusalo.model.reservationTotal
+import com.example.salusalo.model.DEFAULT_HOLD_MINUTES
+import com.example.salusalo.model.HOLD_MINUTES
+import com.example.salusalo.model.parseTimestamp
+import com.example.salusalo.model.pickupDeadlineEstimate
 import com.example.salusalo.model.reviewCountText
 import com.example.salusalo.viewmodel.ReserveResult
 import kotlinx.coroutines.CancellationException
@@ -451,6 +455,7 @@ fun FoodActionsDialog(
  * "Reserved" receipt. Amounts on the receipt come from the reservation the
  * server returned, never from the listing shown here.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ReservationReviewDialog(
     foodPostId: String,
@@ -470,9 +475,13 @@ fun ReservationReviewDialog(
     pickupWindow: String,
     handover: String,
     expires: String,
+    // The listing's times, for the pickup deadline estimate (null when not set).
+    pickupStart: java.time.Instant?,
+    pickupEnd: java.time.Instant?,
+    expiration: java.time.Instant?,
     saving: Boolean,
     result: ReserveResult?,
-    onConfirm: (note: String) -> Unit,
+    onConfirm: (note: String, holdMinutes: Int) -> Unit,
     onMessageDonor: (reservationId: String) -> Unit,
     // Back or Done on the receipt: closes the receipt and the details page.
     onFinished: () -> Unit,
@@ -482,6 +491,7 @@ fun ReservationReviewDialog(
     val priced = unitPrice > 0
     val donorRole = if (priced) "seller" else "donor"
     var note by rememberSaveable(foodPostId) { mutableStateOf("") }
+    var holdMinutes by rememberSaveable(foodPostId) { mutableIntStateOf(DEFAULT_HOLD_MINUTES) }
 
     val reserved = (result as? ReserveResult.Reserved)
         ?.takeIf { it.reservation.foodPostId == foodPostId }
@@ -548,6 +558,14 @@ fun ReservationReviewDialog(
 
                 ActionLine("Pickup location", pickupLocation)
                 ActionLine("Pickup window", pickupWindow)
+                parseTimestamp(reservation.pickupDeadline)?.let { deadline ->
+                    ActionLine("Pick up by", pickUpByTime(deadline, java.time.Instant.now()))
+                    Text(
+                        "If it isn't marked as picked up by then, the reservation expires and the food goes back on the listing.",
+                        style = SaluText.Meta,
+                        color = SaluColors.Gray
+                    )
+                }
 
                 when (reserved.noteSent) {
                     true -> Text(
@@ -608,6 +626,45 @@ fun ReservationReviewDialog(
                 }
             }
 
+            ActionCard {
+                Text("Pick up within", style = SaluText.FoodTitle, color = SaluColors.DarkGreen)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    HOLD_MINUTES.forEach { minutes ->
+                        FilterChip(
+                            selected = holdMinutes == minutes,
+                            onClick = { holdMinutes = minutes },
+                            enabled = !saving,
+                            label = {
+                                Text(
+                                    when {
+                                        minutes < 60 -> "$minutes min"
+                                        minutes == 60 -> "1 hour"
+                                        else -> "${minutes / 60} hours"
+                                    }
+                                )
+                            }
+                        )
+                    }
+                }
+                if (expiration != null) {
+                    val now = java.time.Instant.now()
+                    val estimate = pickupDeadlineEstimate(now, pickupStart, pickupEnd, expiration, holdMinutes)
+                    Text(
+                        holdEstimateText(estimate, pickupStart, pickupEnd, expiration, now),
+                        style = SaluText.Supporting,
+                        color = SaluColors.DarkGreen
+                    )
+                }
+                Text(
+                    "If it isn't marked as picked up by then, the reservation expires and the food goes back on the listing.",
+                    style = SaluText.Meta,
+                    color = SaluColors.Gray
+                )
+            }
+
             OutlinedTextField(
                 value = note,
                 onValueChange = { if (it.length <= 2000) note = it },
@@ -643,7 +700,7 @@ fun ReservationReviewDialog(
                 text = if (saving) "Reserving…" else "Confirm reservation",
                 enabled = !saving,
                 loading = saving,
-                onClick = { onConfirm(note) }
+                onClick = { onConfirm(note, holdMinutes) }
             )
         }
     }

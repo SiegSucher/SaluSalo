@@ -403,3 +403,13 @@ After running `20261003_phase5_maps.sql`, run two more files the same way:
 
 - `tests/phase5_maps_check.sql` only reads the catalog and the listings and returns one row per check (PASS or FAIL): the two columns and their types, the pin constraint, that `update_my_food_post_with_pin` is SECURITY DEFINER with `search_path=public` and executable by `authenticated` only, that `update_my_food_post` still takes its 12 arguments and never touches the pin, that clients still have only SELECT and INSERT on `food_posts` and no UPDATE or DELETE policy, that the insert and SELECT policies are unchanged, and that no stored pin is half set or out of range (its details give the number of listings with a pin).
 - `tests/phase5_maps_live_safety_check.sql` works like the other live checks and also always ends with an error that undoes everything. It picks the donor of the newest listing (or the newest account) and the newest other account, and inserts two test listings as that donor through RLS, like the app. It checks that a pin is stored rounded, that a half-set or out-of-range pin is refused on insert and on edit with nothing changed, that a pin can be added and moved but an edit without a pin (old or new function) keeps it, that the function refuses the outsider, an expired and a `REMOVED` listing, no login and another project's token, that a direct UPDATE is refused, and that the outsider sees the pin only while the listing is visible to them.
+
+### 20261011_reservation_limits_and_expiry.sql (per-person limits and pickup deadlines, PROJECT_STATUS.md §24)
+
+Run **before** installing the build that reserves with a pickup time (`create_reservation_with_hold`). Older builds keep working.
+
+1. **Trial run (nothing is kept):** paste this migration and, below it, `tests/reservation_limits_live_safety_check.sql` into one SQL Editor query and run it. It ends with "SAFETY CHECK FINISHED: …" on purpose. Then run `tests/reservation_limits_check.sql`: every row should be false (nothing stayed). If rows are true, the editor committed the migration; that is harmless and counts as step 2.
+2. **Apply:** run this file alone. It also turns on Supabase Cron (`pg_cron`) and schedules the job `salusalo-expire-reservations` (every minute). If the extension is refused, switch on Integrations → Cron in the dashboard and run the file again.
+3. **Check:** run `tests/reservation_limits_check.sql` (every row true), then the two commented queries at its end (the job is active and has succeeded at least once), then `tests/reservation_limits_live_safety_check.sql` alone (all PASS).
+
+Never grant EXECUTE on `expire_overdue_reservations()` to any client role; keep the limit check and the rate limit in `create_reservation`.

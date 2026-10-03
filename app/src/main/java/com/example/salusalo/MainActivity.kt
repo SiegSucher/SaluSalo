@@ -5,6 +5,7 @@ import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.nextReserveBlockerChange
 import com.example.salusalo.model.reserveBlocker
+import com.example.salusalo.model.reservableNow
 import com.example.salusalo.model.ListingHandover
 import com.example.salusalo.model.ReportTarget
 import com.example.salusalo.model.donorRatingLabel
@@ -3178,11 +3179,19 @@ private fun FoodDetailsScreen(
     val unit = food.post.unit
     val donation = food.free
 
+    val limit = food.post.maxPerRecipient
+    // How much of this listing the person already holds or picked up; read once
+    // when the page opens and only for a listing with a limit (null while unknown).
+    val held by produceState<Int?>(null, food.id, limit) {
+        value = if (limit == null || isOwnFood) 0 else reservationViewModel.heldQuantity(food.id)
+    }
+    // A failed read counts as 0; the server still refuses over the limit.
+    val reservable = reservableNow(limit, available, held ?: 0)
     var quantity by rememberSaveable(food.id) {
         mutableStateOf(1)
     }
-    // A reload may leave less than the amount chosen.
-    LaunchedEffect(available) { if (quantity > available) quantity = available.coerceAtLeast(1) }
+    // A reload (or the count above) may leave less than the amount chosen.
+    LaunchedEffect(reservable) { if (quantity > reservable) quantity = reservable.coerceAtLeast(1) }
     // Re-checked when the expiry or the end of pickup passes while the page is
     // open, and when the app comes back (a delay doesn't count while the phone sleeps).
     var clockTick by remember { mutableStateOf(Instant.now()) }
@@ -3297,10 +3306,15 @@ private fun FoodDetailsScreen(
             pickupWindow = pickupWindow,
             handover = handover,
             expires = expires,
+            pickupStart = parseTimestamp(post.pickupStart),
+            pickupEnd = parseTimestamp(post.pickupEnd),
+            expiration = parseTimestamp(post.expirationDate),
             saving = reserveSaving,
             result = reserveResult,
-            // The price shown; the server refuses if it has changed since.
-            onConfirm = { note -> reservationViewModel.reserve(food.id, quantity, food.post.price, note) },
+            // The price shown and the chosen hold; the server refuses if the price has changed.
+            onConfirm = { note, holdMinutes ->
+                reservationViewModel.reserve(food.id, quantity, food.post.price, note, holdMinutes)
+            },
             onMessageDonor = { reservationId -> onMessageReservation(reservationId) },
             onFinished = {
                 reviewing = false
@@ -3755,7 +3769,16 @@ private fun FoodDetailsScreen(
                             )
                         } else if (blocker != null) {
                             InlineNotice(text = blocker, icon = Icons.Outlined.Info)
+                        } else if (limit != null && held != null && reservable == 0) {
+                            InlineNotice(
+                                text = "You've reserved the most this listing allows per person ($limit).",
+                                icon = Icons.Outlined.Info
+                            )
                         } else {
+                            if (limit != null) {
+                                Text("Limit: $limit per person", style = SaluText.Meta, color = SaluColors.Gray)
+                                Spacer(Modifier.height(4.dp))
+                            }
                             Text(payLine, style = SaluText.Supporting, color = SaluColors.DarkGreen)
 
                             Spacer(Modifier.height(10.dp))
@@ -3763,7 +3786,7 @@ private fun FoodDetailsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 QuantityStepper(
                                     quantity = quantity,
-                                    available = available,
+                                    available = reservable.coerceAtLeast(1),
                                     unit = unit,
                                     onDecrease = { quantity-- },
                                     onIncrease = { quantity++ }

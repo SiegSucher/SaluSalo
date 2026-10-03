@@ -35,6 +35,8 @@ data class FoodPost(
     /** The pickup pin; both null for listings without one (see [pickupPin] in Geo.kt). */
     @SerialName("pickup_latitude") val pickupLatitude: Double? = null,
     @SerialName("pickup_longitude") val pickupLongitude: Double? = null,
+    /** The most one person may reserve (open plus picked up); null = no limit. Set on Post only. */
+    @SerialName("max_per_recipient") val maxPerRecipient: Int? = null,
     @Transient val displayImageUrl: String? = null,
     /** The donor's name from get_listing_donor_profiles(); null if it could not be loaded. */
     @Transient val donorName: String? = null,
@@ -85,6 +87,8 @@ data class NewFoodPost(
     // The pickup pin: required for a new listing, so no defaults and never null.
     @SerialName("pickup_latitude") val pickupLatitude: Double,
     @SerialName("pickup_longitude") val pickupLongitude: Double,
+    // No default either, so it is always sent (null for no limit).
+    @SerialName("max_per_recipient") val maxPerRecipient: Int?,
     val status: FoodPostStatus = FoodPostStatus.AVAILABLE
 )
 
@@ -131,7 +135,8 @@ data class FoodPostDraft(
     val handover: ListingHandover?,
     val allergens: String,
     val storageNotes: String,
-    val pickupPin: GeoPin
+    val pickupPin: GeoPin,
+    val maxPerRecipient: Int? = null
 )
 
 /**
@@ -200,3 +205,27 @@ fun formatPeso(amount: Double): String = formatPeso(BigDecimal.valueOf(amount))
 /** Price for [quantity] units at [unitPrice], without binary rounding errors. */
 fun reservationTotal(unitPrice: Double, quantity: Int): BigDecimal =
     BigDecimal.valueOf(unitPrice).multiply(BigDecimal(quantity))
+
+/** How long a recipient may ask for a reservation to be held (create_reservation_with_hold). */
+val HOLD_MINUTES = listOf(15, 30, 60, 120)
+const val DEFAULT_HOLD_MINUTES = 30
+
+/**
+ * The deadline create_reservation_with_hold() will set: the hold counted from
+ * now or from the pickup start, whichever is later, but never after the end of
+ * pickup or the expiry. The server's own value is what counts.
+ */
+fun pickupDeadlineEstimate(
+    now: java.time.Instant,
+    pickupStart: java.time.Instant?,
+    pickupEnd: java.time.Instant?,
+    expiration: java.time.Instant,
+    holdMinutes: Int
+): java.time.Instant {
+    val start = if (pickupStart != null && pickupStart.isAfter(now)) pickupStart else now
+    return listOfNotNull(start.plusSeconds(holdMinutes * 60L), pickupEnd, expiration).min()
+}
+
+/** How many one person may reserve now: what's left, within the listing's per-person limit. */
+fun reservableNow(limit: Int?, available: Int, held: Int): Int =
+    (if (limit == null) available else minOf(available, limit - held)).coerceAtLeast(0)
