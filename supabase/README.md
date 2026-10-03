@@ -426,3 +426,12 @@ It adds `is_salusalo_admin()` and admin-only SECURITY DEFINER functions for the 
 4. **Safety check:** run `tests/admin_dashboard_live_safety_check.sql` alone. It ends with "SAFETY CHECK FINISHED: 20 passed, 0 failed, 0 skipped." on purpose and undoes everything, including the roles it sets. Check 14 skips if the donor or recipient it picks has Reservation updates turned off.
 
 Never grant table privileges on `report_notes`, `admin_audit_log` or `reports`, and never let an admin function take the caller or a role from its arguments.
+
+### 20261013_admin_analytics.sql (admin dashboard Analytics, PROJECT_STATUS.md §26)
+
+Run after `20261012_admin_dashboard.sql`. Safe to run again; app builds are unaffected.
+
+It adds the admin-only `admin_analytics(p_weeks)` (4, 8 or 12 weeks; counts only, no names or emails) for the dashboard's Analytics page, and the internal `admin_analytics_kpis(from, to)`, which no client may run.
+
+1. **Apply:** run this file alone ("Success. No rows returned").
+2. **Safety check:** run `tests/admin_analytics_live_safety_check.sql` alone. It ends with "SAFETY CHECK FINISHED: 10 passed, 0 failed, 0 skipped." on purpose and undoes everything (a test listing, a reservation of 2 and its pickup, and the roles it sets).

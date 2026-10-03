@@ -31,7 +31,8 @@ window.Pages.overview = (function () {
         h('div', { class: 'span-4 stack' },
           card({ title: 'Reports to review', className: 'card--flush', body: reportsBody,
             actions: h('a', { class: 'btn btn--ghost btn--sm', href: '#/reports' }, 'All', icon('chevronRight', 18)) }),
-          card({ title: 'Food rescue', sub: 'The last 30 days', body: rescueBody }))));
+          card({ title: 'Food rescue', sub: 'The last 30 days', body: rescueBody,
+            actions: h('a', { class: 'btn btn--ghost btn--sm', href: '#/analytics' }, 'Analytics', icon('chevronRight', 18)) }))));
     refs = { stats, activityBody, reportsBody, resBody, rescueBody };
     load();
   }
