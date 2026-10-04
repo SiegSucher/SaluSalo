@@ -197,6 +197,7 @@ internal fun ProfileEditor(profile: UserProfile?, onUpdated: (UserProfile) -> Un
         }
     )
     if (feedback.isNotBlank()) InlineNotice(text = feedback, icon = Icons.Outlined.Info)
+    PhoneContactSettings(profileId = profile?.id)
 }
 
 @Composable

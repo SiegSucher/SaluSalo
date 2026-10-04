@@ -206,6 +206,7 @@ fun ChatScreen(
                                 }
                             }
                             conversation?.let {
+                                ChatCallButton(conversationId = it.id, otherName = it.otherName)
                                 Box {
                                     IconButton(onClick = { menuOpen = true }) {
                                         Icon(
