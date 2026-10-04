@@ -1,6 +1,7 @@
 package com.example.salusalo
 
 import com.example.salusalo.model.FoodPost
+import com.example.salusalo.model.RecommendationReason
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -9,8 +10,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 // Short, plain-English labels for times and reasons shown on cards. They are
-// worked out from the listing's own timestamps and the user's own saved
-// preferences only; nothing here is invented.
+// worked out from the listing's own timestamps, the user's own saved
+// preferences and what the recommendation model learned from the user's own
+// reservations and saves only; nothing here is invented.
 
 private val shortDate = DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH)
 
@@ -60,6 +62,26 @@ internal fun DiscoveryPreferences.reasonFor(post: FoodPost): String? {
         listingType == "Donations" -> "Free food, as you prefer"
         listingType == "For sale" -> "For sale, as you prefer"
         else -> "Matches your preferences"
+    }
+}
+
+/**
+ * Why a listing is in "Recommended for you", from the feature the model weighs
+ * most for it and whether that came from a listing the user reserved or saved.
+ */
+internal fun recommendationLabel(reason: RecommendationReason): String {
+    val chose = if (reason.fromReservation) "reserved" else "saved"
+    return when (reason.kind) {
+        RecommendationReason.Kind.CATEGORY ->
+            reason.category?.trim()
+                ?.takeIf { it.isNotEmpty() && !it.equals("Other", ignoreCase = true) }
+                ?.let { "Like the ${it.lowercase(Locale.ENGLISH)} you $chose" }
+                ?: "Similar to food you $chose"
+        RecommendationReason.Kind.FREE -> "Free food, like what you $chose"
+        RecommendationReason.Kind.FOR_SALE -> "For sale, like what you $chose"
+        RecommendationReason.Kind.DONOR ->
+            if (reason.fromReservation) "From a donor you reserved from" else "From a donor whose food you saved"
+        RecommendationReason.Kind.SIMILAR -> "Similar to food you $chose"
     }
 }
 

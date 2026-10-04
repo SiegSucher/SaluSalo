@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostStatus
+import com.example.salusalo.model.ListingRecommender
 import com.example.salusalo.model.nextReserveBlockerChange
 import com.example.salusalo.model.reserveBlocker
 import com.example.salusalo.model.reservableNow
@@ -1537,6 +1538,8 @@ private fun HomeScreen(
     val notificationViewModel: NotificationViewModel = viewModel(key = "notifications-$sessionKey")
     val savedListingViewModel: SavedListingViewModel = viewModel(key = "saved-$sessionKey")
     val savedIds by savedListingViewModel.savedIds.collectAsStateWithLifecycle()
+    // The saved rows carry each saved listing's details, for the recommendations.
+    val savedRows by savedListingViewModel.saved.collectAsStateWithLifecycle()
     val savedMessage by savedListingViewModel.message.collectAsStateWithLifecycle()
     val activeChat by messageViewModel.active.collectAsStateWithLifecycle()
     val chatOpening by messageViewModel.opening.collectAsStateWithLifecycle()
@@ -1558,6 +1561,8 @@ private fun HomeScreen(
     // The listing whose details page is open (kept through rotation).
     val openedListing by foodViewModel.openedListing.collectAsStateWithLifecycle()
     val reserveResult by reservationViewModel.reserveResult.collectAsStateWithLifecycle()
+    // This account's own reservations, each with its listing, for the recommendations.
+    val myReservations by reservationViewModel.myReservations.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // The phone's position, only for distances, Nearby and Nearest. It stays in
@@ -1619,6 +1624,9 @@ private fun HomeScreen(
     }
     // Bookmarks load once per session, so the icons show the right state at once.
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { savedListingViewModel.start(it) } }
+    // The reservations load once per session too (quietly), so the recommendations
+    // can learn from them before Activity has been opened.
+    LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { reservationViewModel.start(it) } }
     // A new alert plays the phone's notification sound while the app is on
     // screen, unless it is a message in the chat that is open. The switch is
     // read when the alert arrives.
@@ -1693,6 +1701,23 @@ private fun HomeScreen(
     val discoveryPreferences = rememberDiscoveryPreferences(sessionKey)
     val preferredFoods = remember(remotePosts, phonePin, discoveryPreferences) {
         remotePosts.filter { discoveryPreferences.matches(it) }.map { it.toHomeFood(distanceTo(it)) }
+    }
+    // "Recommended for you": a small model trained on this phone from the account's
+    // own reservations and saves (ListingRecommender) picks among the listings that
+    // match the saved preferences. Empty until it has something to learn from, or
+    // when nothing matches what it learned; the row then stays as above.
+    val ownProfileId = currentProfile?.id
+    val recommendations = remember(remotePosts, myReservations, savedIds, savedRows, discoveryPreferences, ownProfileId) {
+        ListingRecommender.train(
+            feed = remotePosts,
+            reserved = myReservations.map { it.foodPost },
+            savedIds = savedIds,
+            saved = savedRows.mapNotNull { it.foodPost },
+            ownProfileId = ownProfileId
+        )?.recommend(remotePosts.filter { discoveryPreferences.matches(it) }, limit = 2).orEmpty()
+    }
+    val recommendedFoods = remember(recommendations, phonePin) {
+        recommendations.map { it.post.toHomeFood(distanceTo(it.post)) }
     }
 
     val visibleFoods = remember(foods, search, category, sort, phonePin) { foods.filter { food ->
@@ -1970,11 +1995,15 @@ private fun HomeScreen(
                                 if (onHome && category == "All" && search.isBlank()) {
                                     item(key = "picked") {
                                         val now = Instant.now()
+                                        val learned = recommendations.isNotEmpty()
                                         PickedForYouSection(
+                                            learned = learned,
                                             preferencesActive = discoveryPreferences.isActive,
-                                            foods = preferredFoods.take(2),
+                                            foods = if (learned) recommendedFoods else preferredFoods.take(2),
                                             reasonFor = { food ->
-                                                discoveryPreferences.reasonFor(food.post)
+                                                recommendations.firstOrNull { it.post.id == food.id }
+                                                    ?.let { recommendationLabel(it.reason) }
+                                                    ?: discoveryPreferences.reasonFor(food.post)
                                                     ?: postedLabel(parseTimestamp(food.createdAt), now)
                                                     ?: "New listing"
                                             },
@@ -2584,12 +2613,15 @@ private fun FeedSearchAndFilters(
 }
 
 /**
- * "Picked for you" when Food preferences or a pickup area are set, else the
- * newest listings, each with the reason it is here. The selection itself is
- * unchanged: listings that match the saved preferences, newest first.
+ * "Recommended for you" when the on-device model ([ListingRecommender]) has
+ * picks ([learned]), else "Picked for you" when Food preferences or a pickup
+ * area are set, else the newest listings; each card says why it is here.
+ * Without picks the selection is as before: listings that match the saved
+ * preferences, newest first.
  */
 @Composable
 private fun PickedForYouSection(
+    learned: Boolean,
     preferencesActive: Boolean,
     foods: List<HomeFood>,
     reasonFor: (HomeFood) -> String,
@@ -2608,8 +2640,16 @@ private fun PickedForYouSection(
             .padding(vertical = 16.dp)
     ) {
         SectionHeader(
-            title = if (preferencesActive) "Picked for you" else "Just posted",
-            subtitle = if (preferencesActive) "Matches your food preferences" else "The newest food in your community",
+            title = when {
+                learned -> "Recommended for you"
+                preferencesActive -> "Picked for you"
+                else -> "Just posted"
+            },
+            subtitle = when {
+                learned -> "Learned from what you reserve and save"
+                preferencesActive -> "Matches your food preferences"
+                else -> "The newest food in your community"
+            },
             icon = Icons.Outlined.AutoAwesome,
             iconTint = SaluColors.Sparkle,
             modifier = Modifier.padding(start = 16.dp, end = 4.dp),
@@ -2883,7 +2923,7 @@ private data class HomeFood(
     val free: Boolean get() = post.price <= 0.0
 }
 
-/** A card in "Picked for you": photo with its price, the name, and why it is here. */
+/** A card in the row at the top of Home: photo with its price, the name, and why it is here. */
 @Composable
 private fun RecommendationCard(
     food: HomeFood,
@@ -2988,7 +3028,7 @@ private fun PhotoPriceLabel(food: HomeFood, modifier: Modifier = Modifier) {
     )
 }
 
-/** Skeleton of a "Picked for you" card. */
+/** Skeleton of a card in the row at the top of Home. */
 @Composable
 private fun RecommendationSkeleton() {
     SaluCard(Modifier.width(212.dp)) {

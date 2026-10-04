@@ -207,7 +207,7 @@ internal fun FoodPreferenceSettings(profileId: String?) {
     var selected by rememberSaveable { mutableStateOf(stored.categories.toList()) }
     var type by rememberSaveable { mutableStateOf(stored.listingType) }
     var feedback by rememberSaveable { mutableStateOf("") }
-    SettingsCaption("Choose food for the ‘For your preferences’ row on Home.")
+    SettingsCaption("Choose the food for the row at the top of Home.")
     SettingsCard {
         Text("Food categories", style = SaluText.FoodTitle, color = SaluColors.DarkGreen, modifier = Modifier.semantics { heading() })
         Column {
