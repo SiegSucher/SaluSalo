@@ -206,10 +206,11 @@ class FoodRepository(
 
     /**
      * Deletes or removes the caller's own listing through remove_my_food_post().
-     * The server finds the caller from the token. A listing nobody ever reserved
-     * is deleted, and then its photos too (best effort: a failure only leaves
-     * photos behind in Storage). A listing with reservations is only hidden, so
-     * its photos stay for those reservations.
+     * The server finds the caller from the token. A listing nobody ever
+     * reserved, reported or started a chat about is deleted, and then its
+     * photos too (best effort: a failure only leaves photos behind in Storage).
+     * Any other listing is only hidden, so its photos stay for its
+     * reservations, chats and reports.
      */
     suspend fun removeMyFoodPost(post: FoodPost): RemoveFoodPostResult {
         val result = supabase.postgrest.rpc("remove_my_food_post", buildJsonObject {

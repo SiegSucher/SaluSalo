@@ -23,13 +23,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.salusalo.viewmodel.NotificationViewModel
 import com.example.salusalo.viewmodel.SavedListingViewModel
 import com.example.salusalo.model.FoodPost
+import com.example.salusalo.model.canBeReserved
 import com.example.salusalo.model.ReservationDisplay
 import com.example.salusalo.model.ResponseRate
 import com.example.salusalo.model.parseTimestamp
 import com.example.salusalo.model.reservationTotal
-import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.formatPeso
-import com.example.salusalo.model.isExpired
 import com.example.salusalo.model.hasPhoto
 import androidx.compose.foundation.background
 import coil3.compose.AsyncImage
@@ -290,7 +289,7 @@ fun ProfileSections(
                                     }
 
                                     // Only a listing that can still be reserved opens.
-                                    if (post.status == FoodPostStatus.AVAILABLE && !post.isExpired()) {
+                                    if (post.canBeReserved()) {
                                         SectionButton("View listing") {
                                             onOpenListing(post)
                                         }
@@ -481,10 +480,8 @@ fun ProfileSections(
 
                                 savedRows.forEach { row ->
                                     val post = row.foodPost
-                                    // Gone, fully reserved or expired: it can only be removed.
-                                    val available = post != null &&
-                                            post.status == FoodPostStatus.AVAILABLE &&
-                                            !post.isExpired()
+                                    // Gone, fully reserved, expired or past its pickup time: it can only be removed.
+                                    val available = post?.canBeReserved() == true
                                     SectionCard {
                                         Row(verticalAlignment = Alignment.Top) {
                                             if (post != null) {

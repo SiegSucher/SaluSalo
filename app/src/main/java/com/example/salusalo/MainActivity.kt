@@ -1,6 +1,7 @@
 package com.example.salusalo
 
 import android.os.Bundle
+import android.os.SystemClock
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.nextReserveBlockerChange
@@ -280,9 +281,11 @@ private fun SaluSaloApp() {
     // when no one is signed in. Saved, so rotation and Android restoring the app
     // don't show it again.
     var introDone by rememberSaveable { mutableStateOf(false) }
+    // When the app opened, so a rotation during the intro waits only for the rest of it.
+    val introStartedAt = rememberSaveable { SystemClock.elapsedRealtime() }
     LaunchedEffect(Unit) {
         if (!introDone) {
-            delay(STARTUP_INTRO_MS)
+            delay((STARTUP_INTRO_MS - (SystemClock.elapsedRealtime() - introStartedAt)).coerceAtLeast(0L))
             introDone = true
         }
     }
@@ -503,11 +506,17 @@ private fun SaluSaloApp() {
                         }
                     )
 
-                    "home" -> HomeScreen(
-                        onLogout = { logOut() },
-                        currentProfile = currentProfile,
-                        onProfileUpdated = { currentProfile = it }
-                    )
+                    // Only with a profile: while Home fades out after Log out (or a
+                    // session that ended), it must not be drawn again for no one,
+                    // which would start a second set of screens and send requests
+                    // without a signed-in account.
+                    "home" -> currentProfile?.let { profile ->
+                        HomeScreen(
+                            onLogout = { logOut() },
+                            currentProfile = profile,
+                            onProfileUpdated = { currentProfile = it }
+                        )
+                    }
 
                     else -> SignInScreen(
                         mode = currentScreen,
@@ -3238,9 +3247,11 @@ private fun FoodDetailsScreen(
     var foodAction by rememberSaveable(food.id) {
         mutableStateOf("")
     }
-    var reviewing by rememberSaveable(food.id) {
-        mutableStateOf(false)
-    }
+    // The price and amount the Review reservation page shows, fixed when it
+    // opens: a feed reload meanwhile must not change what Confirm sends (the
+    // server refuses a price that has changed since). Null while it is closed.
+    var reviewPrice by rememberSaveable(food.id) { mutableStateOf<Double?>(null) }
+    var reviewQuantity by rememberSaveable(food.id) { mutableIntStateOf(1) }
     val reserveSaving by reservationViewModel.saving.collectAsStateWithLifecycle()
     val reserveResult by reservationViewModel.reserveResult.collectAsStateWithLifecycle()
 
@@ -3305,7 +3316,8 @@ private fun FoodDetailsScreen(
     val handover = ListingHandover.fromCode(post.handover)?.label ?: notSet
     val expires = parseTimestamp(post.expirationDate)?.let { listingTime(it) } ?: "—"
 
-    if (reviewing && !isOwnFood) {
+    val frozenPrice = reviewPrice
+    if (frozenPrice != null && !isOwnFood) {
         ReservationReviewDialog(
             foodPostId = food.id,
             foodTitle = food.title,
@@ -3313,9 +3325,9 @@ private fun FoodDetailsScreen(
             hasPhoto = post.hasPhoto,
             imageUrl = food.imageUrl,
             profileName = profileName,
-            quantity = quantity,
+            quantity = reviewQuantity,
             unit = unit,
-            unitPrice = food.unitPrice,
+            unitPrice = frozenPrice,
             pickupLocation = food.pickupLocation,
             pickupWindow = pickupWindow,
             handover = handover,
@@ -3327,18 +3339,18 @@ private fun FoodDetailsScreen(
             result = reserveResult,
             // The price shown and the chosen hold; the server refuses if the price has changed.
             onConfirm = { note, holdMinutes ->
-                reservationViewModel.reserve(food.id, quantity, food.post.price, note, holdMinutes)
+                reservationViewModel.reserve(food.id, reviewQuantity, frozenPrice, note, holdMinutes)
             },
             onMessageDonor = { reservationId -> onMessageReservation(reservationId) },
             onFinished = {
-                reviewing = false
+                reviewPrice = null
                 reservationViewModel.clearReserveResult()
                 onReserved()
             },
             onBack = {
                 // Leaving while the request runs keeps its result for the receipt.
                 if (!reserveSaving) {
-                    reviewing = false
+                    reviewPrice = null
                     reservationViewModel.clearReserveResult()
                 }
             }
@@ -3812,7 +3824,8 @@ private fun FoodDetailsScreen(
                                     text = "Reserve",
                                     onClick = {
                                         reservationViewModel.clearReserveResult()
-                                        reviewing = true
+                                        reviewQuantity = quantity
+                                        reviewPrice = food.post.price
                                     },
                                     modifier = Modifier.weight(1f)
                                 )

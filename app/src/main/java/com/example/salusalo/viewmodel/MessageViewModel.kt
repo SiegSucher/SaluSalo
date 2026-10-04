@@ -1,6 +1,9 @@
 package com.example.salusalo.viewmodel
 
 import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.salusalo.data.MessageRepository
@@ -34,9 +37,13 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
     val opening = _opening.asStateFlow()
     private val _sending = MutableStateFlow(false)
     val sending = _sending.asStateFlow()
-    /** Text to prefill the input with when a chat opens (for example an allergens question). */
-    private val _draft = MutableStateFlow("")
-    val draft = _draft.asStateFlow()
+    /**
+     * What is typed in the open chat, prefilled when a chat opens (for example
+     * an allergens question). Held here, not in the screen, so a send that
+     * finishes after a rotation clears the box that is shown.
+     */
+    var draft by mutableStateOf("")
+        private set
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
 
@@ -151,7 +158,7 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
         threadJob?.cancel()
         _active.value = null
         _messages.value = emptyList()
-        _draft.value = draft
+        this.draft = draft
         _opening.value = true
         threadJob = viewModelScope.launch {
             val id = try {
@@ -187,14 +194,16 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** Sends [body] in the open thread; [onSent] runs after the server accepted it. */
-    fun send(body: String, onSent: () -> Unit = {}) {
+    fun updateDraft(text: String) { draft = text }
+
+    /** Sends [body] in the open thread; the typed text is cleared once the server accepted it. */
+    fun send(body: String) {
         val conversation = _active.value ?: return
         if (_sending.value || body.isBlank()) return
         viewModelScope.launch {
             _sending.value = true
             runCatching { repository.sendMessage(conversation.id, body) }
-                .onSuccess { sent -> addMessage(sent); _draft.value = ""; onSent() }
+                .onSuccess { sent -> addMessage(sent); draft = "" }
                 .onFailure { _message.value = errorText(it) }
             _sending.value = false
         }
@@ -212,9 +221,11 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
         threadJob = null
         _active.value = null
         _messages.value = emptyList()
-        _draft.value = ""
+        draft = ""
         _opening.value = false
-        loadConversations()
+        // Quiet: a chat that failed to open has already said so; closing it
+        // must not add a second error.
+        loadConversations(quiet = true)
     }
 
     fun clearMessage() { _message.value = null }
@@ -228,7 +239,7 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
         _conversations.value = emptyList()
         _active.value = null
         _messages.value = emptyList()
-        _draft.value = ""
+        draft = ""
         _message.value = null
     }
 

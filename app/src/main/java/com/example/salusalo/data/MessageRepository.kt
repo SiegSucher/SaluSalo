@@ -41,11 +41,18 @@ class MessageRepository {
         postgrest.rpc("get_my_conversations", buildJsonObject { put("p_conversation_id", conversationId) })
             .decodeList<ConversationSummary>().firstOrNull()?.withSignedImage()
 
+    /**
+     * The thread's newest [MAX_CHAT_MESSAGES] messages, oldest first. They are
+     * read newest first: Supabase's API answers at most 1000 rows, so a longer
+     * thread read oldest first would lose its newest messages instead.
+     */
+    // ponytail: older messages of a very long thread aren't shown; add paging if a chat ever needs them.
     suspend fun getMessages(conversationId: String): List<ChatMessage> =
         supabase.from("messages").select {
             filter { filter("conversation_id", FilterOperator.EQ, conversationId) }
-            order("created_at", Order.ASCENDING)
-        }.decodeList()
+            order("created_at", Order.DESCENDING)
+            limit(MAX_CHAT_MESSAGES)
+        }.decodeList<ChatMessage>().asReversed()
 
     suspend fun sendMessage(conversationId: String, body: String): ChatMessage {
         val text = body.trim()
@@ -75,3 +82,6 @@ class MessageRepository {
     private suspend fun ConversationSummary.withSignedImage() =
         copy(displayImageUrl = bucket.signedUrlOrNull(foodImagePath))
 }
+
+/** The most messages a chat loads, the newest; Supabase answers at most 1000 rows. */
+private const val MAX_CHAT_MESSAGES = 1000L

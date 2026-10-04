@@ -187,6 +187,17 @@ fun FoodPost.reserveBlocker(now: java.time.Instant = java.time.Instant.now()): S
     else -> null
 }
 
+/** True when Home would offer Reserve on it now: nothing in [reserveBlocker] stops it. */
+fun FoodPost.canBeReserved(now: java.time.Instant = java.time.Instant.now()): Boolean = reserveBlocker(now) == null
+
+/**
+ * Activity's Active filter for the donor's own listing: it can still be
+ * reserved, or it still has food to hand over. Until the reservations are
+ * known, a fully reserved listing counts as active.
+ */
+fun FoodPost.isActiveListing(hasOpenReservations: Boolean, reservationsKnown: Boolean, now: java.time.Instant): Boolean =
+    hasOpenReservations || (!reservationsKnown && status == FoodPostStatus.RESERVED) || canBeReserved(now)
+
 /**
  * The next moment [reserveBlocker] can change by itself (the expiry or the end
  * of pickup, whichever comes first after [now]), or null when both have passed.
