@@ -1,6 +1,7 @@
 package com.example.salusalo
 
 import com.example.salusalo.model.FoodPost
+import com.example.salusalo.model.RecommendationReason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -76,6 +77,20 @@ class UiTextTest {
             "For sale, as you prefer",
             DiscoveryPreferences(listingType = "For sale").reasonFor(post(price = 25.0))
         )
+    }
+
+    @Test
+    fun recommendationReasonSaysWhatTheUserReservedOrSaved() {
+        fun label(kind: RecommendationReason.Kind, reserved: Boolean, category: String? = null) =
+            recommendationLabel(RecommendationReason(kind, reserved, category))
+        assertEquals("Like the cooked meals you reserved", label(RecommendationReason.Kind.CATEGORY, true, "Cooked meals"))
+        assertEquals("Like the bread & pastries you saved", label(RecommendationReason.Kind.CATEGORY, false, " Bread & pastries "))
+        assertEquals("Similar to food you saved", label(RecommendationReason.Kind.CATEGORY, false, "Other"))
+        assertEquals("Free food, like what you reserved", label(RecommendationReason.Kind.FREE, true))
+        assertEquals("For sale, like what you saved", label(RecommendationReason.Kind.FOR_SALE, false))
+        assertEquals("From a donor you reserved from", label(RecommendationReason.Kind.DONOR, true))
+        assertEquals("From a donor whose food you saved", label(RecommendationReason.Kind.DONOR, false))
+        assertEquals("Similar to food you reserved", label(RecommendationReason.Kind.SIMILAR, true))
     }
 
     @Test

@@ -95,6 +95,20 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     private var refreshPending = false
     // When the lists were last asked for (SystemClock.elapsedRealtime()).
     private var refreshRequestedAt = 0L
+    // The profile whose lists start() has loaded.
+    private var startedProfileId: String? = null
+
+    /**
+     * Loads the lists once per signed-in profile when Home starts, so Home's
+     * recommendations can learn from this account's reservations. Quiet: a
+     * failure here changes nothing on screen (Activity and Profile load the
+     * lists again when opened and show their own errors).
+     */
+    fun start(profileId: String) {
+        if (startedProfileId == profileId) return
+        startedProfileId = profileId
+        launchRequest { refreshLists(quiet = true) }
+    }
 
     fun refresh() {
         refreshRequestedAt = SystemClock.elapsedRealtime()
@@ -220,6 +234,7 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     fun clearSession() {
         refreshPending = false
         refreshRequestedAt = 0L
+        startedProfileId = null
         _myReservations.value = emptyList()
         _donorReservations.value = emptyList()
         _loaded.value = false
@@ -264,9 +279,11 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     // Loads each list on its own, so a failure in one cannot stop the other from
-    // loading. A failure is shown through [loadFailed]. The caller's own reviews
-    // load alongside; if they fail, the last ones are kept and nothing is shown.
-    private suspend fun refreshLists() {
+    // loading. A failure is shown through [loadFailed], except in a [quiet] load
+    // (start()), which leaves the flags as they were when it fails. The caller's
+    // own reviews load alongside; if they fail, the last ones are kept and
+    // nothing is shown.
+    private suspend fun refreshLists(quiet: Boolean = false) {
         val mine = runCatching { repository.getMyReservations() }
             .onSuccess { _myReservations.value = it }
         val donor = runCatching { repository.getReservationsForMyFoodPosts() }
@@ -276,6 +293,7 @@ class ReservationViewModel(application: Application) : AndroidViewModel(applicat
         listOfNotNull(mine.exceptionOrNull(), donor.exceptionOrNull(), reviews.exceptionOrNull())
             .firstOrNull { it is CancellationException }?.let { throw it }
         val failed = mine.isFailure || donor.isFailure
+        if (failed && quiet) return
         _loadFailed.value = failed
         if (!failed) _loaded.value = true
     }
