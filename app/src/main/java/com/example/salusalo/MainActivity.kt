@@ -1714,7 +1714,7 @@ private fun HomeScreen(
             savedIds = savedIds,
             saved = savedRows.mapNotNull { it.foodPost },
             ownProfileId = ownProfileId
-        )?.recommend(remotePosts.filter { discoveryPreferences.matches(it) }, limit = 2).orEmpty()
+        )?.recommend(remotePosts.filter { discoveryPreferences.matches(it) }, limit = TOP_ROW_CARDS).orEmpty()
     }
     val recommendedFoods = remember(recommendations, phonePin) {
         recommendations.map { it.post.toHomeFood(distanceTo(it.post)) }
@@ -1999,7 +1999,7 @@ private fun HomeScreen(
                                         PickedForYouSection(
                                             learned = learned,
                                             preferencesActive = discoveryPreferences.isActive,
-                                            foods = if (learned) recommendedFoods else preferredFoods.take(2),
+                                            foods = if (learned) recommendedFoods else preferredFoods.take(TOP_ROW_CARDS),
                                             reasonFor = { food ->
                                                 recommendations.firstOrNull { it.post.id == food.id }
                                                     ?.let { recommendationLabel(it.reason) }
@@ -2611,6 +2611,9 @@ private fun FeedSearchAndFilters(
         }
     }
 }
+
+/** How many cards the row at the top of Home shows at most (it scrolls sideways). */
+private const val TOP_ROW_CARDS = 4
 
 /**
  * "Recommended for you" when the on-device model ([ListingRecommender]) has

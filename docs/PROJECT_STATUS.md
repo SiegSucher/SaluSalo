@@ -2877,7 +2877,7 @@ The developer ran steps 1–10 on one phone, switching between A (PASTOR) and B,
 
 ### 31.1 What the user sees
 
-- The row at the top of Home (shown, as before, only with no chip and no search) becomes **"Recommended for you"**, "Learned from what you reserve and save", when the model has picks: up to 2 listings, each with a line saying why ("Like the cooked meals you reserved", "From a donor you reserved from", "Similar to food you saved", "Free food, like what you reserved").
+- The row at the top of Home (shown, as before, only with no chip and no search) becomes **"Recommended for you"**, "Learned from what you reserve and save", when the model has picks: up to 4 listings (2 before the PR #29 follow-up; the row scrolls sideways), each with a line saying why ("Like the cooked meals you reserved", "From a donor you reserved from", "Similar to food you saved", "Free food, like what you reserved").
 - Otherwise the row is exactly as before: "Picked for you" with saved Food preferences or a pickup area, else "Just posted".
 - Saved Food preferences and the pickup area still apply: the model picks only among the listings that match them.
 - It never shows the account's own listings or listings it already reserved (in any state) or saved.
@@ -2931,11 +2931,16 @@ Changed from the draft written in the session: its offline step was dropped, bec
 
 Left out: a quiet start-up load that fails (hard to cause on purpose), a history longer than the caps (50 choices), and timing on a slow phone.
 
+**Follow-up for PR #29 (2026-10-04, at the developer's request):** the row shows up to **4** cards instead of 2, both "Recommended for you" and the fallback "Picked for you" / "Just posted" (one constant, `TOP_ROW_CARDS`). Short check:
+
+11. [New] C (with its saves or reservations from above, and at least 5 other listings in the feed): Home's top row shows up to 4 cards and swipes sideways; none is C's own, reserved or saved.
+12. [Regression] A new account or one with no history: "Just posted" shows up to 4 of the newest listings.
+
 ### 31.6 Known limits
 
 - It learns only from this account's own reservations and saves, as loaded on this phone: not from what other people choose (no collaborative filtering), not from views or ratings.
 - Listings not chosen so far count as negatives, including ones the user never saw; a cancelled or expired reservation still counts as a choice, and its listing is never recommended again.
-- The row shows at most 2 recommendations; "Browse all" opens the normal list sorted by Newest (the model doesn't sort it).
+- The row shows at most 4 recommendations (`TOP_ROW_CARDS` in `MainActivity.kt`, also the fallback rows' size), fewer when fewer listings share something with the account's choices; "Browse all" opens the normal list sorted by Newest (the model doesn't sort it).
 - Words are matched as written: "pandesal" and "pan de sal" differ, and plural folding is simple and English-only.
 - Only the newest 50 chosen listings count, by the listing's posting time.
 - The account's reservation lists now also load when Home starts: one more set of requests per session (its reservations, those on its listings and its reviews), as when Activity is opened. The row can switch from "Just posted" or "Picked for you" to "Recommended for you" a moment after Home appears, when those loads finish.
