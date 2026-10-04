@@ -265,7 +265,7 @@ Run `migrations/20260930_phase3_demo_fixes.sql` by hand in the SQL Editor after 
 - **`reservations.cancel_reason`** (new, nullable): `LISTING_REMOVED` when the reservation was cancelled because its donor removed the listing; NULL otherwise. Allowed only on `CANCELLED` rows.
 - **No direct DELETE.** The policy "Users may delete their own food posts" is dropped and DELETE on `food_posts` is revoked from `authenticated`. **Do not run `20260923_phase2_food_posts.sql` again after this file**: it would restore the delete policy (and the update policy).
 - **`remove_my_food_post(p_food_post_id)`** (SECURITY DEFINER) is the only way to delete a listing, and only the caller's own:
-  - never reserved: the row is deleted, with its saved rows, chats and alerts; the app then deletes its photos (best effort). Returns `('DELETED', 0)`;
+  - never reserved: the row is deleted, with its saved rows, chats and alerts; the app then deletes its photos (best effort). Returns `('DELETED', 0)`. **Since `20261015` only when it was also never reported and nobody started a chat about it; otherwise it is kept as below;**
   - reserved at least once: the status becomes `REMOVED` and the quantity stays as it was. Open reservations are cancelled with `cancel_reason = 'LISTING_REMOVED'`, each of their recipients gets one `RESERVATION_REMOVED` alert (it follows the "Reservation updates" switch; the donor gets none), and saved rows are deleted. Past reservations, photos and chats are kept. Returns `('REMOVED', n)`, n = open reservations cancelled;
   - already removed: returns `('REMOVED', 0)` and changes nothing.
   It locks the listing's open reservations first and then the listing, the same order as `cancel_reservation` and `claim_reservation`, so running at the same time as either waits instead of deadlocking.
@@ -444,3 +444,13 @@ It adds the `ANNOUNCEMENT` alert type, the `announcements` table (no client priv
 
 1. **Apply:** run this file alone ("Success. No rows returned").
 2. **Safety check:** run `tests/admin_announcements_live_safety_check.sql` alone, before anyone sends a real announcement. It ends with "SAFETY CHECK FINISHED: 14 passed, 0 failed, 0 skipped." on purpose and undoes everything (test announcements, their alerts, audit rows and the roles it sets); no phone gets them.
+
+### 20261015_bugfix_keep_reported_listings.sql (bug fix pass, round 4, PROJECT_STATUS.md §30)
+
+Run after `20261014_admin_announcements.sql`. It can run before or after installing any build and is safe to run again; it changes only `remove_my_food_post`.
+
+- **Why (audit #36).** A donor's Delete removed every listing nobody had reserved, even one that was reported or that someone had asked about in a chat. The admin then saw only "Deleted listing" (no photos or details), and the other person's chat and its messages were deleted with it, without telling them.
+- **What:** a listing is deleted only when nobody reserved it, reported it or started a chat about it. Otherwise it is kept as `REMOVED`, like a reserved one: hidden from Home and the donor's listings, with its photos, chats and reports kept. The name, argument, result and texts are unchanged; every build already shows such a listing as "Listing removed".
+
+1. **Apply:** run this file alone ("Success. No rows returned").
+2. **Safety check:** run `tests/bugfix_keep_reported_listings_live_safety_check.sql` alone. It ends with "SAFETY CHECK FINISHED: 9 passed, 0 failed, 0 skipped." on purpose and undoes everything (four test listings, a report, a chat message and a reservation; no alert is kept). It fails if the recipient it picks already sent 10 reports today or 10 reservations in the last 10 minutes.

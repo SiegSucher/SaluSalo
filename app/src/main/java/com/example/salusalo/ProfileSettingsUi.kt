@@ -203,7 +203,8 @@ internal fun ProfileEditor(profile: UserProfile?, onUpdated: (UserProfile) -> Un
 internal fun FoodPreferenceSettings(profileId: String?) {
     val context = LocalContext.current
     val stored = rememberDiscoveryPreferences(profileId ?: "signed-out")
-    var selected by remember { mutableStateOf(stored.categories) }
+    // A list, so ticks not saved yet survive rotation like the type below.
+    var selected by rememberSaveable { mutableStateOf(stored.categories.toList()) }
     var type by rememberSaveable { mutableStateOf(stored.listingType) }
     var feedback by rememberSaveable { mutableStateOf("") }
     SettingsCaption("Choose food for the ‘For your preferences’ row on Home.")
@@ -257,7 +258,7 @@ internal fun FoodPreferenceSettings(profileId: String?) {
     }
     SettingsCaption("Saved for your account on this phone. The full Home feed still shows all available food.")
     SettingsSaveButton("Save preferences", profileId != null) {
-        profileId?.let { saveFoodPreferences(context, it, selected, type); feedback = "Preferences saved. Check Home for matching listings." }
+        profileId?.let { saveFoodPreferences(context, it, selected.toSet(), type); feedback = "Preferences saved. Check Home for matching listings." }
     }
     if (feedback.isNotBlank()) InlineNotice(text = feedback, icon = Icons.Outlined.CheckCircle, tone = NoticeTone.Success)
 }

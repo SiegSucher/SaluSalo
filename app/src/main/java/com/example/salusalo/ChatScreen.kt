@@ -138,11 +138,7 @@ fun ChatScreen(
     val messages by messageViewModel.messages.collectAsStateWithLifecycle()
     val opening by messageViewModel.opening.collectAsStateWithLifecycle()
     val sending by messageViewModel.sending.collectAsStateWithLifecycle()
-    val initialDraft by messageViewModel.draft.collectAsStateWithLifecycle()
-    var draft by rememberSaveable(conversation?.id) { mutableStateOf("") }
-    LaunchedEffect(conversation?.id, initialDraft) {
-        if (conversation != null && draft.isEmpty() && initialDraft.isNotEmpty()) draft = initialDraft
-    }
+    val draft = messageViewModel.draft
     // Reporting the other person in this chat (for example a recipient who didn't show up).
     var reporting by rememberSaveable(conversation?.id) { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -308,7 +304,7 @@ fun ChatScreen(
                             ) {
                                 OutlinedTextField(
                                     value = draft,
-                                    onValueChange = { if (it.length <= 2000) draft = it },
+                                    onValueChange = { if (it.length <= 2000) messageViewModel.updateDraft(it) },
                                     modifier = Modifier.weight(1f),
                                     placeholder = { Text("Type a message…", style = SaluText.Body) },
                                     textStyle = SaluText.Body.copy(fontSize = 15.sp),
@@ -317,7 +313,7 @@ fun ChatScreen(
                                     colors = saluFieldColors(container = SaluColors.Cream)
                                 )
                                 FilledIconButton(
-                                    onClick = { messageViewModel.send(draft) { draft = "" } },
+                                    onClick = { messageViewModel.send(draft) },
                                     enabled = draft.isNotBlank() && !sending,
                                     modifier = Modifier
                                         .padding(bottom = 4.dp)

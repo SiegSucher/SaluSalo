@@ -44,8 +44,10 @@ import com.example.salusalo.model.MyReview
 import com.example.salusalo.model.PIN_MAP_ZOOM
 import com.example.salusalo.model.ReservationDisplay
 import com.example.salusalo.model.ReservationStatus
+import com.example.salusalo.model.canBeReserved
 import com.example.salusalo.model.formatPeso
 import com.example.salusalo.model.hasPhoto
+import com.example.salusalo.model.isActiveListing
 import com.example.salusalo.model.isExpired
 import com.example.salusalo.model.parseTimestamp
 import com.example.salusalo.model.pickupPin
@@ -241,10 +243,11 @@ fun ActivityScreen(
     // the server marks a listing EXPIRED; it is worked out from expiration_date.
     // Until the reservations have loaded, a fully reserved listing counts as
     // active: it may still have food to hand over.
-    fun isActive(post: FoodPost): Boolean =
-        onListing[post.id].orEmpty().any { it.status == ReservationStatus.RESERVED } ||
-            (!reservationsLoaded && post.status == FoodPostStatus.RESERVED) ||
-            (post.status == FoodPostStatus.AVAILABLE && !post.isExpired(now))
+    fun isActive(post: FoodPost): Boolean = post.isActiveListing(
+        hasOpenReservations = onListing[post.id].orEmpty().any { it.status == ReservationStatus.RESERVED },
+        reservationsKnown = reservationsLoaded,
+        now = now
+    )
 
     // Removed listings are left out by the repository.
     val listings = myPosts.sortedByDescending { parseTimestamp(it.createdAt) ?: Instant.EPOCH }
@@ -1041,6 +1044,17 @@ private fun listingStock(post: FoodPost): String =
 private fun listingStatus(post: FoodPost, now: Instant): SaluStatus? =
     listingStatus(post, post.isExpired(now)).takeIf { it != SaluStatus.Available }
 
+/** The listing's badge. One whose pickup has ended says so: Home no longer lists it. */
+@Composable
+private fun ListingStatusBadge(post: FoodPost, now: Instant, showAvailable: Boolean) {
+    val status = listingStatus(post, now)
+    when {
+        status != null -> StatusBadge(status)
+        !post.canBeReserved(now) -> StatusBadge(SaluStatus.Expired, label = "Pickup ended")
+        showAvailable -> StatusBadge(SaluStatus.Available)
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ActivityListingCard(
@@ -1086,7 +1100,7 @@ private fun ActivityListingCard(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             if (reservationsKnown) ReservationCountChip(open = open, any = reservations.isNotEmpty())
-                            listingStatus(post, now)?.let { StatusBadge(it) }
+                            ListingStatusBadge(post, now, showAvailable = false)
                         }
                     }
                 }
@@ -1606,7 +1620,7 @@ private fun ManageReservationsPage(
                 "Cancelled" -> EmptyState(
                     icon = Icons.Outlined.EventBusy,
                     title = "No cancellations",
-                    message = "Reservations the recipient cancelled appear here."
+                    message = "Reservations that were cancelled, released or not picked up in time appear here."
                 )
                 else -> EmptyState(
                     icon = Icons.Outlined.People,
@@ -1980,7 +1994,7 @@ private fun ListingDetailsPage(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    StatusBadge(listingStatus(post, now) ?: SaluStatus.Available)
+                    ListingStatusBadge(post, now, showAvailable = true)
                     if (reservationsKnown) ReservationCountChip(open = open.size, any = reservations.isNotEmpty())
                 }
             }
@@ -2057,8 +2071,9 @@ private fun ListingDetailsPage(
     }
 }
 
+// It never says "reported": the reported person is not told (reports are anonymous).
 const val DELETE_LISTING_TEXT =
-    "If nobody has ever reserved this listing, it is deleted with its photos. If it has reservations, it is removed from Home and your listings instead: open reservations are cancelled and their recipients are told, and past reservations, photos and chats are kept."
+    "A listing nobody reserved or messaged you about is deleted with its photos. Otherwise, or when Salu-Salo needs to keep it, it is removed from Home and your listings instead: open reservations are cancelled and their recipients are told, and past reservations, photos and chats are kept."
 
 /** Shows the result of Delete listing, then clears it. */
 @Composable

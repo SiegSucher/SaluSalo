@@ -45,9 +45,9 @@ sealed interface EditResult {
 
 /** The outcome of Delete, for the "Delete listing" result dialog. */
 sealed interface DeleteResult {
-    /** Never reserved: the listing and its photos are gone. */
+    /** Never reserved, reported or messaged about: the listing and its photos are gone. */
     data object Deleted : DeleteResult
-    /** Reserved at least once: hidden, with [cancelledReservations] open reservations cancelled. */
+    /** Reserved, reported or messaged about: hidden, with [cancelledReservations] open reservations cancelled. */
     data class Removed(val cancelledReservations: Int) : DeleteResult
     data class Failed(val message: String) : DeleteResult
 }

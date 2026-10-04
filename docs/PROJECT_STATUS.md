@@ -1,6 +1,6 @@
 # Salu-Salo — Project Status
 
-_Last updated: 2026-10-04. Phases 1–4 are complete and both parts of Phase 5 passed on two phones; all of them are merged into `master`, together with the demo fixes (§9–§13), the Profile redesign (§16), the clean-ups after the second audit (§17), the automatic Supabase role (§18, PR #13), the UI/UX refresh (§19, PRs #14 and #15) and a web admin dashboard with sample data (§20, PR #15). The bug fix pass after the full audit of 2026-09-29 (§21) passed a one-phone test and was merged into `master` through PR #17 on 2026-09-30 (`8ed8eef`); its three migrations are applied to the live project. A second round (§22: the rest of the 34 findings) passed a one-phone test and was merged into `master` through PR #18 on 2026-09-30 (`65d5f6a`); its three migrations are applied too (live checks 5/5, 5/5, 3/3). A third round (§23: what the verification audit of 2026-09-30 found still open; no SQL) passed a one-phone test and two-phone checks and was merged through PR #19 on 2026-10-03 (`10270e7`). Reservation limits and pickup deadlines (§24, Mika's idea from PR #16, rebuilt) passed a two-phone test and were merged through PR #20 on 2026-10-03 (`a3dcd98`); its migration is applied and its Cron job runs. Phase 6 has started: its first slice, the admin dashboard on real data (§25), was built on branch `claude/admin-real`, its migration applied to the live project (safety check 20/20), deployed to https://salusalo.web.app and tested on the PC and the phone on 2026-10-03, and merged into `master` through PR #23 (merge commit `a60b315`). Analytics (§26) applied, deployed, tested on the phone and merged through PR #24 (`c240f48`, 2026-10-03). Announcements (§27) on branch `claude/admin-announcements`: migration applied (live safety check 14/14), deployed, and the one-phone test passed (2026-10-04); merged into `master` through PR #25 (`f959f0e`). Mika's chat wallpaper (§28, PR #22) was merged on 2026-10-04 (`6f1223c`). The new logo and the loading screen on every app open (§29) are on branch `claude/new-logo-startup`: built, the dashboard logo deployed, and the one-phone test passed (2026-10-04); not yet committed. [Current state](#current-state-2026-09-30) summarizes the architecture and [Current known issues](#current-known-issues) what is still open; the numbered sections are the history of each phase, with later changes marked. Manual test results are in the [results log](#results-log)._
+_Last updated: 2026-10-04. Phases 1–4 are complete and both parts of Phase 5 passed on two phones; all of them are merged into `master`, together with the demo fixes (§9–§13), the Profile redesign (§16), the clean-ups after the second audit (§17), the automatic Supabase role (§18, PR #13), the UI/UX refresh (§19, PRs #14 and #15) and a web admin dashboard with sample data (§20, PR #15). The bug fix pass after the full audit of 2026-09-29 (§21) passed a one-phone test and was merged into `master` through PR #17 on 2026-09-30 (`8ed8eef`); its three migrations are applied to the live project. A second round (§22: the rest of the 34 findings) passed a one-phone test and was merged into `master` through PR #18 on 2026-09-30 (`65d5f6a`); its three migrations are applied too (live checks 5/5, 5/5, 3/3). A third round (§23: what the verification audit of 2026-09-30 found still open; no SQL) passed a one-phone test and two-phone checks and was merged through PR #19 on 2026-10-03 (`10270e7`). Reservation limits and pickup deadlines (§24, Mika's idea from PR #16, rebuilt) passed a two-phone test and were merged through PR #20 on 2026-10-03 (`a3dcd98`); its migration is applied and its Cron job runs. Phase 6 has started: its first slice, the admin dashboard on real data (§25), was built on branch `claude/admin-real`, its migration applied to the live project (safety check 20/20), deployed to https://salusalo.web.app and tested on the PC and the phone on 2026-10-03, and merged into `master` through PR #23 (merge commit `a60b315`). Analytics (§26) applied, deployed, tested on the phone and merged through PR #24 (`c240f48`, 2026-10-03). Announcements (§27) on branch `claude/admin-announcements`: migration applied (live safety check 14/14), deployed, and the one-phone test passed (2026-10-04); merged into `master` through PR #25 (`f959f0e`). Mika's chat wallpaper (§28, PR #22) was merged on 2026-10-04 (`6f1223c`). The new logo and the loading screen on every app open (§29) passed a one-phone test and were merged through PR #26 on 2026-10-04 (`7369654`). A second full bug audit on 2026-10-04 found nothing critical or high; a fourth bug fix round (§30, #36–#42) is on branch `claude/bugfix-pass-4`: built and checked locally, its migration applied to the live project, and its one-phone test passed (2026-10-04); not committed yet. [Current state](#current-state-2026-10-04) summarizes the architecture and [Current known issues](#current-known-issues) what is still open; the numbered sections are the history of each phase, with later changes marked. Manual test results are in the [results log](#results-log)._
 
 This is the handoff status document. It was first written from static inspection of the Kotlin code and the Supabase SQL at `d4f65fe`, plus build checks (see [Build verification](#build-verification)). Manual results are recorded only as reported by the tester. Keep it up to date, and never mark an item fixed or tested unless it actually was.
 
@@ -35,16 +35,19 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Bug fix pass, round 2 (not part of the six phases) | The rest of the 34 findings: #12 one rating per reviewer, #13 friendly errors, #16 photo cache keys, #24 bucket limits and an orphan list, #25 rate limits, #26 bookmark race, #27 photo sampling, #29 fewer requests, #30 backup rules, #31 release config, #32 `anon` grants, #34 clean-ups; #28 deferred (§22) | **Passed on one phone (2026-09-30); committed as `a2412eb` (docs `2562de6`), merged into `master` through PR #18 on 2026-09-30 (`65d5f6a`).** Built and unit-tested (54 of 54), migrations applied. Branch `claude/bugfix-pass-2` (from `claude/bugfix-pass-1` at `5429e6e`), 2026-09-30. Three new migrations (`20261008`–`20261010`), dry-run on a local PostgreSQL 16 (§22.4) and applied to the live project on 2026-09-30; live checks 5 of 5, 5 of 5, 3 of 3. |
 | Bug fix pass, round 3 (not part of the six phases) | What the verification audit of 2026-09-30 found still open: #35 sign-in lost to a rotation, #17 listing pages when reservations fail, #22 details after a listing leaves the feed, #7 pages closed by rotation, #4 Post's My posts, #18 feed reload after cancel, #14 Realtime reconnects, #2 feed every minute, R1 alert-settings errors, #29 and #34 leftovers, #33 docs (§23) | **Passed on one phone and two-phone checks (2026-10-03); merged into `master` through PR #19 (`10270e7`).** Built and unit-tested (57 of 57). Branch `claude/bugfix-pass-3` (from `master` at `65d5f6a`). No SQL. |
 | Reservation limits and pickup deadlines (Mika's idea from PR #16, rebuilt; not part of the six phases) | A per-person limit set on Post; a pickup time chosen when reserving (15 min to 2 h); reservations not picked up in time expire by themselves through a Supabase Cron job, with alerts; countdowns and "Expired" in Activity (§24) | **Built and unit-tested (68 of 68), lint 0 errors, on branch `claude/reservation-limits` (from `master` at `10270e7`). Migration `20261011_reservation_limits_and_expiry.sql` applied on 2026-10-03 (check 9/9, live safety check 20/20, Cron job running); the two-phone test passed on 2026-10-03; committed as `cc235a1`, merged into `master` through PR #20 on 2026-10-03 (`a3dcd98`).** |
+| Bug fix pass, round 4 (not part of the six phases) | The second full audit of 2026-10-04: #36 a reported or chatted-about listing kept as `REMOVED` instead of deleted, #37 Log out no longer redraws Home without an account, #38 the Review reservation page keeps its price and amount, #39 a chat loads its newest messages, #40 one error when closing a chat offline, #41 listings whose pickup ended are Closed, #42 these docs, and four small ones (§30) | **Built and checked locally on branch `claude/bugfix-pass-4` (from `master` at `7369654`): unit tests 73/73, lint 0 errors, SQL dry run 9/9. Migration `20261015` applied (live safety check 9/9) to the live project and the one-phone test (§30.4) passed on 2026-10-04; not committed yet.** |
 | Phase 6: Admin and Final Release | ID verification and the admin screen (the Email verified badge moved to Phase 5 part 1) | **Started: first slice (§25), the web admin dashboard on real data, on branch `claude/admin-real`: migration applied (live safety check 20/20), deployed to https://salusalo.web.app, and the manual test passed on the PC and the phone (2026-10-03); merged into `master` through PR #23 (`a60b315`).** Analytics (§26) applied, deployed, tested on the phone and merged through PR #24 (`c240f48`, 2026-10-03). Announcements (§27) on branch `claude/admin-announcements`: migration applied (live safety check 14/14), deployed, and the one-phone test passed (2026-10-04); merged into `master` through PR #25 (`f959f0e`). ID verification and suspending accounts are later slices. |
 
 - The roadmap has six phases (confirmed by the developer on 2026-09-25); earlier versions of this document went only up to Phase 4. Phases 1–3 are described in §1–§3 and Phase 4 in §8.
 
-### Current state (2026-09-30)
+### Current state (2026-10-04)
 
-This summarizes the app as it is on `master` at `a3dcd98` (2026-10-03): the §21 and §22 bug fix passes (PRs #17 and #18), round 3 (§23, PR #19) and reservation limits and pickup deadlines (§24, PR #20; the reservation rules below predate §24, which adds the per-person limit, the pickup deadline and automatic expiry). The numbered sections below are the history of each phase; where a later change replaced something, it is marked there.
+This summarizes the app as it is on `master` at `7369654` (2026-10-04), plus round 4 (§30) on branch `claude/bugfix-pass-4`: the §21 and §22 bug fix passes (PRs #17 and #18), round 3 (§23, PR #19), reservation limits and pickup deadlines (§24, PR #20), the admin dashboard (§25–§27, PRs #23–#25), the chat wallpaper (§28, PR #22) and the new logo and loading screen (§29, PR #26). The numbered sections below are the history of each phase; where a later change replaced something, it is marked there.
 
-- **Bugs fixed:** the full bug audit of 2026-09-29 had 34 findings. §21 fixed #1–#11, #14, #15 and #17–#23; round 2 (§22) fixed #12, #13, #25, #26, #27, #30, #32 and #33, and partly #16, #24, #29, #31 and #34; #28 is deferred. The per-finding table is §22.1. A verification audit on 2026-09-30 found 17 of them only partly fixed, one regression (R1) and one new bug (#35); round 3 (§23) fixes what can be fixed in the app, and §23.1 lists every finding's state after it.
-- **Database migrations:** 19 files in `supabase/migrations/`, applied by hand in filename order (`supabase/README.md`).
+- **Bugs fixed:** the full bug audit of 2026-09-29 had 34 findings. §21 fixed #1–#11, #14, #15 and #17–#23; round 2 (§22) fixed #12, #13, #25, #26, #27, #30, #32 and #33, and partly #16, #24, #29, #31 and #34; #28 is deferred. The per-finding table is §22.1. A verification audit on 2026-09-30 found 17 of them only partly fixed, one regression (R1) and one new bug (#35); round 3 (§23) fixes what can be fixed in the app, and §23.1 lists every finding's state after it. A second full audit on 2026-10-04 found nothing critical or high and seven new findings (#36–#42) plus four small ones; round 4 (§30) fixes all of them (§30.1).
+- **Database migrations:** 24 files in `supabase/migrations/`, applied by hand in filename order (`supabase/README.md`).
+  - Applied to the live project on 2026-10-03 and 2026-10-04: `20261011_reservation_limits_and_expiry.sql` (§24), `20261012_admin_dashboard.sql` (§25), `20261013_admin_analytics.sql` (§26) and `20261014_admin_announcements.sql` (§27).
+  - Applied to the live project on 2026-10-04 (round 4, §30): `20261015_bugfix_keep_reported_listings.sql` (a reported or chatted-about listing is kept as `REMOVED` instead of deleted).
   - Applied to the live project on 2026-09-30: `20261005_bugfix_security_integrity.sql` (the profile check in cancel and claim, the listing photo read rule, the listing checks trigger), `20261006_bugfix_reservations.sql` (`create_reservation_at_price`, `release_reservation`, the pickup-end check) and `20261007_bugfix_profile_relink.sql` (`relink_my_profile`).
   - Applied to the live project on 2026-09-30 (round 2): `20261008_bugfix_one_rating_per_reviewer.sql` (ratings count each reviewer's latest review), `20261009_bugfix_storage_and_rate_limits.sql` (bucket limits, message and reservation rate limits) and `20261010_bugfix_revoke_anon_execute.sql` (no function executable without a login).
 - **Authentication:**
@@ -58,13 +61,13 @@ This summarizes the app as it is on `master` at `a3dcd98` (2026-10-03): the §21
   - Round 3: a sign-in or sign-up that finishes after a rotation (or a dark-mode or font change) still opens Home: the app follows Firebase's user as Compose state, and runs one account setup at a time.
 - **Reservations:**
   - Every change goes through SECURITY DEFINER RPCs that take the caller from the token and refuse a token without a profile. Clients have SELECT only on `reservations`.
-  - The current app reserves through `create_reservation_at_price` (refused when the price changed since the user saw it), which calls `create_reservation`. That function locks the listing, refuses your own, removed, expired and pickup-ended listings and asks for more than is left, and changes quantity and status in the same transaction. Older builds call `create_reservation` directly.
+  - The current app reserves through `create_reservation_with_hold` (§24), which calls `create_reservation_at_price` (refused when the price changed since the user saw it), which calls `create_reservation`. That function locks the listing, refuses your own, removed, expired and pickup-ended listings and asks for more than is left, and changes quantity and status in the same transaction. Older builds call `create_reservation` directly.
   - The recorded `unit_price` always comes from the listing, through a trigger.
   - `cancel_reservation` is for the recipient, and `claim_reservation` and `release_reservation` for the listing's donor, all only while `RESERVED`. Cancel and release give the quantity back.
-  - `remove_my_food_post` cancels the open reservations of a removed listing.
+  - `remove_my_food_post` cancels the open reservations of a removed listing. Since round 4 (§30) it deletes a listing only when nobody reserved it, reported it or started a chat about it; otherwise it keeps it as `REMOVED`.
   - The `reservations_notify` trigger sends the alerts: a release alerts the recipient.
   - Donors see recipient names only, through `get_donor_reservations()`, which also returns `cancel_reason`.
-  - Nothing expires reservations automatically; the donor releases a no-show.
+  - Since §24 a listing may limit how much one person reserves, the app reserves with a pickup time (15 min to 2 h), and the Cron job `salusalo-expire-reservations` cancels a reservation not marked as picked up by its deadline (`PICKUP_EXPIRED`), giving the quantity back. The donor can still release a no-show earlier.
   - Round 2 (`20261009`): at most 10 reservations per person per 10 minutes and 20 chat messages per person per minute, enforced in `create_reservation` and `send_message`.
   - Round 2 (`20261008`): a donor's rating counts each reviewer's latest review only.
 - **Home feed refresh:**
@@ -87,21 +90,23 @@ This summarizes the app as it is on `master` at `a3dcd98` (2026-10-03): the §21
   - Results of cancel, claim and release show in a dialog. Reservation lists reload when Activity opens and when a tab is tapped (tab taps at most every 10 seconds since round 2).
   - A failed first load shows "Could not load your listings" or "Could not load your reservations" with Try again, never an empty state. A failed reload keeps the lists with a note. Totals and reservation counts show only after the reservations have loaded; since round 3 that includes the "Your listing" and Manage reservations pages, which show the load error with Try again instead of "No reservations yet" or "No active reservations".
   - Round 3: the Edit Listing and Rate pages stay open through rotation (Activity and Post). Post's "My posts" shows its loading and failure states instead of "(0)" and "You have no food posts yet.".
-- **Automated tests (2026-09-30):**
-  - `testDebugUnitTest` 57 of 57 (round 3): `ExampleUnitTest` 1, `GeoTest` 11, `PhotoSigningTest` 8, `PickupStartTest` 6, `SupabaseRoleTest` 8, `UiTextTest` 9, `PublishOnceTest` 6, `ReserveBlockerTest` 3, `PhotoSampleTest` 3, `RealtimeRejoinTest` 2.
-  - `assembleDebug` passed and `lintDebug` found 0 errors on 2026-09-30 (round 3); `assembleRelease` (unsigned) passed in round 2.
+- **Automated tests (2026-10-04):**
+  - `testDebugUnitTest` 73 of 73 (round 4): `ExampleUnitTest` 1, `GeoTest` 11, `PhotoSigningTest` 8, `PickupStartTest` 6, `SupabaseRoleTest` 8, `UiTextTest` 9, `PublishOnceTest` 6, `ReserveBlockerTest` 5, `PhotoSampleTest` 3, `RealtimeRejoinTest` 2, `ReservationLimitsTest` 11, `NotificationTypeTest` 3.
+  - `assembleDebug` passed and `lintDebug` found 0 errors on 2026-10-04 (round 4); `assembleRelease` (unsigned) passed in round 2.
+  - The admin dashboard's Node checks (`admin/tests/`, 3) pass (2026-10-04).
   - The Edge Function's Deno tests (21) last ran in §18.
-  - SQL live safety checks after the §21 migrations (2026-09-30): 22 of 23 (the one failure was the check itself, corrected), 15 of 15, 9 of 9. After the round 2 migrations (2026-09-30): 5 of 5, 5 of 5, 3 of 3 (§22.4). Round 3 has no SQL.
-- **Manual testing completed:** every phase and fix set up to §18 passed on two phones (results log). §21 passed a test on one phone, switching accounts, on 2026-09-30 (§21.4). It covered posting, filters after posting, reserving through the price-checked function, cancel, release and its alert, mark as picked up, offline refresh and Activity notes, rotation and dark mode offline, posting offline and retrying, the Home dialog after leaving Post, the pickup-end note and feed, and delete. §22 passed its one-phone test on 2026-09-30 (§22.5). Round 3 (§23) passed its one-phone test (§23.4, with regression steps 15–19) on 2026-10-03.
+  - SQL live safety checks after the §21 migrations (2026-09-30): 22 of 23 (the one failure was the check itself, corrected), 15 of 15, 9 of 9. After the round 2 migrations (2026-09-30): 5 of 5, 5 of 5, 3 of 3 (§22.4). Round 3 has no SQL. Round 4's check (`bugfix_keep_reported_listings_live_safety_check.sql`) passed 9 of 9 on a local PostgreSQL 16 (§30.3) and 9 of 9 on the live project (2026-10-04, §30.4a).
+- **Manual testing completed:** every phase and fix set up to §18 passed on two phones (results log). §21 passed a test on one phone, switching accounts, on 2026-09-30 (§21.4). It covered posting, filters after posting, reserving through the price-checked function, cancel, release and its alert, mark as picked up, offline refresh and Activity notes, rotation and dark mode offline, posting offline and retrying, the Home dialog after leaving Post, the pickup-end note and feed, and delete. §22 passed its one-phone test on 2026-09-30 (§22.5). Round 3 (§23) passed its one-phone test (§23.4, with regression steps 15–19) on 2026-10-03. §24 passed its two-phone test on 2026-10-03, and §25–§27 and §29 their tests (§25.4, §26.4, §27.4, §29.2). Round 4 (§30) passed its one-phone test on 2026-10-04 (§30.4a).
 
 ### Current known issues
 
-Still unresolved on 2026-09-30:
+Still unresolved on 2026-10-04:
 
 - **Not tested on a phone:**
   - The optional checks for #5 (photo links older than an hour), #21 (a disabled or deleted account) and #15 (restoring a re-created account's profile).
   - The password-reset email (no test record).
 - **Round 3 (§23)** passed on one phone and its two-phone checks (#2, #8, #14) on 2026-10-03; merged through PR #19.
+- **Round 4 (§30)** on branch `claude/bugfix-pass-4`: built and checked locally; migration `20261015` applied to the live project and the one-phone test (§30.4) passed on 2026-10-04; not committed yet.
 - **Audit findings still open after round 3** (details in §23.1; each needs a decision or work outside the app code):
   - #9: reservations never expire by themselves, and one person can reserve a listing's whole quantity (the app's design says "part or all"). **Addressed in §24** (per-person limit, pickup deadlines, automatic expiry): applied and passed its two-phone test on 2026-10-03.
   - #10: donors' Firebase UIDs are the first folder of listing photo paths, so anyone who may see a listing can read its donor's UID.
@@ -109,14 +114,15 @@ Still unresolved on 2026-09-30:
   - #12: a friendly second account still adds one rating (each reviewer now counts once).
   - #16: cards download the stored 1600 px photo once per phone (no thumbnails; Supabase image transformations need a paid plan).
   - #24: orphaned Storage files are only listed (`storage_orphans_query.sql`), never deleted automatically.
-  - #28: no feed pagination (PostgREST would cap the feed at 1000 rows); the chat Realtime channel is unfiltered and checked by RLS per row.
+  - #28: no feed pagination (PostgREST would cap the feed at 1000 rows); the chat Realtime channel is unfiltered and checked by RLS per row. Since round 4 a chat loads its newest 1000 messages (#39), so a longer chat leaves out its oldest.
   - #29: every Activity open still reloads its lists (kept on purpose: an alert opening Activity needs fresh lists).
   - #31: not ready for Play: R8 off, no real keystore, `applicationId` `com.example.salusalo` (Play refuses `com.example.*`), no in-app account deletion or web deletion link, Play Console forms not done; Google sign-in works only with registered SHA-1s; `googleid` pinned to 1.2.0.
   - #34: `users.role` always `RECIPIENT` (kept for Phase 6); an unknown server enum value breaks a whole list (alert types only: fixed by the §27 build, which skips unknown types); a discarded draft's photo-picker grants are left to Android to prune; Post's "My posts" duplicates Activity.
 - **Design limits:**
   - Only chats and alerts are live; the feed reloads every minute while it is on screen (round 3).
   - A published listing photo is never replaced by the app, but the Storage policy lets a donor overwrite their own file through the API; other phones would keep showing their cached copy (§23.1, #16).
-  - No automatic reservation expiry (no scheduler; the donor releases).
+  - Reservations expire about a minute after their pickup deadline (§24.6); those made by builds older than §24 have no deadline and never expire.
+  - Since round 4 a listing someone reported or started a chat about can't be fully deleted by its donor; it is only removed (hidden), with its photos (§30.5).
   - Rate limits (round 2): a person reserving more than 10 times in 10 minutes, or sending more than 20 messages a minute, waits.
   - A recipient keeps read access to a listing after cancelling (`is_reservation_recipient` ignores status).
   - #21 is noticed at the next token refresh (up to an hour).
@@ -201,7 +207,7 @@ Code involved:
 - `viewmodel/ReservationViewModel.kt`
 - UI: `FoodDetailsScreen` in `MainActivity.kt`, and `ActivityScreen.kt`
 
-**Later changes.** This section describes Phase 3 as built on 2026-09-25. Since then: listings change only through RPCs (§11, §12); the Activity tabs were rebuilt (§19); cancel and claim refuse a caller without a profile, donors can release a reservation, reserving checks the price shown and the pickup end, and listing photos have a stricter read rule (§21). The markers below point to them; [Current state](#current-state-2026-09-30) has the summary.
+**Later changes.** This section describes Phase 3 as built on 2026-09-25. Since then: listings change only through RPCs (§11, §12); the Activity tabs were rebuilt (§19); cancel and claim refuse a caller without a profile, donors can release a reservation, reserving checks the price shown and the pickup end, and listing photos have a stricter read rule (§21). The markers below point to them; [Current state](#current-state-2026-10-04) has the summary.
 
 ### 2.1 Data model
 
@@ -2750,7 +2756,7 @@ Part 3, regression:
 
 ## 29. New logo and a loading screen when the app opens
 
-**Written on branch `claude/new-logo-startup` (from `master` at `6f1223c`) on 2026-10-04, at the developer's request. Built: `assembleDebug`, unit tests 71/71, `lintDebug` 0 errors (39 warnings, from 47; none new). The dashboard logo deployed on 2026-10-04, and the one-phone test (29.2) passed on 2026-10-04. Not yet committed.**
+**Written on branch `claude/new-logo-startup` (from `master` at `6f1223c`) on 2026-10-04, at the developer's request. Built: `assembleDebug`, unit tests 71/71, `lintDebug` 0 errors (39 warnings, from 47; none new). The dashboard logo deployed on 2026-10-04, and the one-phone test (29.2) passed on 2026-10-04. Committed as `399a6da` and merged into `master` through PR #26 on 2026-10-04 (merge commit `7369654`).**
 
 ### 29.1 What changed
 
@@ -2781,3 +2787,74 @@ Not tested: Android 7 (the legacy icon), themed icons (Android 13+), turning the
 
 - Opening the app now shows the loading screen for at least 1.2 s before Sign In or Home.
 - The themed (monochrome) icon is a silhouette made from the colours; its fine details (the bread's stripes) are approximate.
+
+## 30. Bug fix pass, round 4 (2026-10-04)
+
+### 30.0 Status
+
+**Written on branch `claude/bugfix-pass-4` (from `master` at `7369654`, the PR #26 merge) on 2026-10-04, after a second full, read-only audit the same day. Built: `assembleDebug` passed, `testDebugUnitTest` 73 of 73 (71 before, plus 2 in `ReserveBlockerTest`), `lintDebug` 0 errors. The migration passed a local PostgreSQL 16 dry run (§30.3) and was applied to the live project on 2026-10-04 ("Success. No rows returned"). Live safety check 9 of 9; the one-phone test (§30.4) passed on 2026-10-04. Not committed yet.**
+
+### 30.1 The audit (2026-10-04)
+
+A read-only audit of `master` at `7369654`: all 23 migrations as they now stand, the `set-firebase-role` Edge Function, all of the Kotlin app and the admin dashboard's JS, `firebase.json` and its Content-Security-Policy. It found nothing critical or high. The numbers follow the 2026-09-29 audit.
+
+| Bug | Severity | What was wrong | Status |
+|---|---|---|---|
+| #36 | Medium | `remove_my_food_post` deleted every listing nobody had reserved, also one that was reported or that someone had asked about in a chat. A reported donor could erase the evidence: the admin then saw only "Deleted listing" (no photos, details or chat), and the other person's chat and its messages were deleted with it, without telling them. | FIXED (migration `20261015`) |
+| #37 | Low | Log out (and a session that ended) redrew Home for a moment without an account: a second set of screens was made and the feed, response rate and ratings were requested without a login (all refused). | FIXED |
+| #38 | Low | The per-minute feed reload (round 3) changed the open Review reservation page to the listing's latest price and amount, and Confirm sent those, so the price check (#8) no longer guaranteed the price the user had read. | FIXED |
+| #39 | Low | A chat was read oldest first without a limit; Supabase answers at most 1000 rows, so a longer chat lost its newest messages. | FIXED |
+| #40 | Low | Closing a chat reloaded the inbox in a way that shows errors: offline, a chat that failed to open showed a second error on Back. | FIXED |
+| #41 | Low | Activity's Active filter, Saved Listings and the claim and donation records ignored the end of pickup: a listing nobody could reserve any more stayed "Active" (with no badge) until it expired. | FIXED |
+| #42 | Low | These docs said nothing expires reservations, 57 tests and 19 migrations, and §29 and `CLAUDE.md` said "not yet committed" after PR #26. | FIXED |
+| Small | Minor | A message sent while the phone was turned stayed in the box; turning the phone during the first 1.2 s restarted the loading screen; unsaved Food preferences ticks were lost on rotation; the empty Cancelled list in Manage reservations named only the recipient's cancellations. | FIXED |
+
+Still open from the first audit, unchanged: #10, #11, #12, #16, #24, #28, #31 and #34 in part ("Current known issues").
+
+### 30.2 What changed
+
+- **Database** (`20261015_bugfix_keep_reported_listings.sql`, #36): `remove_my_food_post` deletes a listing only when nobody reserved it, reported it or started a chat about it. Otherwise it is kept as `REMOVED`, like a reserved one: hidden from Home and from the donor's listings, its photos, chats and reports kept, saved rows removed. Everything else is the 20260930 function unchanged (the same locks, checks, texts and result), so any app build keeps working: such a listing comes back as `REMOVED`, which every build shows as "Listing removed". Checks: `supabase/tests/bugfix_keep_reported_listings_live_safety_check.sql` (9 checks, always rolls back).
+- `MainActivity.kt`: Home is drawn only with an account (#37); the Review reservation page keeps the price and amount it opened with, and Confirm sends those (#38); the loading screen counts its 1.2 s from when the app opened, so a rotation doesn't restart it.
+- `data/MessageRepository.kt` (#39): a chat loads its newest 1000 messages and shows them oldest first.
+- `viewmodel/MessageViewModel.kt` and `ChatScreen.kt`: closing a chat reloads the inbox quietly (#40); what is typed in a chat is held by the ViewModel, so a send that finishes after a rotation clears the box that is shown.
+- `model/FoodPost.kt` (#41): `canBeReserved()` and `isActiveListing()`; `ActivityScreen.kt` uses them for the Active and Closed filters and shows a "Pickup ended" badge; `ProfileSections.kt` uses `canBeReserved()` for Saved Listings and the records' "View listing". The empty Cancelled list in Manage reservations now names cancelled, released and expired reservations.
+- `ProfileSettingsUi.kt`: unsaved Food preferences ticks survive rotation.
+- The Delete listing dialog (`DELETE_LISTING_TEXT`) and the comments on `remove_my_food_post` in the app follow #36. The dialog never says "reported": the reported person is not told.
+- Tests: two in `ReserveBlockerTest` (`canBeReserved`, `isActiveListing`).
+- Docs: this section, "Current state", "Current known issues", §29's status, `CLAUDE.md` and `supabase/README.md` (#42).
+
+### 30.3 Checks run (local only, 2026-10-04)
+
+- Local PostgreSQL 16.4 with stand-ins for Supabase's roles, `auth.jwt()`, Storage and Cron: all 24 migrations from an empty database, the new one also run twice. The new check, written first, failed before the migration (5 passed, 4 failed: the reported and chatted-about listings were deleted, and the admin's report showed "Deleted listing") and passes **9 of 9** after it. Still passing: `phase3_live_safety_check` 14/14, `admin_dashboard_live_safety_check` 20/20, `bugfix_security_live_safety_check` 21 passed, 2 skipped (as before), `reservation_limits_live_safety_check` 20/20, `bugfix_anon_grants_check` 3/3, `phase3_demo_fixes_check` 13/13.
+- JVM: the two new tests failed to compile before the change (`canBeReserved` and `isActiveListing` didn't exist) and pass after it; `testDebugUnitTest` 73 of 73. `assembleDebug` passed; `lintDebug` 0 errors.
+- No automated test covers #37, #38, #39, #40 or the three rotation fixes (screens and network code); the phone test does, except #39, which would need a chat of more than 1000 messages.
+
+### 30.4 Phone test (one phone, switching accounts; A = donor, B = recipient)
+
+Before installing: in the SQL Editor run `supabase/migrations/20261015_bugfix_keep_reported_listings.sql` ("Success. No rows returned"), then `supabase/tests/bugfix_keep_reported_listings_live_safety_check.sql` ("SAFETY CHECK FINISHED: 9 passed, 0 failed, 0 skipped."). Then Run in Android Studio.
+
+1. [Setup] A: post three free listings, "Keep 1", "Keep 2" and "Delete me", and a fourth, "Ends soon", with the pickup end about 5 minutes from now (expiry later today).
+2. [New #36] B: open "Keep 1" → Report this listing → any reason → "Report sent…". Open "Keep 2" → Message → send "Test". Bookmark "Ends soon".
+3. [New #36] A: Activity → "Keep 1" → Delete listing: the dialog reads "A listing nobody reserved or messaged you about is deleted with its photos. Otherwise, or when Salu-Salo needs to keep it, it is removed…" → Delete → "Listing removed. Its past reservations and chats are kept." (before: "Listing deleted."). The same for "Keep 2". Then "Delete me" → "Listing deleted." (regression).
+4. [New #36] Dashboard → Reports: the report on "Keep 1" shows the listing (not "Deleted listing"), with its photo; its listing page says "Removed by the donor" and "The donor removed it in the app."
+5. [New #36] B: Messages → the chat about "Keep 2" is still there with "Test"; "Keep 1" and "Keep 2" are gone from Home.
+6. [New #41] After the end of pickup of "Ends soon": A: Activity → My Listings → Active no longer lists it; Closed lists it with a "Pickup ended" badge (Edit is still offered). B: Profile → Saved Listings: "Ends soon" says "No longer available", with Remove only.
+7. [New #40] B: Messages, then airplane mode on, tap a chat → the error dialog → OK → Back: no second error. Airplane mode off.
+8. [New] B: open a listing → tap Allergens: the chat opens with "Hi! What allergens does … contain?" in the box. Turn the phone while the message sends (tap send, turn at once): the box is empty afterwards and the message shows once.
+9. [New] Close the app (swipe away), open it and turn the phone during the loading screen: it ends after about 1.2 s in all, not 1.2 s after turning. Profile → Settings → Food preferences: tick two categories, don't save, turn the phone: still ticked.
+10. [Regression #37, #38] B: reserve 1 of an available listing (free or priced): the review page shows the price; Confirm → receipt. A: mark it picked up → "Marked as picked up…". Profile → Log out → Sign In, with no error.
+
+Optional, with two phones (#38): B opens a priced listing of A, chooses 2 and taps Reserve (the review page shows its price and total); A edits the price; B waits a minute on the review page: the price and total don't change; Confirm → "The price changed to ₱… per unit. Check the details before reserving." (before: the page switched to the new price and the reservation went through).
+
+Left out: #39 (a chat of more than 1000 messages).
+
+### 30.4a Result (2026-10-04)
+
+The developer ran steps 1–10 on one phone, switching between A (PASTOR) and B, with the dashboard on the PC: **all passed** (reported as "all test passed"). In step 4 the open report on "Keep 1" showed the listing with its photo, "From PASTOR" and a Removed badge, with no Remove listing button; for an open report the way to the listing page is the listing's name in the "Reported listing" card (the View listing button appears only once a report is closed). The live safety check (`bugfix_keep_reported_listings_live_safety_check.sql`) passed **9 of 9** (donor PASTOR, recipient SaluSalo). Not reported: the optional two-phone #38 step.
+
+### 30.5 Known limits
+
+- #36: a listing someone reported or started a chat about stays in the database as `REMOVED`, with its photos; its donor can't delete it completely. A donor who expected "Listing deleted" for a listing nobody reserved or messaged about could guess it was reported. Listings deleted before this migration stay "Deleted listing" in their reports.
+- #38: if the donor changes the price while the review page is open, Confirm is refused with the new price; the user goes back and reserves again.
+- #39: a chat shows only its newest 1000 messages.
+- The text typed in a chat is no longer kept if Android closes the app in the background; the open chat closes then anyway.
