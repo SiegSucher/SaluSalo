@@ -685,6 +685,7 @@ Preconditions: `20260926_phase4_messaging_notifications.sql` has been run in the
 | 2026-10-04 | `6f1223c` (`master`) | Developer | Merged | Mika's chat wallpaper (§28) merged through PR #22, after Claude built it merged with `master` (unit tests 71/71, lint 0 errors). Not checked on a phone before the merge. |
 | 2026-10-04 | `claude/new-logo-startup` (uncommitted); dashboard deployed | Developer | Passed | New logo and the loading screen when the app opens (§29): the 9-step one-phone test (§29.2), including Mika's chat wallpaper (§28) and the dashboard logo. |
 | 2026-10-04 | `59237ff` (branch `ccr-01f52d20-ihgnaw`, renamed `claude/ml-recommendations`); no SQL | Developer | Passed | On-device recommendations (§31): the 10-step one-phone test (§31.5) with accounts A and a new C. The first reservation expired on its 30-minute pickup time before step 9 (§24 as designed); step 9 passed with a second one. |
+| 2026-10-04 | `ba394b8` (branch `claude/ml-recommendations`); no SQL | Developer | Passed | §31 follow-up: up to 4 cards in the row at the top of Home; the 2-step check (§31.5 steps 11–12). |
 
 - **Build:** the test phone's app code was deployed on 2026-09-25 at 10:37 (+08:00), after the last source change (10:04), so it matches the working tree above. That same code was committed on 2026-09-25, with no source changes after 10:04. The build on any second device was not checked.
 - **Phase 4 retest build:** `c7323b8`, built at 21:21 (+08:00) with no local source changes and installed from Android Studio. A's phone showed the new "Loading your alert settings…" text, so it ran this build; which build the second phone ran was not checked.
@@ -2873,7 +2874,7 @@ The developer ran steps 1–10 on one phone, switching between A (PASTOR) and B,
 
 ### 31.0 Status
 
-**Written on branch `ccr-01f52d20-ihgnaw` (from `master` at `a5f9a2c`, the PR #27 merge) on 2026-10-04, at the developer's request for a simple recommendation based on reservations and saves "that can be called ML" and doesn't break anything; renamed `claude/ml-recommendations` for the PR (`claude/home-recommendations` is the older §19.4 branch). No SQL, no new library, no new permission. The writing session could not build with AGP (§31.4); built afterwards on the developer's PC: `assembleDebug`, `testDebugUnitTest` 86 of 86 and `lintDebug` 0 errors. The 10-step one-phone test (§31.5) passed on 2026-10-04.**
+**Written on branch `ccr-01f52d20-ihgnaw` (from `master` at `a5f9a2c`, the PR #27 merge) on 2026-10-04, at the developer's request for a simple recommendation based on reservations and saves "that can be called ML" and doesn't break anything; renamed `claude/ml-recommendations` for the PR (`claude/home-recommendations` is the older §19.4 branch). No SQL, no new library, no new permission. The writing session could not build with AGP (§31.4); built afterwards on the developer's PC: `assembleDebug`, `testDebugUnitTest` 86 of 86 and `lintDebug` 0 errors. The 10-step one-phone test (§31.5) passed on 2026-10-04, and the 4-card follow-up (`ba394b8`) its 2-step check the same day.**
 
 ### 31.1 What the user sees
 
@@ -2931,7 +2932,7 @@ Changed from the draft written in the session: its offline step was dropped, bec
 
 Left out: a quiet start-up load that fails (hard to cause on purpose), a history longer than the caps (50 choices), and timing on a slow phone.
 
-**Follow-up for PR #29 (2026-10-04, at the developer's request):** the row shows up to **4** cards instead of 2, both "Recommended for you" and the fallback "Picked for you" / "Just posted" (one constant, `TOP_ROW_CARDS`). Short check:
+**Follow-up for PR #29 (2026-10-04, at the developer's request):** the row shows up to **4** cards instead of 2, both "Recommended for you" and the fallback "Picked for you" / "Just posted" (one constant, `TOP_ROW_CARDS`; commit `ba394b8`, `testDebugUnitTest` 86/86, `lintDebug` 0 errors). Short check, **passed on 2026-10-04** (installed from Android Studio):
 
 11. [New] C (with its saves or reservations from above, and at least 5 other listings in the feed): Home's top row shows up to 4 cards and swipes sideways; none is C's own, reserved or saved.
 12. [Regression] A new account or one with no history: "Just posted" shows up to 4 of the newest listings.
