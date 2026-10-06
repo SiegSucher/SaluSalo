@@ -64,8 +64,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.window.Dialog
+import com.example.salusalo.model.Allergen
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostDraft
+import com.example.salusalo.model.NO_ALLERGENS
+import com.example.salusalo.model.allergenText
+import com.example.salusalo.model.parseAllergens
 import com.example.salusalo.model.FoodPostEdit
 import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.GeoPin
@@ -132,7 +136,7 @@ fun PostScreen(
     var distribution by rememberSaveable {
         mutableStateOf(ListingHandover.MEET_AT_PICKUP_LOCATION.label)
     }
-    var allergens by rememberSaveable { mutableStateOf("") }
+    var allergens by rememberSaveable(stateSaver = AllergenChoiceSaver) { mutableStateOf(AllergenChoice()) }
     var storage by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
 
@@ -252,8 +256,7 @@ fun PostScreen(
             !isPickupStartAllowed(pickupStart, now) -> PICKUP_START_PAST
             pickupEnd <= pickupStart -> "Pickup must end after it starts."
             pickupEnd > expiry -> "Pickup must end on or before expiration."
-            allergens.isBlank() -> ALLERGENS_MISSING
-            textLength(allergens) > 300 -> "Allergens must be 300 characters or fewer."
+            allergens.problem != null -> allergens.problem.orEmpty()
             textLength(storage) > 300 -> "Storage notes must be 300 characters or fewer."
             textLength(description) > 2000 -> "The description must be 2,000 characters or fewer."
             else -> ""
@@ -492,14 +495,7 @@ fun PostScreen(
                     subtitle = "Help people eat it safely",
                     icon = Icons.Outlined.WarningAmber
                 ) {
-                    PostField(
-                        label = "Allergens",
-                        value = allergens,
-                        onChange = { allergens = it },
-                        example = "e.g., Contains wheat, milk, and eggs",
-                        hint = ALLERGENS_HINT,
-                        required = true
-                    )
+                    AllergenPicker(allergens) { allergens = it }
                     PostField(
                         label = "Storage notes (optional)",
                         value = storage,
@@ -575,7 +571,7 @@ fun PostScreen(
                                     pickupStart = Instant.ofEpochMilli(pickupStart).toString(),
                                     pickupEnd = Instant.ofEpochMilli(pickupEnd).toString(),
                                     handover = ListingHandover.fromLabel(distribution),
-                                    allergens = allergens,
+                                    allergens = allergens.text,
                                     storageNotes = storage,
                                     pickupPin = pin,
                                     maxPerRecipient = maxPerPerson.trim().toIntOrNull()
@@ -756,7 +752,7 @@ fun PostScreen(
                 "Details to review",
                 listOfNotNull(
                     if (photos.isEmpty()) "• Add at least one food photo." else "• ${photos.size} photo(s) selected.",
-                    if (allergens.isBlank()) "• Allergens are missing. Write \"None\" if there are none." else null,
+                    allergens.problem?.let { "• $it" },
                     if (storage.isBlank()) "• Storage instructions have not been provided." else null
                 )
             )
@@ -902,7 +898,9 @@ fun EditListingDialog(
     var handover by rememberSaveable(post.id) {
         mutableStateOf(ListingHandover.fromCode(post.handover)?.label.orEmpty())
     }
-    var allergens by rememberSaveable(post.id) { mutableStateOf(post.allergens.orEmpty()) }
+    var allergens by rememberSaveable(post.id, stateSaver = AllergenChoiceSaver) {
+        mutableStateOf(allergenChoiceOf(post.allergens))
+    }
     var storage by rememberSaveable(post.id) { mutableStateOf(post.storageNotes.orEmpty()) }
     var error by rememberSaveable(post.id) { mutableStateOf("") }
     var waiting by rememberSaveable(post.id) { mutableStateOf(false) }
@@ -964,8 +962,7 @@ fun EditListingDialog(
             pickupStart != 0L && pickupEnd <= pickupStart -> "Pickup must end after it starts."
             pickupEnd != 0L && pickupEnd > expiry -> "Pickup must end on or before expiration."
             // Required here too, so an older listing with none must fill them in.
-            allergens.isBlank() -> ALLERGENS_MISSING
-            textLength(allergens) > 300 -> "Allergens must be 300 characters or fewer."
+            allergens.problem != null -> allergens.problem.orEmpty()
             textLength(storage) > 300 -> "Storage notes must be 300 characters or fewer."
             textLength(description) > 2000 -> "The description must be 2,000 characters or fewer."
             else -> ""
@@ -1076,14 +1073,7 @@ fun EditListingDialog(
                 }
 
                 FormSection(title = "Food information", icon = Icons.Outlined.WarningAmber) {
-                    PostField(
-                        label = "Allergens",
-                        value = allergens,
-                        onChange = { allergens = it },
-                        example = "e.g., Contains wheat, milk, and eggs",
-                        hint = ALLERGENS_HINT,
-                        required = true
-                    )
+                    AllergenPicker(allergens) { allergens = it }
                     PostField(
                         label = "Storage notes (optional)",
                         value = storage,
@@ -1124,7 +1114,7 @@ fun EditListingDialog(
                                     pickupStart = pickupStart.takeIf { it != 0L }?.let { Instant.ofEpochMilli(it).toString() },
                                     pickupEnd = pickupEnd.takeIf { it != 0L }?.let { Instant.ofEpochMilli(it).toString() },
                                     handover = ListingHandover.fromLabel(handover),
-                                    allergens = allergens,
+                                    allergens = allergens.text,
                                     storageNotes = storage,
                                     // Null only for an older listing that still has no pin.
                                     pickupPin = pickupPin
@@ -1145,9 +1135,105 @@ private fun epochMillis(timestamp: String?): Long =
 private fun textLength(value: String): Int = value.trim().let { it.codePointCount(0, it.length) }
 
 private const val PICKUP_START_PAST = "The pickup start is in the past. Tap Start now, or choose a later time."
-private const val ALLERGENS_MISSING = "Enter the allergens, or write \"None\"."
+private const val ALLERGENS_MISSING = "Pick the allergens, or None if there are none."
 private const val ALLERGENS_HINT =
-    "List allergens such as wheat, milk, eggs or nuts, or write \"None\" if there are none."
+    "Pick every allergen in the food, including sauces like patis (fish) or bagoong (fish or shrimp). " +
+            "Pick None if there are none."
+
+/**
+ * The allergen chips on Post and Edit: the picked allergens, None, and Other
+ * with its text (null while Other is off). Saved as [text] (allergenText), so
+ * My allergies can check the picked ones.
+ */
+private data class AllergenChoice(
+    val picked: Set<Allergen> = emptySet(),
+    val none: Boolean = false,
+    val other: String? = null
+) {
+    val text: String get() = allergenText(picked, other)
+
+    /** Why the listing can't be posted or saved yet; null when it can. */
+    val problem: String? get() = when {
+        !none && picked.isEmpty() && other == null -> ALLERGENS_MISSING
+        other != null && other.isBlank() -> "Describe the other allergens, or tap Other to remove it."
+        // The database's limit (food_posts_allergens_check).
+        textLength(text) > 300 -> "Allergens must be 300 characters or fewer."
+        else -> null
+    }
+}
+
+/** Edit's chips from the stored text; text typed before the chips opens under Other, so nothing is lost. */
+private fun allergenChoiceOf(text: String?): AllergenChoice {
+    if (text.isNullOrBlank()) return AllergenChoice()
+    val parsed = parseAllergens(text) ?: return AllergenChoice(other = text.trim())
+    return AllergenChoice(
+        picked = parsed.allergens,
+        none = parsed.allergens.isEmpty() && parsed.other == null,
+        other = parsed.other
+    )
+}
+
+/** Keeps the chips across rotation: [None, Other's text or null, the picked names…]. */
+private val AllergenChoiceSaver = listSaver<AllergenChoice, String?>(
+    save = { listOf(it.none.toString(), it.other) + it.picked.map { allergen -> allergen.name } },
+    restore = { saved ->
+        AllergenChoice(
+            picked = Allergen.entries.filter { it.name in saved.drop(2) }.toSet(),
+            none = saved[0] == "true",
+            other = saved[1]
+        )
+    }
+)
+
+/** Pick every allergen the food contains, or None; Other adds a short text that allergy lists can't check. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AllergenPicker(choice: AllergenChoice, onChange: (AllergenChoice) -> Unit) {
+    Column {
+        Text("Allergens *", style = SaluText.Meta, color = SaluColors.Gray)
+        Spacer(Modifier.height(4.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Allergen.entries.forEach { allergen ->
+                val picked = allergen in choice.picked
+                SaluFilterChip(
+                    label = allergen.label,
+                    selected = picked,
+                    onClick = {
+                        onChange(
+                            choice.copy(
+                                picked = if (picked) choice.picked - allergen else choice.picked + allergen,
+                                none = false
+                            )
+                        )
+                    }
+                )
+            }
+            SaluFilterChip(
+                label = "Other",
+                selected = choice.other != null,
+                onClick = { onChange(choice.copy(other = if (choice.other == null) "" else null, none = false)) }
+            )
+            // None can't be combined with anything else.
+            SaluFilterChip(
+                label = NO_ALLERGENS,
+                selected = choice.none,
+                onClick = { onChange(AllergenChoice(none = !choice.none)) }
+            )
+        }
+        Text(ALLERGENS_HINT, style = SaluText.Meta, color = SaluColors.Gray)
+        if (choice.other != null) {
+            Spacer(Modifier.height(12.dp))
+            PostField(
+                label = "Other allergens",
+                value = choice.other,
+                onChange = { onChange(choice.copy(other = it)) },
+                example = "e.g., Crab paste, annatto",
+                hint = "People's allergy lists can't check these, so name them clearly.",
+                required = true
+            )
+        }
+    }
+}
 
 /** "Start now": the current minute, with seconds zeroed. */
 private fun currentMinute(): Long = System.currentTimeMillis().let { it - it % 60_000L }

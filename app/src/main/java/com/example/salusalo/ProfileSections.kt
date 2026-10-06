@@ -170,6 +170,7 @@ fun ProfileSections(
         "password" -> "Change Password"
         "edit_profile" -> "Edit Profile"
         "food_preferences" -> "Food preferences"
+        "allergies" -> "My allergies"
         "location" -> "Location & distance"
         "help" -> "Help & food safety"
         "about" -> "About Salu-Salo"
@@ -616,6 +617,7 @@ fun ProfileSections(
                             "edit_profile" -> ProfileEditor(profile, onProfileUpdated)
                             "account" -> AccountSecuritySettings(profile, ::navigate)
                             "food_preferences" -> FoodPreferenceSettings(profile?.id)
+                            "allergies" -> AllergySettings(profile?.id)
                             "location" -> LocationPreferenceSettings(profile?.id)
                             "help" -> HelpSettings(::navigate)
                             "about" -> AboutSettings(::navigate)
