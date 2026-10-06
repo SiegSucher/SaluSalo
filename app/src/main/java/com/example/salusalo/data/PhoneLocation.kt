@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
 import android.os.Build
@@ -12,8 +13,12 @@ import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import com.example.salusalo.model.GeoPin
+import com.example.salusalo.model.pickupAddressText
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 
@@ -40,8 +45,9 @@ sealed interface PhoneLocationResult {
  * The phone's own location, foreground only, through the platform LocationManager
  * (via androidx.core; no location library). The result is only returned to the
  * caller: it is never logged, stored or sent anywhere. Callers keep it in memory
- * to compute distances; the only way a position leaves the phone is when a donor
- * taps "Use my location" and then saves the pin with a listing.
+ * to compute distances; a position leaves the phone only after a donor taps
+ * "Use my location": [pickupAddress] looks the pin up, and the donor may then
+ * save the pin with a listing.
  */
 object PhoneLocation {
     /** Asked for together: Android 12+ then lets the user choose Precise or Approximate. */
@@ -123,6 +129,38 @@ object PhoneLocation {
             ?: lastKnown(context, maxAgeMillis)
             ?: PhoneLocationResult.NotFound
     }
+
+    /**
+     * A pickup location text for [pin] ([pickupAddressText]: no house number), or
+     * null when the phone has no address lookup, finds nothing, is offline or
+     * takes over 10 seconds. Android's Geocoder sends the position to its
+     * provider (Google on most phones); call it only after the donor tapped
+     * "Use my location". Nothing is logged or stored.
+     */
+    suspend fun pickupAddress(context: Context, pin: GeoPin): String? {
+        if (!Geocoder.isPresent()) return null
+        return withTimeoutOrNull(ADDRESS_TIMEOUT_MILLIS) {
+            try {
+                val address = runInterruptible(Dispatchers.IO) {
+                    // The listener version needs Android 13; this one works on all.
+                    @Suppress("DEPRECATION")
+                    Geocoder(context).getFromLocation(pin.latitude, pin.longitude, 1)?.firstOrNull()
+                } ?: return@withTimeoutOrNull null
+                pickupAddressText(
+                    street = address.thoroughfare,
+                    area = address.subLocality,
+                    town = address.locality,
+                    province = address.subAdminArea ?: address.adminArea
+                )
+            } catch (_: IOException) {
+                null
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+        }
+    }
+
+    private const val ADDRESS_TIMEOUT_MILLIS = 10_000L
 
     /** One fix from [provider]; the request is cancelled if the caller stops waiting. */
     @SuppressLint("MissingPermission")

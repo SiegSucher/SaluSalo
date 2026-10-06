@@ -472,7 +472,9 @@ fun PostScreen(
                         onPinChange = { pickupPin = it },
                         savedPin = null,
                         editing = false,
-                        accent = SaluColors.Green
+                        accent = SaluColors.Green,
+                        locationText = location,
+                        onLocationTextChange = { location = it }
                     )
 
                     PostDateButton("Pickup starts", pickupStart, required = true, onNow = { pickupStart = currentMinute() }) {
@@ -1051,7 +1053,9 @@ fun EditListingDialog(
                         onPinChange = { pickupPin = it },
                         savedPin = post.pickupPin,
                         editing = true,
-                        accent = SaluColors.Green
+                        accent = SaluColors.Green,
+                        locationText = location,
+                        onLocationTextChange = { location = it }
                     )
                     PostDateButton("Pickup starts", pickupStart, onNow = { pickupStart = currentMinute() }) {
                         chooseDateTime(pickupStart) { pickupStart = it }

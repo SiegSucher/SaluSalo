@@ -6,6 +6,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
@@ -153,9 +154,19 @@ fun ProfileSections(
         }
     }
 
+    // "Saved" messages pop up at the bottom of the page for a few seconds;
+    // errors and "fix this" texts stay next to the form (feedback).
+    val snackbar = remember { SnackbarHostState() }
+    fun showSaved(message: String) {
+        feedback = ""
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            snackbar.showSnackbar(message)
+        }
+    }
+
     fun savePreferences() {
         setNotificationSoundOn(context, sound)
-        feedback = "Preferences saved on this device."
     }
 
     val title = when (page) {
@@ -593,7 +604,7 @@ fun ProfileSections(
                                                 messageAlerts = messageAlerts,
                                                 reservationAlerts = reservationAlerts
                                             )
-                                        ) { feedback = "Preferences saved to your account." }
+                                        ) { showSaved("Preferences saved to your account.") }
                                     }
                                 }
                                 SaluSecondaryButton(
@@ -614,11 +625,11 @@ fun ProfileSections(
                                 )
                             }
 
-                            "edit_profile" -> ProfileEditor(profile, onProfileUpdated)
+                            "edit_profile" -> ProfileEditor(profile, onProfileUpdated, ::showSaved)
                             "account" -> AccountSecuritySettings(profile, ::navigate)
-                            "food_preferences" -> FoodPreferenceSettings(profile?.id)
-                            "allergies" -> AllergySettings(profile?.id)
-                            "location" -> LocationPreferenceSettings(profile?.id)
+                            "food_preferences" -> FoodPreferenceSettings(profile?.id, ::showSaved)
+                            "allergies" -> AllergySettings(profile?.id, ::showSaved)
+                            "location" -> LocationPreferenceSettings(profile?.id, ::showSaved)
                             "help" -> HelpSettings(::navigate)
                             "about" -> AboutSettings(::navigate)
                             "how_it_works" -> HowItWorksSettings(pickups = false)
@@ -698,7 +709,7 @@ fun ProfileSections(
                                                         currentPassword = ""
                                                         newPassword = ""
                                                         confirmPassword = ""
-                                                        feedback = "Your password was changed."
+                                                        showSaved("Your password was changed.")
                                                     }.onFailure { error ->
                                                         feedback = (error as? PasswordChangeException)?.message
                                                             ?: "Your password could not be changed. Check " +
@@ -862,7 +873,27 @@ fun ProfileSections(
                         }
                     }
                 }
+
+                // Below the page, so it never covers the Save button; it takes space only while shown.
+                SnackbarHost(snackbar) { data -> SavedSnackbar(data.visuals.message) }
             }
+        }
+    }
+}
+
+/** A "saved" message at the bottom of a Profile page: dark green, white text and a tick. */
+@Composable
+private fun SavedSnackbar(message: String) {
+    Snackbar(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        shape = SaluRadius.Control,
+        containerColor = SectionDark,
+        contentColor = Color.White
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.CheckCircle, contentDescription = null)
+            Spacer(Modifier.width(12.dp))
+            Text(message, style = SaluText.Body)
         }
     }
 }

@@ -12,14 +12,24 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LocationOff
 import androidx.compose.material.icons.outlined.MyLocation
+import androidx.compose.material.icons.outlined.OpenInFull
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
@@ -38,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.example.salusalo.data.PhoneLocation
 import com.example.salusalo.data.PhoneLocationResult
@@ -358,9 +369,11 @@ private const val PIN_NOTE =
 private const val START_POSITION_MAX_AGE_MILLIS = 24 * 60 * 60 * 1000L
 
 /**
- * The pickup pin on Post and Edit: a map to tap, "Use my location", and the
- * note on who sees the pin. [savedPin] is the pin the listing had when Edit
- * opened (null on Post, and for older listings without one).
+ * The pickup pin on Post and Edit: a map to tap (also full screen), "Use my
+ * location", and the note on who sees the pin. [savedPin] is the pin the
+ * listing had when Edit opened (null on Post, and for older listings without
+ * one). A pin from "Use my location" also fills in [locationText], the pickup
+ * location box, when it is still empty.
  */
 @Composable
 internal fun PickupPinPicker(
@@ -368,12 +381,19 @@ internal fun PickupPinPicker(
     onPinChange: (GeoPin) -> Unit,
     savedPin: GeoPin?,
     editing: Boolean,
-    accent: Color
+    accent: Color,
+    locationText: String,
+    onLocationTextChange: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var placedNow by rememberSaveable { mutableStateOf(false) }
+    var addressFilled by rememberSaveable { mutableStateOf(false) }
+    var mapExpanded by rememberSaveable { mutableStateOf(false) }
     var locationNote by rememberSaveable { mutableStateOf("") }
     var camera by remember { mutableStateOf<MapCameraRequest?>(null) }
+    val currentPin by rememberUpdatedState(pin)
+    val currentLocationText by rememberUpdatedState(locationText)
     val finder = rememberLocationFinder()
     // The pin; else the phone's last known position if location access is
     // already allowed (never asks here); else Tagbilaran.
@@ -386,12 +406,76 @@ internal fun PickupPinPicker(
     }
 
     val status = when {
+        addressFilled -> "Pin placed, and the pickup location filled in from it. Check it above and add a landmark."
         placedNow -> "Pin placed. Tap the map again to move it."
         editing && savedPin == null ->
             "This listing has no pickup pin yet. Tap the map to add one. " +
                     "Without a pin, others see no map or distance."
         editing -> "Tap the map to move the pin."
         else -> "Tap the map to place the pin, or use your location."
+    }
+    val placeTapped: (GeoPin) -> Unit = { tapped ->
+        onPinChange(tapped.rounded())
+        placedNow = true
+        addressFilled = false
+        locationNote = ""
+    }
+    val closeExpanded: () -> Unit = {
+        mapExpanded = false
+        // The small map shows where the pin ended up.
+        currentPin?.let { camera = MapCameraRequest(it, PIN_MAP_ZOOM) }
+    }
+
+    if (mapExpanded) {
+        Dialog(onDismissRequest = closeExpanded, properties = EdgeToEdgeDialog) {
+            DarkSystemBarIcons()
+            Surface(modifier = Modifier.fillMaxSize(), color = SaluColors.Cream) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .safeDrawingPadding()
+                ) {
+                    SaluTopBar(
+                        title = "Pickup pin",
+                        onBack = null,
+                        subtitle = status,
+                        actions = {
+                            TextButton(onClick = closeExpanded) {
+                                Text("Done", color = accent)
+                            }
+                        }
+                    )
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        PickupMap(
+                            pin = pin,
+                            start = pin ?: start.first,
+                            startZoom = if (pin != null) PIN_MAP_ZOOM else start.second,
+                            description = "Full-screen map for the pickup pin. Tap to place the pin.",
+                            modifier = Modifier.matchParentSize(),
+                            onTap = placeTapped
+                        )
+                        // A big, plain way out besides the small Done, for anyone who misses it.
+                        FilledIconButton(
+                            onClick = closeExpanded,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(12.dp)
+                                .size(52.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = Color.White,
+                                contentColor = SaluColors.DarkGreen
+                            )
+                        ) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Close the map", modifier = Modifier.size(28.dp))
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -403,22 +487,35 @@ internal fun PickupPinPicker(
         )
         InlineNotice(text = PIN_NOTE, icon = Icons.Outlined.Info)
 
-        PickupMap(
-            pin = pin,
-            start = start.first,
-            startZoom = start.second,
-            description = "Map for the pickup pin. Tap to place the pin.",
-            modifier = Modifier
+        Box(
+            Modifier
                 .fillMaxWidth()
                 .height(220.dp)
-                .clip(SaluRadius.Control),
-            camera = camera,
-            onTap = { tapped ->
-                onPinChange(tapped.rounded())
-                placedNow = true
-                locationNote = ""
+                .clip(SaluRadius.Control)
+        ) {
+            PickupMap(
+                pin = pin,
+                start = start.first,
+                startZoom = start.second,
+                description = "Map for the pickup pin. Tap to place the pin.",
+                modifier = Modifier.matchParentSize(),
+                camera = camera,
+                onTap = placeTapped
+            )
+            FilledIconButton(
+                onClick = { mapExpanded = true },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(40.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = Color.White,
+                    contentColor = SaluColors.DarkGreen
+                )
+            ) {
+                Icon(Icons.Outlined.OpenInFull, contentDescription = "Show the map full screen")
             }
-        )
+        }
 
         Text(status, style = SaluText.Meta, color = accent)
 
@@ -429,6 +526,7 @@ internal fun PickupPinPicker(
             enabled = !finder.finding,
             onClick = {
                 locationNote = ""
+                addressFilled = false
                 finder.find(PhoneLocation.PIN_MAX_AGE_MILLIS, preferFresh = true) { result ->
                     when (result) {
                         is PhoneLocationResult.Found ->
@@ -437,9 +535,19 @@ internal fun PickupPinPicker(
                                 locationNote = "Your phone shared only its approximate location, so the pin " +
                                         "wasn't placed. Zoom in and tap the exact spot."
                             } else {
-                                onPinChange(result.position.rounded())
+                                val placed = result.position.rounded()
+                                onPinChange(placed)
                                 placedNow = true
                                 camera = MapCameraRequest(result.position, PIN_MAP_ZOOM)
+                                // Only into an empty box, never over what the donor typed, and
+                                // only while the pin is still this one. No address: nothing said.
+                                if (currentLocationText.isBlank()) scope.launch {
+                                    val address = PhoneLocation.pickupAddress(context.applicationContext, placed)
+                                    if (address != null && currentLocationText.isBlank() && currentPin == placed) {
+                                        onLocationTextChange(address)
+                                        addressFilled = true
+                                    }
+                                }
                             }
 
                         PhoneLocationResult.NoPermission ->

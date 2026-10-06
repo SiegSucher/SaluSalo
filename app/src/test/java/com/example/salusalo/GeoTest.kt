@@ -6,6 +6,7 @@ import com.example.salusalo.model.NEARBY_RADIUS_METERS
 import com.example.salusalo.model.NewFoodPost
 import com.example.salusalo.model.distanceLabel
 import com.example.salusalo.model.distanceMeters
+import com.example.salusalo.model.pickupAddressText
 import com.example.salusalo.model.pickupPin
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.double
@@ -127,5 +128,32 @@ class GeoTest {
         assertEquals(123.854012, sent.getValue("pickup_longitude").jsonPrimitive.double, 0.0)
         // No limit is still sent, as null (supabase-kt drops values equal to a default).
         assertTrue(sent.containsKey("max_per_recipient"))
+    }
+
+    @Test
+    fun pickupAddressJoinsStreetBarangayTownAndProvince() {
+        assertEquals(
+            "Rizal Street, Poblacion, Tagbilaran City, Bohol",
+            pickupAddressText("Rizal Street", "Poblacion", "Tagbilaran City", "Bohol")
+        )
+    }
+
+    @Test
+    fun pickupAddressLeavesOutBlankUnnamedAndRepeatedParts() {
+        assertEquals("Balilihan, Bohol", pickupAddressText("Unnamed Road", " ", "Balilihan", "Bohol"))
+        assertEquals("Osmeña Boulevard, Cebu City, Cebu", pickupAddressText("Osmeña Boulevard", "Cebu City", "cebu city", "Cebu"))
+    }
+
+    @Test
+    fun pickupAddressNeverShowsAHouseNumber() {
+        assertEquals("Rizal Street, Bohol", pickupAddressText("12 Rizal Street", null, null, "Bohol"))
+        assertEquals("Rizal Street, Bohol", pickupAddressText("12-B Rizal Street", null, null, "Bohol"))
+        // A numbered street keeps its name.
+        assertEquals("10th Street, Bohol", pickupAddressText("10th Street", null, null, "Bohol"))
+    }
+
+    @Test
+    fun pickupAddressIsNullWhenNothingIsLeft() {
+        assertNull(pickupAddressText(null, " ", "Unnamed Road", null))
     }
 }
