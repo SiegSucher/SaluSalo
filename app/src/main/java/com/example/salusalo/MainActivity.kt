@@ -2,9 +2,13 @@ package com.example.salusalo
 
 import android.os.Bundle
 import android.os.SystemClock
+import com.example.salusalo.model.Allergen
 import com.example.salusalo.model.FoodPost
 import com.example.salusalo.model.FoodPostStatus
 import com.example.salusalo.model.ListingRecommender
+import com.example.salusalo.model.allergenNames
+import com.example.salusalo.model.allergiesIn
+import com.example.salusalo.model.parseAllergens
 import com.example.salusalo.model.nextReserveBlockerChange
 import com.example.salusalo.model.reserveBlocker
 import com.example.salusalo.model.reservableNow
@@ -1699,13 +1703,17 @@ private fun HomeScreen(
     // alert, message or badge change); every value they read is a key.
     val foods = remember(remotePosts, phonePin) { remotePosts.map { it.toHomeFood(distanceTo(it)) } }
     val discoveryPreferences = rememberDiscoveryPreferences(sessionKey)
+    // The row at the top of Home never shows a listing with one of the user's
+    // allergies (My allergies), not even after Show.
     val preferredFoods = remember(remotePosts, phonePin, discoveryPreferences) {
-        remotePosts.filter { discoveryPreferences.matches(it) }.map { it.toHomeFood(distanceTo(it)) }
+        remotePosts.filter { discoveryPreferences.matches(it) && discoveryPreferences.myAllergiesIn(it).isEmpty() }
+            .map { it.toHomeFood(distanceTo(it)) }
     }
     // "Recommended for you": a small model trained on this phone from the account's
     // own reservations and saves (ListingRecommender) picks among the listings that
-    // match the saved preferences. Empty until it has something to learn from, or
-    // when nothing matches what it learned; the row then stays as above.
+    // match the saved preferences and have none of the user's allergies. Empty until
+    // it has something to learn from, or when nothing matches what it learned; the
+    // row then stays as above.
     val ownProfileId = currentProfile?.id
     val recommendations = remember(remotePosts, myReservations, savedIds, savedRows, discoveryPreferences, ownProfileId) {
         ListingRecommender.train(
@@ -1714,13 +1722,16 @@ private fun HomeScreen(
             savedIds = savedIds,
             saved = savedRows.mapNotNull { it.foodPost },
             ownProfileId = ownProfileId
-        )?.recommend(remotePosts.filter { discoveryPreferences.matches(it) }, limit = TOP_ROW_CARDS).orEmpty()
+        )?.recommend(
+            remotePosts.filter { discoveryPreferences.matches(it) && discoveryPreferences.myAllergiesIn(it).isEmpty() },
+            limit = TOP_ROW_CARDS
+        ).orEmpty()
     }
     val recommendedFoods = remember(recommendations, phonePin) {
         recommendations.map { it.post.toHomeFood(distanceTo(it.post)) }
     }
 
-    val visibleFoods = remember(foods, search, category, sort, phonePin) { foods.filter { food ->
+    val matchingFoods = remember(foods, search, category, sort, phonePin) { foods.filter { food ->
         val matchesSearch =
             food.title.contains(search, ignoreCase = true) ||
                     food.donorName.contains(search, ignoreCase = true)
@@ -1749,6 +1760,18 @@ private fun HomeScreen(
             else -> results.sortedWith(newestFirst)
         }
     } }
+    // Listings whose donor picked one of the user's allergies (My allergies), by ID:
+    // left out of the feed until Show is tapped, then marked. Show lasts until Hide
+    // or until the app is closed.
+    var showAllergyFoods by rememberSaveable { mutableStateOf(false) }
+    val allergyMatches = remember(matchingFoods, discoveryPreferences, ownProfileId) {
+        matchingFoods.filter { it.donorId != ownProfileId }
+            .associate { it.id to discoveryPreferences.myAllergiesIn(it.post) }
+            .filterValues { it.isNotEmpty() }
+    }
+    val visibleFoods = remember(matchingFoods, allergyMatches, showAllergyFoods) {
+        if (showAllergyFoods) matchingFoods else matchingFoods.filter { it.id !in allergyMatches }
+    }
     // One line under the chips while Nearby or Nearest is chosen.
     val locationLine = if (category != "Nearby" && sort != "Nearest") null else when {
         locationFinder.finding && phonePin == null -> "Finding your location…"
@@ -2042,6 +2065,31 @@ private fun HomeScreen(
                                     )
                                 }
 
+                                // My allergies: how many listings are left out, with Show or
+                                // Hide. When every listing is left out, the empty state says it.
+                                if (!showFeedSkeleton && allergyMatches.isNotEmpty() &&
+                                    (showAllergyFoods || visibleFoods.isNotEmpty())
+                                ) {
+                                    item(key = "allergy-notice") {
+                                        val found = Allergen.entries.filter { allergen ->
+                                            allergyMatches.values.any { allergen in it }
+                                        }
+                                        InlineNotice(
+                                            text = if (showAllergyFoods) {
+                                                "Showing ${listingCount(allergyMatches.size)} with your allergies."
+                                            } else {
+                                                "${listingCount(allergyMatches.size)} hidden because of your " +
+                                                        "allergies (${allergenNames(found)})."
+                                            },
+                                            icon = Icons.Outlined.WarningAmber,
+                                            tone = NoticeTone.Warning,
+                                            actionLabel = if (showAllergyFoods) "Hide" else "Show",
+                                            onAction = { showAllergyFoods = !showAllergyFoods },
+                                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp)
+                                        )
+                                    }
+                                }
+
                                 // A failed reload keeps the listings already shown.
                                 if (feedError != null && remotePosts.isNotEmpty()) {
                                     item(key = "feed-error") {
@@ -2076,9 +2124,11 @@ private fun HomeScreen(
                                             search = search,
                                             category = category,
                                             hasPosition = phonePin != null,
+                                            hiddenForAllergies = if (showAllergyFoods) 0 else allergyMatches.size,
                                             onRetry = { foodViewModel.loadAvailablePosts() },
                                             onClearSearch = { search = "" },
                                             onShowAll = { category = "All" },
+                                            onShowAllergyFoods = { showAllergyFoods = true },
                                             onPost = { page = "post" }
                                         )
                                     }
@@ -2087,6 +2137,7 @@ private fun HomeScreen(
                                     else -> items(visibleFoods, key = { it.id }) { food ->
                                         AvailableFoodCard(
                                             food = food,
+                                            allergyWarning = allergyMatches[food.id],
                                             // Your own listings can't be bookmarked.
                                             canSave = food.donorId != currentProfile?.id,
                                             saved = food.id in savedIds,
@@ -2163,6 +2214,7 @@ private fun HomeScreen(
                 // copy would still offer Reserve.
                 noLongerListed = opened.listed && latest == null,
                 isOwnFood = currentProfile?.id != null && food.donorId == currentProfile.id,
+                allergies = discoveryPreferences.allergies,
                 saved = food.id in savedIds,
                 onToggleSave = { savedListingViewModel.toggle(food.id) },
                 loadExtraPhotos = { foodViewModel.extraPhotoUrls(food.post) },
@@ -2792,9 +2844,12 @@ private fun FeedEmptyState(
     category: String,
     // False while Nearby has no phone position; the note under the chips says why.
     hasPosition: Boolean,
+    // Listings left out because of My allergies (0 after Show).
+    hiddenForAllergies: Int,
     onRetry: () -> Unit,
     onClearSearch: () -> Unit,
     onShowAll: () -> Unit,
+    onShowAllergyFoods: () -> Unit,
     onPost: () -> Unit
 ) {
     val modifier = Modifier.padding(horizontal = 20.dp)
@@ -2807,6 +2862,16 @@ private fun FeedEmptyState(
             onAction = onRetry,
             tint = SaluColors.Error,
             iconBackground = SaluColors.ErrorSoft,
+            modifier = modifier
+        )
+
+        hiddenForAllergies > 0 -> EmptyState(
+            icon = Icons.Outlined.NoFood,
+            title = "No food without your allergies right now",
+            message = if (hiddenForAllergies == 1) "1 listing with your allergies is hidden."
+            else "$hiddenForAllergies listings with your allergies are hidden.",
+            actionLabel = "Show them",
+            onAction = onShowAllergyFoods,
             modifier = modifier
         )
 
@@ -3070,6 +3135,8 @@ private fun RecommendationSkeleton() {
 @Composable
 private fun AvailableFoodCard(
     food: HomeFood,
+    // The user's allergies this listing contains (shown after Home's Show).
+    allergyWarning: List<Allergen>?,
     canSave: Boolean,
     saved: Boolean,
     onToggleSave: () -> Unit,
@@ -3134,6 +3201,15 @@ private fun AvailableFoodCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                if (!allergyWarning.isNullOrEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    MetaItem(
+                        icon = Icons.Outlined.WarningAmber,
+                        text = "Contains ${allergenNames(allergyWarning)}",
+                        color = SaluColors.Error
+                    )
+                }
 
                 Spacer(Modifier.height(8.dp))
 
@@ -3228,6 +3304,8 @@ private fun FoodDetailsScreen(
     // The feed listed it when the page opened and no longer does.
     noLongerListed: Boolean,
     isOwnFood: Boolean,
+    // My allergies (saved on the phone).
+    allergies: Set<Allergen>,
     saved: Boolean,
     onToggleSave: () -> Unit,
     loadExtraPhotos: suspend () -> List<String?>,
@@ -3354,6 +3432,12 @@ private fun FoodDetailsScreen(
     val notSet = "Not set — ask the donor"
     val post = food.post
     val allergens = post.allergens?.takeIf { it.isNotBlank() } ?: notProvided
+    // My allergies: the ones the donor picked, and whether the rest could be
+    // checked at all (typed text and "Other" can't). Never shown as safe.
+    val myAllergens = if (isOwnFood) emptyList() else allergiesIn(post.allergens, allergies)
+    val pickedAllergens = parseAllergens(post.allergens)
+    val allergensUnchecked = !isOwnFood && allergies.isNotEmpty() &&
+            (pickedAllergens == null || pickedAllergens.other != null)
     val storageNote = post.storageNotes?.takeIf { it.isNotBlank() } ?: notProvided
     val pickupWindow = listingPickupWindow(post.pickupStart, post.pickupEnd) ?: notSet
     val handover = ListingHandover.fromCode(post.handover)?.label ?: notSet
@@ -3542,6 +3626,16 @@ private fun FoodDetailsScreen(
                 Column(
                     modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 12.dp)
                 ) {
+                    if (myAllergens.isNotEmpty()) {
+                        InlineNotice(
+                            text = "Contains ${allergenNames(myAllergens)}, which " +
+                                    (if (myAllergens.size == 1) "is" else "are") + " on your allergy list.",
+                            icon = Icons.Outlined.WarningAmber,
+                            tone = NoticeTone.Error
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
+
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -3774,6 +3868,20 @@ private fun FoodDetailsScreen(
                             actionLabel = "Ask the $role about allergens",
                             onClick = { messageDonor("Hi! What allergens does ${food.title} contain?") }
                         )
+
+                        if (allergensUnchecked) {
+                            InlineNotice(
+                                text = if (pickedAllergens == null) {
+                                    "These allergens can't be checked against your allergies. " +
+                                            "Ask the $role if you're unsure."
+                                } else {
+                                    "Allergens under \"Other\" aren't checked against your allergies. " +
+                                            "Read them, and ask the $role if you're unsure."
+                                },
+                                icon = Icons.Outlined.WarningAmber,
+                                tone = NoticeTone.Warning
+                            )
+                        }
 
                         DetailRow(
                             icon = Icons.Outlined.AcUnit,

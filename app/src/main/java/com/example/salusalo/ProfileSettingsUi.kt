@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.encodeProfilePhoto
 import com.example.salusalo.data.supabaseErrorText
+import com.example.salusalo.model.Allergen
 import com.example.salusalo.model.UserProfile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -95,6 +96,8 @@ internal fun SettingsHub(navigate: (String) -> Unit) {
         SettingsRow(Icons.Outlined.Notifications, "Notifications", "Alerts and the notification sound") { navigate("notifications") }
         RowDivider()
         SettingsRow(Icons.Outlined.Restaurant, "Food preferences", "Food for your Home row") { navigate("food_preferences") }
+        RowDivider()
+        SettingsRow(Icons.Outlined.NoFood, "My allergies", "Hide food with your allergens") { navigate("allergies") }
         RowDivider()
         SettingsRow(Icons.Outlined.LocationOn, "Location & distance", "Your preferred pickup area") { navigate("location") }
     }
@@ -259,6 +262,63 @@ internal fun FoodPreferenceSettings(profileId: String?) {
     SettingsCaption("Saved for your account on this phone. The full Home feed still shows all available food.")
     SettingsSaveButton("Save preferences", profileId != null) {
         profileId?.let { saveFoodPreferences(context, it, selected.toSet(), type); feedback = "Preferences saved. Check Home for matching listings." }
+    }
+    if (feedback.isNotBlank()) InlineNotice(text = feedback, icon = Icons.Outlined.CheckCircle, tone = NoticeTone.Success)
+}
+
+/** My allergies: Home leaves out listings whose donor picked one of them (Home's Show brings them back). */
+@Composable
+internal fun AllergySettings(profileId: String?) {
+    val context = LocalContext.current
+    val stored = rememberDiscoveryPreferences(profileId ?: "signed-out")
+    // Names, so ticks not saved yet survive rotation.
+    var selected by rememberSaveable { mutableStateOf(stored.allergies.map { it.name }) }
+    var feedback by rememberSaveable { mutableStateOf("") }
+    SettingsCaption("Home hides listings whose donor marked one of these allergens.")
+    SettingsCard {
+        Text("My allergies", style = SaluText.FoodTitle, color = SaluColors.DarkGreen, modifier = Modifier.semantics { heading() })
+        Column {
+            Allergen.entries.forEach { allergen ->
+                val checked = allergen.name in selected
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(SaluRadius.Small)
+                        .toggleable(
+                            value = checked,
+                            role = Role.Checkbox,
+                            onValueChange = { now -> selected = if (now) selected + allergen.name else selected - allergen.name }
+                        )
+                        .heightIn(min = 48.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked,
+                        onCheckedChange = null,
+                        colors = CheckboxDefaults.colors(checkedColor = SaluColors.Green, uncheckedColor = SaluColors.Gray)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(allergen.label, style = SaluText.Body, color = SaluColors.DarkGreen)
+                        allergen.examples?.let { Text(it, style = SaluText.Supporting, color = SaluColors.Gray) }
+                    }
+                }
+            }
+        }
+    }
+    InlineNotice(
+        text = "Only allergens the donor picked from this list can be checked. Listings with typed allergens, " +
+                "or allergens under \"Other\", are never hidden: read them, and ask the donor if you're unsure.",
+        icon = Icons.Outlined.WarningAmber,
+        tone = NoticeTone.Warning
+    )
+    SettingsCaption("Saved for your account on this phone, never on Salu-Salo's server.")
+    SettingsSaveButton("Save allergies", profileId != null) {
+        profileId?.let { id ->
+            saveAllergies(context, id, Allergen.entries.filter { it.name in selected }.toSet())
+            feedback = if (selected.isEmpty()) "Allergies cleared. Home shows every listing."
+            else "Allergies saved. Home hides listings that contain them."
+        }
     }
     if (feedback.isNotBlank()) InlineNotice(text = feedback, icon = Icons.Outlined.CheckCircle, tone = NoticeTone.Success)
 }

@@ -392,6 +392,8 @@ fun ProfileScreen(
                 MenuDivider()
                 ProfileMenuRow(Icons.Outlined.Restaurant, "Food preferences", "Choose food for your Home row") { page = "food_preferences" }
                 MenuDivider()
+                ProfileMenuRow(Icons.Outlined.NoFood, "My allergies", "Hide food with your allergens") { page = "allergies" }
+                MenuDivider()
                 ProfileMenuRow(Icons.Outlined.LocationOn, "Location & distance", "Your preferred pickup area") { page = "location" }
                 MenuDivider()
                 ProfileMenuRow(Icons.Outlined.Shield, "Trust & Safety", "Pickup safety, badges and reports") { page = "safety" }
