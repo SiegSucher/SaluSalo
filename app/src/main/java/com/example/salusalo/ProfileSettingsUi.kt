@@ -122,7 +122,7 @@ internal fun SettingsHub(navigate: (String) -> Unit) {
 }
 
 @Composable
-internal fun ProfileEditor(profile: UserProfile?, onUpdated: (UserProfile) -> Unit) {
+internal fun ProfileEditor(profile: UserProfile?, onUpdated: (UserProfile) -> Unit, onSaved: (String) -> Unit) {
     val context = LocalContext.current
     val repository = remember { UserRepository() }
     val scope = rememberCoroutineScope()
@@ -142,7 +142,8 @@ internal fun ProfileEditor(profile: UserProfile?, onUpdated: (UserProfile) -> Un
                     val photo = encodeProfilePhoto(context, uri)
                         ?: error("This photo could not be read.")
                     onUpdated(repository.uploadProfilePhoto(photo))
-                    feedback = "Profile photo saved."
+                    feedback = ""
+                    onSaved("Profile photo saved.")
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
@@ -189,7 +190,7 @@ internal fun ProfileEditor(profile: UserProfile?, onUpdated: (UserProfile) -> Un
                         name = updated.name
                         bio = updated.bio.orEmpty()
                         onUpdated(updated)
-                        feedback = "Profile saved to your account."
+                        onSaved("Profile saved to your account.")
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: Exception) {
@@ -203,13 +204,12 @@ internal fun ProfileEditor(profile: UserProfile?, onUpdated: (UserProfile) -> Un
 }
 
 @Composable
-internal fun FoodPreferenceSettings(profileId: String?) {
+internal fun FoodPreferenceSettings(profileId: String?, onSaved: (String) -> Unit) {
     val context = LocalContext.current
     val stored = rememberDiscoveryPreferences(profileId ?: "signed-out")
     // A list, so ticks not saved yet survive rotation like the type below.
     var selected by rememberSaveable { mutableStateOf(stored.categories.toList()) }
     var type by rememberSaveable { mutableStateOf(stored.listingType) }
-    var feedback by rememberSaveable { mutableStateOf("") }
     SettingsCaption("Choose the food for the row at the top of Home.")
     SettingsCard {
         Text("Food categories", style = SaluText.FoodTitle, color = SaluColors.DarkGreen, modifier = Modifier.semantics { heading() })
@@ -261,19 +261,17 @@ internal fun FoodPreferenceSettings(profileId: String?) {
     }
     SettingsCaption("Saved for your account on this phone. The full Home feed still shows all available food.")
     SettingsSaveButton("Save preferences", profileId != null) {
-        profileId?.let { saveFoodPreferences(context, it, selected.toSet(), type); feedback = "Preferences saved. Check Home for matching listings." }
+        profileId?.let { saveFoodPreferences(context, it, selected.toSet(), type); onSaved("Preferences saved. Check Home for matching listings.") }
     }
-    if (feedback.isNotBlank()) InlineNotice(text = feedback, icon = Icons.Outlined.CheckCircle, tone = NoticeTone.Success)
 }
 
 /** My allergies: Home leaves out listings whose donor picked one of them (Home's Show brings them back). */
 @Composable
-internal fun AllergySettings(profileId: String?) {
+internal fun AllergySettings(profileId: String?, onSaved: (String) -> Unit) {
     val context = LocalContext.current
     val stored = rememberDiscoveryPreferences(profileId ?: "signed-out")
     // Names, so ticks not saved yet survive rotation.
     var selected by rememberSaveable { mutableStateOf(stored.allergies.map { it.name }) }
-    var feedback by rememberSaveable { mutableStateOf("") }
     SettingsCaption("Home hides listings whose donor marked one of these allergens.")
     SettingsCard {
         Text("My allergies", style = SaluText.FoodTitle, color = SaluColors.DarkGreen, modifier = Modifier.semantics { heading() })
@@ -316,19 +314,19 @@ internal fun AllergySettings(profileId: String?) {
     SettingsSaveButton("Save allergies", profileId != null) {
         profileId?.let { id ->
             saveAllergies(context, id, Allergen.entries.filter { it.name in selected }.toSet())
-            feedback = if (selected.isEmpty()) "Allergies cleared. Home shows every listing."
-            else "Allergies saved. Home hides listings that contain them."
+            onSaved(
+                if (selected.isEmpty()) "Allergies cleared. Home shows every listing."
+                else "Allergies saved. Home hides listings that contain them."
+            )
         }
     }
-    if (feedback.isNotBlank()) InlineNotice(text = feedback, icon = Icons.Outlined.CheckCircle, tone = NoticeTone.Success)
 }
 
 @Composable
-internal fun LocationPreferenceSettings(profileId: String?) {
+internal fun LocationPreferenceSettings(profileId: String?, onSaved: (String) -> Unit) {
     val context = LocalContext.current
     val stored = rememberDiscoveryPreferences(profileId ?: "signed-out")
     var area by rememberSaveable { mutableStateOf(stored.area) }
-    var feedback by rememberSaveable { mutableStateOf("") }
     SettingsCaption("Find food by its pickup area.")
     SettingsCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -355,9 +353,8 @@ internal fun LocationPreferenceSettings(profileId: String?) {
     }
     SettingsCaption("Used with your food preferences on Home and saved for this account on this phone.")
     SettingsSaveButton("Save preferences", profileId != null) {
-        profileId?.let { saveAreaPreference(context, it, area); feedback = "Pickup area saved." }
+        profileId?.let { saveAreaPreference(context, it, area); onSaved("Pickup area saved.") }
     }
-    if (feedback.isNotBlank()) InlineNotice(text = feedback, icon = Icons.Outlined.CheckCircle, tone = NoticeTone.Success)
 }
 
 @Composable

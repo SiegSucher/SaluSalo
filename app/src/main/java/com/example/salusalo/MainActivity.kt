@@ -134,6 +134,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -1872,6 +1873,11 @@ private fun HomeScreen(
         resetFilters()
     }
 
+    // The app shrinks above the keyboard, so the bar would ride on it: hidden while typing.
+    val ime = WindowInsets.ime
+    val density = LocalDensity.current
+    val keyboardOpen by remember(ime, density) { derivedStateOf { ime.getBottom(density) > 0 } }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -2157,11 +2163,13 @@ private fun HomeScreen(
             }
         }
 
-        MainNavigationBar(
-            selected = tabOf(page),
-            unreadAlerts = unreadAlerts,
-            onSelect = { tab -> openTab(tab) }
-        )
+        if (!keyboardOpen) {
+            MainNavigationBar(
+                selected = tabOf(page),
+                unreadAlerts = unreadAlerts,
+                onSelect = { tab -> openTab(tab) }
+            )
+        }
     }
 
     if (filterHelp) {

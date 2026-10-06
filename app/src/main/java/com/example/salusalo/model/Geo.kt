@@ -45,6 +45,22 @@ const val DEFAULT_MAP_ZOOM = 12.0
 /** Zoom for a pin or the phone's position: streets and buildings are readable. */
 const val PIN_MAP_ZOOM = 16.0
 
+/** "12 ", "12B " or "12-B " at the start of a street: a house number. */
+private val HOUSE_NUMBER = Regex("""^\d+(-?[A-Za-z])?\s+""")
+
+/**
+ * The pickup location text filled in from an address lookup: street, barangay,
+ * town and province, never a house number or the country, because everyone who
+ * can see the listing reads it. Blank, repeated and "Unnamed Road" parts are
+ * left out; null when nothing is left.
+ */
+fun pickupAddressText(street: String?, area: String?, town: String?, province: String?): String? =
+    listOf(street?.trim()?.replace(HOUSE_NUMBER, ""), area, town, province)
+        .mapNotNull { part -> part?.trim()?.takeIf { it.isNotEmpty() && !it.equals("Unnamed Road", ignoreCase = true) } }
+        .distinctBy { it.lowercase(Locale.ROOT) }
+        .joinToString(", ")
+        .ifEmpty { null }
+
 private const val EARTH_RADIUS_METERS = 6_371_008.8
 
 /** Straight-line (great-circle) distance in meters, by the haversine formula. */
