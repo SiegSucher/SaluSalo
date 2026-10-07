@@ -157,6 +157,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
@@ -268,6 +269,15 @@ private fun SaluSaloApp() {
     // out then). Back to Sign In, saying why. A network failure never ends it.
     DisposableEffect(firebaseAuth) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
+            // Signed out (Log out, or the session ended): this phone's push token
+            // is deleted, so the old account's alerts stop popping up here; the
+            // next sign-in registers a new one (§35).
+            if (auth.currentUser == null && authUid != null) {
+                // Deprecated in Firebase 25.1 in favour of an opt-in registration API
+                // (off unless enabled in the manifest); still the way to drop the token.
+                @Suppress("DEPRECATION")
+                FirebaseMessaging.getInstance().deleteToken()
+            }
             authUid = auth.currentUser?.uid
             if (auth.currentUser == null && screen == "home") {
                 currentProfile = null

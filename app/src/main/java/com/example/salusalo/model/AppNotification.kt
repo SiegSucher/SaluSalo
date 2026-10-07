@@ -36,6 +36,11 @@ enum class NotificationType {
 /** False for an alert of a type this build doesn't know. */
 val AppNotification.isKnown: Boolean get() = type != NotificationType.UNKNOWN
 
+/** The alert type with this name; UNKNOWN for a name this build doesn't know (or none). */
+fun notificationTypeOf(name: String?): NotificationType =
+    NotificationType.entries.firstOrNull { it.name == name && it != NotificationType.UNKNOWN }
+        ?: NotificationType.UNKNOWN
+
 /**
  * Decodes a type name this build doesn't know as UNKNOWN instead of failing, so one
  * new alert type can't break the whole Alerts list or the live alerts (§27).
@@ -43,11 +48,7 @@ val AppNotification.isKnown: Boolean get() = type != NotificationType.UNKNOWN
 object NotificationTypeSerializer : KSerializer<NotificationType> {
     override val descriptor = PrimitiveSerialDescriptor("com.example.salusalo.model.NotificationType", PrimitiveKind.STRING)
     override fun serialize(encoder: Encoder, value: NotificationType) = encoder.encodeString(value.name)
-    override fun deserialize(decoder: Decoder): NotificationType {
-        val name = decoder.decodeString()
-        return NotificationType.entries.firstOrNull { it.name == name && it != NotificationType.UNKNOWN }
-            ?: NotificationType.UNKNOWN
-    }
+    override fun deserialize(decoder: Decoder): NotificationType = notificationTypeOf(decoder.decodeString())
 }
 
 /**

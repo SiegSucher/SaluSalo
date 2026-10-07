@@ -91,6 +91,8 @@ dependencies {
     // The BoM keeps all Firebase libraries on compatible versions.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    // Phone notifications for alerts (§35): FCM data messages from the send-push Edge Function.
+    implementation(libs.firebase.messaging)
     // Google sign-in through Credential Manager; the ID token is passed to Firebase Auth.
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)

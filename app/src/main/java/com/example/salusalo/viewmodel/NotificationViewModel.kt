@@ -8,6 +8,7 @@ import com.example.salusalo.data.SupabaseClientProvider
 import com.example.salusalo.data.shortErrorText
 import com.example.salusalo.model.AppNotification
 import com.example.salusalo.model.NotificationPreferences
+import com.google.firebase.messaging.FirebaseMessaging
 import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.time.Instant
 
 class NotificationViewModel(application: Application) : AndroidViewModel(application) {
@@ -53,6 +55,12 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         sessionProfileId = profileId
         sessionJob = viewModelScope.launch {
             launch { load() }
+            launch {
+                // This phone's push token, for this account (§35). Quiet: a failure
+                // (offline, or the migration not run yet) tries again next start.
+                runCatching { repository.registerPushToken(FirebaseMessaging.getInstance().token.await()) }
+                    .onFailure { if (it is CancellationException) throw it }
+            }
             launch {
                 // Alerts inserted while the connection was lost never arrive live.
                 repository.inserts(profileId, onRejoined = { load(quiet = true) })
