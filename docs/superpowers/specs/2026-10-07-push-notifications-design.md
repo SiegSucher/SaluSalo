@@ -47,21 +47,22 @@ Every in-app alert (a message, a reservation update, an admin announcement) also
 
 - **Library:** `com.google.firebase:firebase-messaging` through the existing Firebase BoM (one line in `libs.versions.toml`, one in `app/build.gradle.kts`).
 - **Manifest:** `POST_NOTIFICATIONS`; the service `.PushService` (not exported) with the `com.google.firebase.MESSAGING_EVENT` filter.
-- **`PushService.kt`** (new, root package), a `FirebaseMessagingService`:
+- **`PushNotifications.kt`** (new, root package) with `PushService`, a `FirebaseMessagingService`:
   - `onNewToken`: when a Firebase user is signed in, `NotificationRepository.registerPushToken(token)` (quiet on failure).
   - `onMessageReceived`: drops the message when no Firebase user is signed in on the phone or its `uid` isn't that user's, and when it is a message of the chat open on screen while the app is resumed. Otherwise posts a notification:
     - channel `alerts` ("Alerts", importance HIGH, so it pops up), created before each post (cheap and idempotent);
     - small icon: the existing monochrome launcher silhouette; title and text from the alert; `BigTextStyle`; auto-cancel;
     - tag: the conversation ID for messages (a chat's newest message replaces its older one), else the alert ID;
-    - silent (`setSilent(true)`) when the "Notification sound" switch is off, or when the in-app sound already played for this alert;
+    - silent (`setSilent(true)`) when the "Notification sound" switch is off;
     - tap: a `PendingIntent` to `MainActivity` (`FLAG_IMMUTABLE`, single top) carrying the alert's ID, type, conversation ID and reservation ID.
-- **Shared, process-wide state** (a small `object`, in `PushService.kt`): whether Home is resumed and which chat is open (set by `HomeScreen`), and a bounded set of alert IDs that already made a sound (`claimSound(id)`: the first caller wins, whichever of Realtime or FCM arrives first, so an alert never sounds twice).
-- **Pure rules for tests:** `shouldShowPush(…)` (the drop rules) and `alertTarget(type, conversationId, reservationId)` (the Alerts page's routing, which `AlertScreen` then uses too, so a tapped pop-up and a tapped alert can't disagree). Unit test `PushRulesTest`.
+- **Shared, process-wide state** (`AlertPresence`, a small `object` in `PushNotifications.kt`): whether Home is resumed and which chat is open, set by `HomeScreen`.
+- **Pure rules for tests:** `pushTapFrom(data)` (reading the alert from the FCM data) and `shouldShowPush(…)` (the drop rules). Unit test `PushRulesTest`.
+- **One routing function:** `HomeScreen`'s `openAlert(type, alertId, conversationId, reservationId)` replaces the Alerts page's four callbacks; a tapped alert and a tapped pop-up both call it, so they can't disagree.
 - **Registering the token:** when Home starts for a profile, `FirebaseMessaging.getToken()` → `register_my_push_token` (quiet). `NotificationRepository.registerPushToken()`.
 - **Sign-out:** whenever the app sees Firebase sign out (Log out, or the session ending), `FirebaseMessaging.deleteToken()` in the background, so the old token stops working; the next sign-in gets a new one. If that fails offline, the `uid` check above still drops the old account's pop-ups.
-- **Tap handling:** `MainActivity` reads the tap's extras in `onCreate` and `onNewIntent` into Compose state (consumed once, so rotation doesn't repeat it). When Home is open for a signed-in profile it marks the alert read and routes with `alertTarget`: a message opens the chat; a reservation alert opens the same reservation page as on Alerts; an announcement switches to Alerts and opens its dialog (`AlertScreen` gains an announcement ID to open). Not signed in: the app just opens.
+- **Tap handling:** `MainActivity` reads the tap's extras in `onCreate` and `onNewIntent` into Compose state (consumed once, so rotation doesn't repeat it). When Home is open for a signed-in profile it marks the alert read and routes with `openAlert`: a message opens the chat; a reservation alert opens the same reservation page as on Alerts; an announcement switches to Alerts and opens its dialog (`AlertsScreen` gains an announcement ID to open). Not signed in: the app just opens.
 - **Permission (Android 13+):** asked once, the first time Home opens after this update (`push_permission_asked` in `salusalo_session`). Profile → Notifications shows "Phone notifications are off" with **Turn on** (the phone's notification settings for Salu-Salo) while they are off, re-checked when the page is shown again.
-- **In-app sound:** unchanged rules (resumed, not the open chat, switch on, normal ringer), plus `claimSound(id)`. Opening a chat also clears its pop-up from the shade.
+- **In-app sound:** unchanged rules (resumed, not the open chat, switch on, normal ringer), and only while the phone doesn't show Salu-Salo's notifications (`phoneNotificationsOn()`); otherwise the pop-up plays the sound, so an alert never sounds twice. Opening a chat also clears its pop-up from the shade.
 - **"Keep me signed in" removed:** the checkbox on Sign In and Create Account, the sign-out in `MainActivity.onCreate`, `keepSignedIn()`/`setKeepSignedIn()` and the parameters that carried the choice. `welcomeSeen()` still treats a saved `keep_signed_in` as "seen" (installs from older builds); the stored value is otherwise ignored.
 
 ## 4. Developer's one-time setup (exact steps go in `supabase/README.md`)
