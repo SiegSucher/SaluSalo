@@ -163,7 +163,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
@@ -180,8 +179,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Only on a fresh start: Android restoring the app hands back the old intent.
-        if (savedInstanceState == null) pushTap = pushTapFrom(intent)
+        // Only on a fresh start: Android restoring the app, or reopening it from
+        // Recents, hands back the old intent.
+        if (isFreshTap(savedInstanceState != null, intent.flags)) pushTap = pushTapFrom(intent)
 
 
         enableEdgeToEdge(
@@ -270,15 +270,9 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
     // out then). Back to Sign In, saying why. A network failure never ends it.
     DisposableEffect(firebaseAuth) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
-            // Signed out (Log out, or the session ended): this phone's push token
-            // is deleted, so the old account's alerts stop popping up here; the
-            // next sign-in registers a new one (§35).
-            if (auth.currentUser == null && authUid != null) {
-                // Deprecated in Firebase 25.1 in favour of an opt-in registration API
-                // (off unless enabled in the manifest); still the way to drop the token.
-                @Suppress("DEPRECATION")
-                FirebaseMessaging.getInstance().deleteToken()
-            }
+            // Signed out (Log out, or the session ended): §35's push token and
+            // notifications go with the account.
+            if (auth.currentUser == null && authUid != null) forgetPushOnSignOut(context)
             authUid = auth.currentUser?.uid
             if (auth.currentUser == null && screen == "home") {
                 currentProfile = null
@@ -1609,7 +1603,8 @@ private fun HomeScreen(
     // A new alert plays the phone's notification sound while the app is on
     // screen, unless it is a message in the chat that is open. The switch is
     // read when the alert arrives. While the phone shows Salu-Salo's
-    // notifications, the pop-up plays it instead (§35), so it never sounds twice.
+    // notifications and pushes arrive, the pop-up plays it instead (§35), so it
+    // doesn't sound twice; if pushes stop arriving, the app's own sound returns.
     val alertSound = remember { AlertSoundPlayer(context) }
     var appResumed by remember { mutableStateOf(false) }
     LifecycleResumeEffect(alertSound) {
@@ -1626,7 +1621,9 @@ private fun HomeScreen(
         notificationViewModel.newAlerts.collect { alert ->
             val inOpenChat = alert.type == NotificationType.MESSAGE &&
                     alert.conversationId != null && alert.conversationId == openChatId
-            if (appResumed && !inOpenChat && notificationSoundOn(context) && !phoneNotificationsOn(context)) {
+            val popUpSounds = phoneNotificationsOn(context) &&
+                    pushesArriving(lastPushAt(context), System.currentTimeMillis())
+            if (appResumed && !inOpenChat && notificationSoundOn(context) && !popUpSounds) {
                 alertSound.play()
             }
         }
@@ -1693,6 +1690,12 @@ private fun HomeScreen(
         onPushTapHandled()
         // For another account (this phone signed in to someone else since): the app just opens.
         if (tap.uid != FirebaseAuth.getInstance().currentUser?.uid) return@LaunchedEffect
+        // A chat and a listing's details are drawn over every page: close them, or
+        // the page the tap opens stays hidden behind them (a message opens its chat).
+        if (tap.type != NotificationType.MESSAGE) {
+            if (messageViewModel.active.value != null) messageViewModel.close()
+            foodViewModel.closeListing()
+        }
         notificationViewModel.markRead(listOf(tap.alertId))
         openAlert(tap.type, tap.alertId, tap.conversationId, tap.reservationId)
     }

@@ -1,5 +1,6 @@
 package com.example.salusalo
 
+import android.content.Intent
 import com.example.salusalo.model.NotificationType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -72,5 +73,25 @@ class PushRulesTest {
                 "u1", appResumed = true, openChatId = "c1"
             )
         )
+    }
+
+    @Test
+    fun readsATapOnlyOnAFreshStartNeverFromRecents() {
+        assertTrue(isFreshTap(hasSavedState = false, intentFlags = 0))
+        assertTrue(isFreshTap(hasSavedState = false, intentFlags = Intent.FLAG_ACTIVITY_NEW_TASK))
+        // Android restoring the app, or reopening it from Recents, hands back the old intent.
+        assertFalse(isFreshTap(hasSavedState = true, intentFlags = 0))
+        assertFalse(isFreshTap(hasSavedState = false, intentFlags = Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY))
+    }
+
+    @Test
+    fun pushesCountAsArrivingFor14DaysAfterTheLastOne() {
+        val day = 24 * 60 * 60 * 1000L
+        assertFalse(pushesArriving(lastPushAtMillis = 0, nowMillis = 100 * day))
+        assertTrue(pushesArriving(lastPushAtMillis = 100 * day, nowMillis = 100 * day + 1))
+        assertTrue(pushesArriving(lastPushAtMillis = 100 * day, nowMillis = 114 * day - 1))
+        assertFalse(pushesArriving(lastPushAtMillis = 100 * day, nowMillis = 114 * day))
+        // The phone's clock moved back: the push still arrived recently.
+        assertTrue(pushesArriving(lastPushAtMillis = 100 * day, nowMillis = 99 * day))
     }
 }

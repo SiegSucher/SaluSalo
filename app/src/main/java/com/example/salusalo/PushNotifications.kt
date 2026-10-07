@@ -15,6 +15,7 @@ import com.example.salusalo.data.NotificationRepository
 import com.example.salusalo.model.NotificationType
 import com.example.salusalo.model.notificationTypeOf
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.runBlocking
@@ -48,6 +49,15 @@ internal fun pushTapFrom(data: Map<String, String>): PushTap? {
         uid = data["uid"]?.takeIf { it.isNotEmpty() }
     )
 }
+
+/**
+ * Whether the Intent that started MainActivity may carry a new tap: not when
+ * Android restores the app, and not when it is reopened from Recents, which
+ * relaunches the task's first Intent (an old notification's) after the app was
+ * closed with Back (Android 7–11) or the phone restarted.
+ */
+internal fun isFreshTap(hasSavedState: Boolean, intentFlags: Int): Boolean =
+    !hasSavedState && (intentFlags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
 
 /** The alert of a tapped notification that opened MainActivity, or null for any other start. */
 internal fun pushTapFrom(intent: Intent?): PushTap? =
@@ -132,6 +142,36 @@ internal fun showAlertNotification(context: Context, tap: PushTap, data: Map<Str
     }
 }
 
+// When this phone last received a Salu-Salo push (salusalo_session, like the
+// sound switch). The app's own alert sound stays quiet only while pushes
+// arrive, so a push side that isn't set up or fails never silences the app.
+private const val PUSH_RECENT_MILLIS = 14L * 24 * 60 * 60 * 1000
+
+/** Whether pushes reach this phone: one arrived in the last 14 days. */
+internal fun pushesArriving(lastPushAtMillis: Long, nowMillis: Long): Boolean =
+    lastPushAtMillis > 0 && nowMillis - lastPushAtMillis < PUSH_RECENT_MILLIS
+
+internal fun lastPushAt(context: Context): Long =
+    context.getSharedPreferences("salusalo_session", 0).getLong("last_push_at", 0L)
+
+private fun markPushArrived(context: Context) {
+    context.getSharedPreferences("salusalo_session", 0).edit { putLong("last_push_at", System.currentTimeMillis()) }
+}
+
+/**
+ * Firebase signed out (Log out, or the session ended): this phone's push token
+ * is deleted, so the old account's alerts stop popping up here (the next
+ * sign-in registers a new one), and its notifications leave the shade, so the
+ * next person using the phone can't read them.
+ */
+internal fun forgetPushOnSignOut(context: Context) {
+    // Deprecated in Firebase 25.1 in favour of an opt-in registration API
+    // (off unless enabled in the manifest); still the way to drop the token.
+    @Suppress("DEPRECATION")
+    FirebaseMessaging.getInstance().deleteToken()
+    NotificationManagerCompat.from(context).cancelAll()
+}
+
 // The notification permission is asked once per phone; kept in salusalo_session
 // like "Notification sound", which sign-out doesn't clear.
 internal fun pushPermissionAsked(context: Context): Boolean =
@@ -164,6 +204,7 @@ class PushService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val tap = pushTapFrom(message.data) ?: return
+        markPushArrived(this)
         val signedIn = FirebaseAuth.getInstance().currentUser?.uid
         if (!shouldShowPush(tap, signedIn, AlertPresence.resumed, AlertPresence.openChatId)) return
         showAlertNotification(this, tap, message.data)
