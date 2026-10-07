@@ -4,8 +4,9 @@
    Everything the app stores is backed up except Firebase Auth's saved sign-in,
    which holds the account's refresh token: restoring it would sign another
    device in to this account. After a restore the user signs in again. The app's
-   own preferences (salusalo_session: welcome pages, Keep me signed in, alert
-   sound; salusalo_discovery_<account>: food preferences) are still backed up.
+   own preferences (salusalo_session: welcome pages, alert sound, the notification
+   permission asked; salusalo_discovery_<account>: food preferences) are still
+   backed up.
 
    The file name is com.google.firebase.auth.api.Store.<base64url "[DEFAULT]">+<base64url
    Firebase app ID> (FirebaseApp.getPersistenceKey()), with the app ID from

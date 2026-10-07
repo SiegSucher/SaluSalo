@@ -7,7 +7,7 @@ import android.media.Ringtone
 import android.media.RingtoneManager
 
 // "Notification sound" is a setting of this phone, not of the account: it is kept
-// in salusalo_session (next to "Keep me signed in"), which sign-out does not clear.
+// in salusalo_session (the phone's own settings), which sign-out does not clear.
 private fun soundPreferences(context: Context) =
     context.getSharedPreferences("salusalo_session", 0)
 

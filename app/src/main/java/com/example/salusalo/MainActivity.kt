@@ -109,7 +109,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -184,15 +183,6 @@ class MainActivity : ComponentActivity() {
         // Only on a fresh start: Android restoring the app hands back the old intent.
         if (savedInstanceState == null) pushTap = pushTapFrom(intent)
 
-        // "Keep me signed in" unchecked: end the session when the app starts
-        // fresh (for example after being swiped away), but not on rotation or
-        // when Android restores the app, which pass a saved state.
-        if (savedInstanceState == null) {
-            val auth = FirebaseAuth.getInstance()
-            if (!keepSignedIn(this) && auth.currentUser != null) {
-                auth.signOut()
-            }
-        }
 
         enableEdgeToEdge(
             statusBarStyle = androidx.activity.SystemBarStyle.light(
@@ -225,22 +215,14 @@ private val ProfileSaver = Saver<UserProfile?, String>(
     restore = { saved -> runCatching { Json.decodeFromString(UserProfile.serializer(), saved) }.getOrNull() }
 )
 
-// Device-only "Keep me signed in" choice. It survives sign-out, so the next
-// fresh start can act on the choice made at the last sign-in. When it was never
-// saved (a session from an older build), the session is kept.
+// This phone's own settings; sign-out doesn't clear them. An account stays
+// signed in until Log out (§35; "Keep me signed in" is gone).
 private fun sessionPreferences(context: Context) =
     context.getSharedPreferences("salusalo_session", 0)
 
-private fun keepSignedIn(context: Context): Boolean =
-    sessionPreferences(context).getBoolean("keep_signed_in", true)
-
-private fun setKeepSignedIn(context: Context, keep: Boolean) {
-    sessionPreferences(context).edit().putBoolean("keep_signed_in", keep).apply()
-}
-
 // The welcome pages show only until this phone has seen them: Get Started,
-// "Sign in" on them, or any account reaching Home. A saved "Keep me signed in"
-// choice means someone signed in on an older build, so they count as seen too.
+// "Sign in" on them, or any account reaching Home. A "Keep me signed in" choice
+// saved by a build before §35 means someone signed in, so they count as seen too.
 private fun welcomeSeen(context: Context): Boolean =
     sessionPreferences(context).run { getBoolean("welcome_seen", false) || contains("keep_signed_in") }
 
@@ -309,7 +291,7 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
         onDispose { firebaseAuth.removeAuthStateListener(listener) }
     }
     // True while an account setup runs (after a sign-in, or Try again), and from a
-    // start with a saved session ("Keep me signed in") until its setup has finished:
+    // start with a saved session until its setup has finished:
     // the branded loading screen then shows instead of a form.
     var setupPending by remember { mutableStateOf(firebaseAuth.currentUser != null) }
     // Opening the app shows the loading screen for at least STARTUP_INTRO_MS, also
@@ -410,7 +392,7 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
         }
     }
 
-    fun signInWithGoogle(keep: Boolean) {
+    fun signInWithGoogle() {
         isAuthenticating = true
         // Cleared first, so a setup started after a rotation uses no typed name.
         signUpName = null
@@ -420,7 +402,6 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
                 firebaseAuth
                     .signInWithCredential(GoogleAuthProvider.getCredential(idToken, null))
                     .await()
-                setKeepSignedIn(context, keep)
                 isAuthenticating = false
                 // A new Google user's profile is created with the Google name and email.
                 openAuthenticatedHome()
@@ -559,7 +540,7 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
                         mode = currentScreen,
                         onNavigate = { screen = it },
                         isAuthenticating = isAuthenticating,
-                        onContinue = { email, password, confirmPassword, name, keep ->
+                        onContinue = { email, password, confirmPassword, name ->
                             val cleanEmail = email.trim()
 
                             when {
@@ -598,8 +579,6 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
                                             .addOnCompleteListener { task ->
                                                 isAuthenticating = false
                                                 if (task.isSuccessful) {
-                                                    // A new account stays signed in.
-                                                    setKeepSignedIn(context, true)
                                                     task.result.user?.updateProfile(
                                                         userProfileChangeRequest {
                                                             displayName = name.trim()
@@ -636,7 +615,6 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
                                             .addOnCompleteListener { task ->
                                                 isAuthenticating = false
                                                 if (task.isSuccessful) {
-                                                    setKeepSignedIn(context, keep)
                                                     openAuthenticatedHome()
                                                 } else {
                                                     message = authErrorMessage(
@@ -648,7 +626,7 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
                                 }
                             }
                         },
-                        onGoogle = { keep -> signInWithGoogle(keep) }
+                        onGoogle = { signInWithGoogle() }
                     )
                 }
             }
@@ -1051,10 +1029,9 @@ private fun SignInScreen(
         email: String,
         password: String,
         confirmPassword: String,
-        name: String,
-        keepSignedIn: Boolean
+        name: String
     ) -> Unit,
-    onGoogle: (keepSignedIn: Boolean) -> Unit
+    onGoogle: () -> Unit
 ) {
     val creatingAccount = mode == "signup"
     val resettingPassword = mode == "forgot"
@@ -1065,9 +1042,6 @@ private fun SignInScreen(
     // Passwords are retained only while this screen remains open.
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-
-    // Starts unchecked: staying signed in is the user's choice at each sign-in.
-    var keepSignedIn by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -1180,39 +1154,8 @@ private fun SignInScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(SaluRadius.Small)
-                                    .toggleable(
-                                        value = keepSignedIn,
-                                        role = Role.Checkbox,
-                                        onValueChange = { keepSignedIn = it }
-                                    )
-                                    .heightIn(min = 48.dp)
-                                    .padding(end = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = keepSignedIn,
-                                    onCheckedChange = null,
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = SaluColors.Green,
-                                        uncheckedColor = SaluColors.Gray
-                                    )
-                                )
-
-                                Spacer(Modifier.width(8.dp))
-
-                                Text(
-                                    "Keep me signed in",
-                                    style = SaluText.Supporting,
-                                    color = SaluColors.DarkGreen
-                                )
-                            }
-
                             TextButton(
                                 onClick = { onNavigate("forgot") },
                                 contentPadding = PaddingValues(horizontal = 8.dp)
@@ -1237,7 +1180,7 @@ private fun SignInScreen(
                     },
                     loading = isAuthenticating,
                     onClick = {
-                        onContinue(email, password, confirmPassword, name, keepSignedIn)
+                        onContinue(email, password, confirmPassword, name)
                     }
                 )
 
@@ -1276,10 +1219,7 @@ private fun SignInScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    // A new account made on the Create Account tab stays signed in.
-                    GoogleButton(enabled = !isAuthenticating) {
-                        onGoogle(if (creatingAccount) true else keepSignedIn)
-                    }
+                    GoogleButton(enabled = !isAuthenticating) { onGoogle() }
 
                     Spacer(Modifier.height(16.dp))
 
