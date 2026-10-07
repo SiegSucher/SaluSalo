@@ -151,6 +151,13 @@ private const val PUSH_RECENT_MILLIS = 14L * 24 * 60 * 60 * 1000
 internal fun pushesArriving(lastPushAtMillis: Long, nowMillis: Long): Boolean =
     lastPushAtMillis > 0 && nowMillis - lastPushAtMillis < PUSH_RECENT_MILLIS
 
+/**
+ * How long to wait before trying again to save this phone's push token: 15
+ * seconds, then twice as long each time, at most 10 minutes (§35.7).
+ */
+internal fun pushRetryDelayMillis(attempt: Int): Long =
+    (15_000L shl attempt.coerceIn(0, 6)).coerceAtMost(600_000L)
+
 internal fun lastPushAt(context: Context): Long =
     context.getSharedPreferences("salusalo_session", 0).getLong("last_push_at", 0L)
 

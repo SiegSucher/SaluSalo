@@ -8,6 +8,7 @@ import com.example.salusalo.data.SupabaseClientProvider
 import com.example.salusalo.data.shortErrorText
 import com.example.salusalo.model.AppNotification
 import com.example.salusalo.model.NotificationPreferences
+import com.example.salusalo.pushRetryDelayMillis
 import com.google.firebase.messaging.FirebaseMessaging
 import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.CancellationException
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.tasks.await
 import java.time.Instant
 
@@ -41,6 +43,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     val newAlerts = _newAlerts.asSharedFlow()
 
     private var sessionJob: Job? = null
+    private var pushTokenJob: Job? = null
     private var sessionProfileId: String? = null
 
     /**
@@ -53,18 +56,9 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         if (sessionJob?.isActive == true && sessionProfileId == profileId) return
         sessionJob?.cancel()
         sessionProfileId = profileId
+        registerPushToken()
         sessionJob = viewModelScope.launch {
             launch { load() }
-            launch {
-                // This phone's push token, for this account (§35). Quiet: a failure
-                // (offline, or the migration not run yet) tries again next start.
-                // getToken is deprecated in Firebase 25.1 in favour of an opt-in
-                // registration API (off unless enabled in the manifest).
-                @Suppress("DEPRECATION")
-                val token = runCatching { FirebaseMessaging.getInstance().token.await() }
-                token.mapCatching { repository.registerPushToken(it) }
-                    .onFailure { if (it is CancellationException) throw it }
-            }
             launch {
                 // Alerts inserted while the connection was lost never arrive live.
                 repository.inserts(profileId, onRejoined = { load(quiet = true) })
@@ -95,6 +89,31 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                 _notifications.update { current -> current.filter { c -> loaded.none { it.id == c.id } } + loaded }
             }
             .onFailure { if (it is CancellationException) throw it else if (!quiet) _message.value = errorText(it) }
+    }
+
+    /**
+     * Saves this phone's push token for this account (§35), trying again until it
+     * works: right after an install Firebase may not have a token yet (§35.7), and
+     * the device may be offline or the migration not run yet. Quiet. Called when
+     * Home starts and whenever the app comes back; one attempt series at a time.
+     */
+    fun registerPushToken() {
+        if (pushTokenJob?.isActive == true) return
+        pushTokenJob = viewModelScope.launch {
+            var attempt = 0
+            while (true) {
+                val saved = runCatching {
+                    // getToken is deprecated in Firebase 25.1 in favour of an opt-in
+                    // registration API (off unless enabled in the manifest).
+                    @Suppress("DEPRECATION")
+                    val token = withTimeoutOrNull(30_000L) { FirebaseMessaging.getInstance().token.await() }
+                        ?: error("No push token yet")
+                    repository.registerPushToken(token)
+                }.onFailure { if (it is CancellationException) throw it }.isSuccess
+                if (saved) return@launch
+                delay(pushRetryDelayMillis(attempt++))
+            }
+        }
     }
 
     /** Reloads the alerts, for example when the app comes back: Realtime misses alerts while it is in the background. */
@@ -139,6 +158,8 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     fun clearSession() {
         sessionJob?.cancel()
         sessionJob = null
+        pushTokenJob?.cancel()
+        pushTokenJob = null
         sessionProfileId = null
         _notifications.value = emptyList()
         _preferences.value = null

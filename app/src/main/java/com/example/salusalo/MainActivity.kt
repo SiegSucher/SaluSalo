@@ -1589,6 +1589,8 @@ private fun HomeScreen(
             wasStopped = false
             messageViewModel.loadConversations(quiet = true)
             notificationViewModel.refresh(quiet = true)
+            // Firebase may have a token only now, or a new one (§35.7).
+            notificationViewModel.registerPushToken()
             foodViewModel.refreshFeedIfStale()
             // The phone may have moved meanwhile; never asks for access here.
             if (PhoneLocation.hasPermission(context)) refreshPhonePosition(askIfNeeded = false)

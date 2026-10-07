@@ -94,4 +94,15 @@ class PushRulesTest {
         // The phone's clock moved back: the push still arrived recently.
         assertTrue(pushesArriving(lastPushAtMillis = 100 * day, nowMillis = 99 * day))
     }
+
+    @Test
+    fun triesToSaveThePushTokenSoonThenLessOften() {
+        assertEquals(15_000L, pushRetryDelayMillis(0))
+        assertEquals(30_000L, pushRetryDelayMillis(1))
+        assertEquals(60_000L, pushRetryDelayMillis(2))
+        assertEquals(120_000L, pushRetryDelayMillis(3))
+        // At most every 10 minutes, however long it keeps failing.
+        assertEquals(600_000L, pushRetryDelayMillis(6))
+        assertEquals(600_000L, pushRetryDelayMillis(1_000))
+    }
 }
