@@ -46,6 +46,12 @@ import com.example.salusalo.data.clearGoogleCredentialState
 import com.example.salusalo.data.requestGoogleIdToken
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.ContextCompat
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.os.Build
+import android.content.pm.PackageManager
+import android.Manifest
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.credentials.exceptions.GetCredentialCancellationException
@@ -1692,6 +1698,19 @@ private fun HomeScreen(
         AlertPresence.openChatId = id
         if (id != null) cancelChatNotification(context, id)
         onDispose { AlertPresence.openChatId = null }
+    }
+    // Android 13+: asked once whether Salu-Salo may show notifications (§35).
+    // Turned off later, Profile → Notifications offers the phone's settings.
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !pushPermissionAsked(context)) {
+            markPushPermissionAsked(context)
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
     // Opening a chat marks its message alerts read on the server; mirror that
     // for alerts that arrive while the chat is open.

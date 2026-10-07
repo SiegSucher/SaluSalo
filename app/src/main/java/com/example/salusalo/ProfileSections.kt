@@ -10,6 +10,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Redeem
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.outlined.StarOutline
@@ -19,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.salusalo.viewmodel.NotificationViewModel
@@ -162,6 +164,21 @@ fun ProfileSections(
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
             snackbar.showSnackbar(message)
+        }
+    }
+
+    // The phone's notification settings for Salu-Salo (app details on Android 7).
+    fun openDeviceNotificationSettings() {
+        val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:${context.packageName}"))
+        val target = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        } else fallback
+        try { context.startActivity(target) }
+        catch (_: Exception) {
+            try { context.startActivity(fallback) }
+            catch (_: Exception) { feedback = "Open your phone Settings, then Apps, then Salu-Salo." }
         }
     }
 
@@ -558,6 +575,22 @@ fun ProfileSections(
                             }
 
                             "notifications" -> {
+                                // Off for the whole app or its Alerts channel (§35); checked
+                                // again each time the page is back on screen.
+                                var phoneNotifications by remember { mutableStateOf(phoneNotificationsOn(context)) }
+                                LifecycleResumeEffect(Unit) {
+                                    phoneNotifications = phoneNotificationsOn(context)
+                                    onPauseOrDispose { }
+                                }
+                                if (!phoneNotifications) {
+                                    InlineNotice(
+                                        text = "Phone notifications are off, so alerts show only inside Salu-Salo.",
+                                        icon = Icons.Outlined.NotificationsOff,
+                                        tone = NoticeTone.Warning,
+                                        actionLabel = "Turn on",
+                                        onAction = { openDeviceNotificationSettings() }
+                                    )
+                                }
                                 SectionCard {
                                     if (serverPreferences == null) {
                                         Text("Alert preferences have not loaded yet.", style = SaluText.Body, color = SaluColors.Gray)
@@ -581,9 +614,9 @@ fun ProfileSections(
                                 }
 
                                 Text(
-                                    "Choose which updates appear in Alerts. Sound plays while " +
-                                            "Salu-Salo is open. Notifications while the app is " +
-                                            "closed are not available yet.",
+                                    "Choose which updates appear in Alerts and pop up on this " +
+                                            "phone, also while Salu-Salo is closed. Notification " +
+                                            "sound is saved on this phone only.",
                                     fontSize = 12.sp
                                 )
 
@@ -609,19 +642,7 @@ fun ProfileSections(
                                 }
                                 SaluSecondaryButton(
                                     text = "Open device notification settings",
-                                    onClick = {
-                                        val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                            Uri.parse("package:${context.packageName}"))
-                                        val target = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                                                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                        } else fallback
-                                        try { context.startActivity(target) }
-                                        catch (_: Exception) {
-                                            try { context.startActivity(fallback) }
-                                            catch (_: Exception) { feedback = "Open your phone Settings, then Apps, then Salu-Salo." }
-                                        }
-                                    }
+                                    onClick = { openDeviceNotificationSettings() }
                                 )
                             }
 

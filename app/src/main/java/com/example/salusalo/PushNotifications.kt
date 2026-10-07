@@ -10,6 +10,7 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import com.example.salusalo.data.NotificationRepository
 import com.example.salusalo.model.NotificationType
 import com.example.salusalo.model.notificationTypeOf
@@ -129,6 +130,15 @@ internal fun showAlertNotification(context: Context, tap: PushTap, data: Map<Str
     } catch (_: SecurityException) {
         // Notifications were turned off in the meantime.
     }
+}
+
+// The notification permission is asked once per phone; kept in salusalo_session
+// like "Notification sound", which sign-out doesn't clear.
+internal fun pushPermissionAsked(context: Context): Boolean =
+    context.getSharedPreferences("salusalo_session", 0).getBoolean("push_permission_asked", false)
+
+internal fun markPushPermissionAsked(context: Context) {
+    context.getSharedPreferences("salusalo_session", 0).edit { putBoolean("push_permission_asked", true) }
 }
 
 /**
