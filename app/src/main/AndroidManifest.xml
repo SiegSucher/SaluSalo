@@ -18,12 +18,17 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.SaluSalo">
+        <!-- Portrait only, whatever the phone's auto-rotate setting (the developer's choice).
+             Android 16+ ignores this on large screens (tablets, unfolded foldables), where the
+             app still turns; its state survives that, as it does a dark-mode change. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.SaluSalo"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            tools:ignore="LockedOrientationActivity,DiscouragedApi">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
