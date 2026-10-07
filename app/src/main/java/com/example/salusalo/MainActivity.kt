@@ -45,6 +45,7 @@ import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.clearGoogleCredentialState
 import com.example.salusalo.data.requestGoogleIdToken
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.credentials.exceptions.GetCredentialCancellationException
@@ -168,8 +169,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 class MainActivity : ComponentActivity() {
+    // A tapped phone notification waiting for Home (§35); Home consumes it once.
+    private var pushTap by mutableStateOf<PushTap?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Only on a fresh start: Android restoring the app hands back the old intent.
+        if (savedInstanceState == null) pushTap = pushTapFrom(intent)
 
         // "Keep me signed in" unchecked: end the session when the app starts
         // fresh (for example after being swiped away), but not on rotation or
@@ -194,9 +201,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SaluTheme {
-                SaluSaloApp()
+                SaluSaloApp(pushTap = pushTap, onPushTapHandled = { pushTap = null })
             }
         }
+    }
+
+    // A notification tapped while the app is open (single top: this activity is reused).
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        pushTapFrom(intent)?.let { pushTap = it }
     }
 }
 
@@ -230,7 +243,7 @@ private fun markWelcomeSeen(context: Context) {
 }
 
 @Composable
-private fun SaluSaloApp() {
+private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
     val context = LocalContext.current
     var screen by rememberSaveable { mutableStateOf(if (welcomeSeen(context)) "signin" else "welcome") }
     var message by rememberSaveable { mutableStateOf("") }
@@ -530,7 +543,9 @@ private fun SaluSaloApp() {
                         HomeScreen(
                             onLogout = { logOut() },
                             currentProfile = profile,
-                            onProfileUpdated = { currentProfile = it }
+                            onProfileUpdated = { currentProfile = it },
+                            pushTap = pushTap,
+                            onPushTapHandled = onPushTapHandled
                         )
                     }
 
@@ -1537,7 +1552,10 @@ private fun GoogleMark() {
 private fun HomeScreen(
     onLogout: () -> Unit,
     currentProfile: UserProfile?,
-    onProfileUpdated: (UserProfile) -> Unit
+    onProfileUpdated: (UserProfile) -> Unit,
+    // A tapped phone notification to open (§35), then onPushTapHandled.
+    pushTap: PushTap?,
+    onPushTapHandled: () -> Unit
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("All") }
@@ -1644,13 +1662,16 @@ private fun HomeScreen(
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { reservationViewModel.start(it) } }
     // A new alert plays the phone's notification sound while the app is on
     // screen, unless it is a message in the chat that is open. The switch is
-    // read when the alert arrives.
+    // read when the alert arrives. While the phone shows Salu-Salo's
+    // notifications, the pop-up plays it instead (§35), so it never sounds twice.
     val alertSound = remember { AlertSoundPlayer(context) }
     var appResumed by remember { mutableStateOf(false) }
     LifecycleResumeEffect(alertSound) {
         appResumed = true
+        AlertPresence.resumed = true
         onPauseOrDispose {
             appResumed = false
+            AlertPresence.resumed = false
             alertSound.stop()
         }
     }
@@ -1659,8 +1680,18 @@ private fun HomeScreen(
         notificationViewModel.newAlerts.collect { alert ->
             val inOpenChat = alert.type == NotificationType.MESSAGE &&
                     alert.conversationId != null && alert.conversationId == openChatId
-            if (appResumed && !inOpenChat && notificationSoundOn(context)) alertSound.play()
+            if (appResumed && !inOpenChat && notificationSoundOn(context) && !phoneNotificationsOn(context)) {
+                alertSound.play()
+            }
         }
+    }
+    // The chat open on screen: its pushed messages don't pop up, and opening it
+    // clears its notification (§35).
+    DisposableEffect(activeChat?.id) {
+        val id = activeChat?.id
+        AlertPresence.openChatId = id
+        if (id != null) cancelChatNotification(context, id)
+        onDispose { AlertPresence.openChatId = null }
     }
     // Opening a chat marks its message alerts read on the server; mirror that
     // for alerts that arrive while the chat is open.
@@ -1670,6 +1701,41 @@ private fun HomeScreen(
                 notificationViewModel.markConversationReadLocally(id)
             }
         }
+    }
+    // The announcement the Alerts page should open (tapped there or on its notification).
+    var announcementToOpen by rememberSaveable { mutableStateOf<String?>(null) }
+    // Where an alert leads, for a tap on the Alerts page and on its phone notification alike.
+    fun openAlert(type: NotificationType, alertId: String, conversationId: String?, reservationId: String?) {
+        when (type) {
+            NotificationType.MESSAGE -> conversationId?.let { messageViewModel.openConversation(it) }
+            // History; Activity then opens the reservation (with Rate for a claimed one).
+            NotificationType.RESERVATION_CLAIMED, NotificationType.RESERVATION_REMOVED -> {
+                activityTab = "History"
+                activityFocus = reservationId
+                page = "activity"
+            }
+            NotificationType.ANNOUNCEMENT -> {
+                announcementToOpen = alertId
+                page = "alerts"
+            }
+            NotificationType.UNKNOWN -> Unit
+            // A new or cancelled reservation on one of this account's listings:
+            // My Listings; Activity then opens that listing's Manage reservations.
+            else -> {
+                activityTab = "My Listings"
+                activityFocus = reservationId
+                page = "activity"
+            }
+        }
+    }
+    // A tapped phone notification (§35), handled once Home is open.
+    LaunchedEffect(pushTap) {
+        val tap = pushTap ?: return@LaunchedEffect
+        onPushTapHandled()
+        // For another account (this phone signed in to someone else since): the app just opens.
+        if (tap.uid != FirebaseAuth.getInstance().currentUser?.uid) return@LaunchedEffect
+        notificationViewModel.markRead(listOf(tap.alertId))
+        openAlert(tap.type, tap.alertId, tap.conversationId, tap.reservationId)
     }
 
     // Greeting follows the signed-in profile and the device's local time;
@@ -1908,25 +1974,9 @@ private fun HomeScreen(
                 when (shown) {
                     "alerts" -> AlertsScreen(
                         notificationViewModel = notificationViewModel,
-                        onOpenConversation = { id -> messageViewModel.openConversation(id) },
-                        onOpenListingReservation = { reservationId ->
-                            // My Listings; Activity then opens that listing's Manage reservations.
-                            activityTab = "My Listings"
-                            activityFocus = reservationId
-                            page = "activity"
-                        },
-                        onOpenClaimedReservation = { reservationId ->
-                            // History; Activity then opens the reservation, with Rate.
-                            activityTab = "History"
-                            activityFocus = reservationId
-                            page = "activity"
-                        },
-                        onOpenRemovedReservation = { reservationId ->
-                            // A reservation cancelled because its listing was removed.
-                            activityTab = "History"
-                            activityFocus = reservationId
-                            page = "activity"
-                        }
+                        onOpenAlert = { alert -> openAlert(alert.type, alert.id, alert.conversationId, alert.reservationId) },
+                        openAnnouncement = announcementToOpen,
+                        onAnnouncementOpened = { announcementToOpen = null }
                     )
 
                     "messages" -> MessagesScreen(

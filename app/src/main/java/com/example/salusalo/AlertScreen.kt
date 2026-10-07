@@ -92,11 +92,12 @@ private fun NotificationType.style(): AlertStyle = when (this) {
 @Composable
 fun AlertsScreen(
     notificationViewModel: NotificationViewModel,
-    onOpenConversation: (String) -> Unit,
-    // A new or cancelled reservation on one of this account's listings.
-    onOpenListingReservation: (String?) -> Unit,
-    onOpenClaimedReservation: (String?) -> Unit,
-    onOpenRemovedReservation: (String?) -> Unit
+    // Where a tapped alert leads: HomeScreen's openAlert, which a tapped phone
+    // notification uses too (§35).
+    onOpenAlert: (AppNotification) -> Unit,
+    // An announcement to open (tapped here or on its notification); then onAnnouncementOpened.
+    openAnnouncement: String?,
+    onAnnouncementOpened: () -> Unit
 ) {
     val alerts by notificationViewModel.notifications.collectAsStateWithLifecycle()
     val preferences by notificationViewModel.preferences.collectAsStateWithLifecycle()
@@ -112,6 +113,12 @@ fun AlertsScreen(
 
     // The announcement whose full text is open; by ID, so it stays open through rotation.
     var openAnnouncementId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(openAnnouncement) {
+        if (openAnnouncement != null) {
+            openAnnouncementId = openAnnouncement
+            onAnnouncementOpened()
+        }
+    }
 
     LaunchedEffect(Unit) { notificationViewModel.refresh() }
 
@@ -262,18 +269,7 @@ fun AlertsScreen(
                             .padding(horizontal = 20.dp),
                         onClick = {
                             notificationViewModel.markRead(listOf(alert.id))
-                            when (alert.type) {
-                                NotificationType.MESSAGE ->
-                                    alert.conversationId?.let(onOpenConversation)
-                                NotificationType.RESERVATION_CLAIMED ->
-                                    onOpenClaimedReservation(alert.reservationId)
-                                NotificationType.RESERVATION_REMOVED ->
-                                    onOpenRemovedReservation(alert.reservationId)
-                                NotificationType.ANNOUNCEMENT ->
-                                    openAnnouncementId = alert.id
-                                else ->
-                                    onOpenListingReservation(alert.reservationId)
-                            }
+                            onOpenAlert(alert)
                         }
                     )
                 }

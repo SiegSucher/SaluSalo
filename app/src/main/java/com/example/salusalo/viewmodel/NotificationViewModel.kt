@@ -58,7 +58,11 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             launch {
                 // This phone's push token, for this account (§35). Quiet: a failure
                 // (offline, or the migration not run yet) tries again next start.
-                runCatching { repository.registerPushToken(FirebaseMessaging.getInstance().token.await()) }
+                // getToken is deprecated in Firebase 25.1 in favour of an opt-in
+                // registration API (off unless enabled in the manifest).
+                @Suppress("DEPRECATION")
+                val token = runCatching { FirebaseMessaging.getInstance().token.await() }
+                token.mapCatching { repository.registerPushToken(it) }
                     .onFailure { if (it is CancellationException) throw it }
             }
             launch {
@@ -96,8 +100,10 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     /** Reloads the alerts, for example when the app comes back: Realtime misses alerts while it is in the background. */
     fun refresh(quiet: Boolean = false) { viewModelScope.launch { load(quiet) } }
 
+    // Alerts not loaded yet (a notification tapped as the app starts) are sent
+    // too; only those already shown as read are skipped.
     fun markRead(ids: List<String>) {
-        val unread = ids.filter { id -> _notifications.value.any { it.id == id && it.readAt == null } }
+        val unread = ids.filter { id -> _notifications.value.none { it.id == id && it.readAt != null } }
         if (unread.isEmpty()) return
         markLocal { it.id in unread }
         viewModelScope.launch { runCatching { repository.markRead(unread) } }

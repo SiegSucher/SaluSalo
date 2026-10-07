@@ -72,6 +72,18 @@ internal object AlertPresence {
 
 internal const val ALERTS_CHANNEL = "alerts"
 
+/** Whether this phone shows Salu-Salo's notifications: allowed for the app, and the Alerts channel not turned off. */
+internal fun phoneNotificationsOn(context: Context): Boolean {
+    val manager = NotificationManagerCompat.from(context)
+    return manager.areNotificationsEnabled() &&
+        manager.getNotificationChannelCompat(ALERTS_CHANNEL)?.importance != NotificationManagerCompat.IMPORTANCE_NONE
+}
+
+/** Removes a chat's notification once the chat is open. */
+internal fun cancelChatNotification(context: Context, conversationId: String) {
+    NotificationManagerCompat.from(context).cancel(conversationId, 0)
+}
+
 /**
  * Shows a pushed alert as a notification that pops up (channel importance high),
  * silent when this phone's "Notification sound" is off. A chat's newest message
