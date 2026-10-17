@@ -42,6 +42,7 @@ Unless stated otherwise, Kotlin paths are relative to `app/src/main/java/com/exa
 | Portrait only (not part of the six phases) | The app stays upright whatever the phone's auto-rotate setting (§34) | **Written on branch `claude/portrait-only` (from `master` at `9568264`) on 2026-10-06. No SQL. Built with AGP on the developer's PC (unit tests 95/95, lint 0 errors; §34.2). Not tested on a phone yet (§34.3).** |
 | Push notifications and staying signed in (not part of the six phases) | Every alert (message, reservation update, announcement) also pops up as a phone notification while the app is closed, in the background or open (not for the open chat); a tap opens the alert's chat, reservation or announcement; the permission asked once; "Keep me signed in" removed, so an account stays signed in until Log out (§35) | **Written on branch `claude/push-notifications` (from `claude/portrait-only` at `387e0bb`) on 2026-10-07. Migration `20261016_push_notifications.sql` and the Edge Function `send-push`. Built with AGP (unit tests 107/107, lint 0 errors), Deno 33/33, SQL check 10/10 on a local PostgreSQL 16 (§35.3); a fresh review's four Important findings fixed (§35.6). Migration applied and `send-push` set up on 2026-10-07 (live safety check 10/10). One-phone test with announcements passed on 2026-10-07 (§35.4a); the two-device test passed in two runs, on 2026-10-11 and 2026-10-17 (§35.4b).** |
 | Phase 6: Admin and Final Release | ID verification and the admin screen (the Email verified badge moved to Phase 5 part 1) | **Started: first slice (§25), the web admin dashboard on real data, on branch `claude/admin-real`: migration applied (live safety check 20/20), deployed to https://salusalo.web.app, and the manual test passed on the PC and the phone (2026-10-03); merged into `master` through PR #23 (`a60b315`).** Analytics (§26) applied, deployed, tested on the phone and merged through PR #24 (`c240f48`, 2026-10-03). Announcements (§27) on branch `claude/admin-announcements`: migration applied (live safety check 14/14), deployed, and the one-phone test passed (2026-10-04); merged into `master` through PR #25 (`f959f0e`). ID verification and suspending accounts are later slices. |
+| Suspend accounts (Phase 6, fourth slice) | An admin suspends and restores an account from the dashboard's Users page; a suspended person sees only a "suspended" screen with the reason and a support email, their active listings are removed and their open reservations cancelled | **Built on branch `claude/suspend-accounts` (§36; from `claude/push-notifications` at `f04c77c`) on 2026-10-17: checked locally (SQL check 18/18, unit tests 114/114, lint 0 errors, dashboard Node checks). Migration `20261017_admin_suspend_accounts.sql` not applied to the live project, dashboard not deployed, phone test (§36.4) not run.** |
 
 - The roadmap has six phases (confirmed by the developer on 2026-09-25); earlier versions of this document went only up to Phase 4. Phases 1–3 are described in §1–§3 and Phase 4 in §8.
 
@@ -132,6 +133,7 @@ Still unresolved on 2026-10-04:
 - **Keyboard and map fixes (§33)**: the 9-step one-phone test (§33.4) passed on 2026-10-06; merged through PR #31 (`9568264`).
 - **Portrait only (§34)** on branch `claude/portrait-only`: built with AGP (95/95, lint 0 errors) on 2026-10-06; **not tested on a phone yet** (§34.3).
 - **Push notifications and staying signed in (§35)** on branch `claude/push-notifications`: built and checked locally on 2026-10-07; the migration is applied and `send-push` set up (live safety check 10/10), and the one-phone test with announcements passed (2026-10-07, §35.4a); the two-device test passed in two runs (2026-10-11 and 2026-10-17, §35.4b). **Not committed or merged yet** (the §35.8 fix and these docs are uncommitted). Known limits in §35.5.
+- **Suspend accounts (§36)** on branch `claude/suspend-accounts`: built and checked locally on 2026-10-17 (SQL check 18/18, unit tests 114/114, lint 0 errors, dashboard Node checks); the migration is **not applied** to the live project, the dashboard is **not deployed**, and the phone test (§36.4) has **not run**. Known limits in §36.5.
 - **Audit findings still open after round 3** (details in §23.1; each needs a decision or work outside the app code):
   - #9: reservations never expire by themselves, and one person can reserve a listing's whole quantity (the app's design says "part or all"). **Addressed in §24** (per-person limit, pickup deadlines, automatic expiry): applied and passed its two-phone test on 2026-10-03.
   - #10: donors' Firebase UIDs are the first folder of listing photo paths, so anyone who may see a listing can read its donor's UID.
@@ -3238,3 +3240,123 @@ Never run (passed in §35.4a, or not tested): the permission question and the Si
 - **Found by:** an outside test-and-inspect pass of `9f17448` on 2026-10-11 (no confirmed bugs; six possible issues, PI-01 to PI-06). PI-02, PI-04 and PI-05 were already in §35.5 and §35.6; PI-03 is now in §35.5; PI-06 (a failed FCM send is not retried) is how FCM pushes work.
 - **What happened (PI-01):** tapping an alert or its pop-up, or Mark all read, showed the alerts as read at once and ignored a failed request (offline): the server kept them unread, and the dots and badge came back at the next reload with no explanation.
 - **Fix (approved by the developer, 2026-10-11):** `NotificationViewModel.markRead()` and `markAllRead()` undo the marks when the request fails, quietly (no error dialog, since a failed pop-up tap at app start would show it later out of context): only alerts still carrying the read time this tap set (`undoMark()`), so one a reload brought back read from the server stays read. Built; 107 of 107 tests, lint 0 errors and 25 warnings. No unit test (the logic sits in the ViewModel with its repository); checked by phone-test step 11 (§35.4). On a phone (2026-10-11, §35.4b): "Mark shown as read" on the Messages filter (`markRead`) offline kept the alerts unread with no dialog, and online they stayed read after a restart. On 2026-10-17 the same passed on the All filter (`markAllRead()`, §35.4b second run, step 6). Not checked: one alert tapped offline.
+
+## 36. Suspend accounts (Phase 6)
+
+**Written on branch `claude/suspend-accounts` (from `claude/push-notifications` at `f04c77c`, so it carries §34 and §35 until PR #32 is merged; PR #32 was still open on 2026-10-17) on 2026-10-17, at the developer's request. Design: `docs/superpowers/specs/2026-10-17-suspend-accounts-design.md`; plan: `docs/superpowers/plans/2026-10-17-suspend-accounts.md`. Built and checked locally (§36.3). Migration `20261017_admin_suspend_accounts.sql` not applied to the live project yet; dashboard not deployed; phone test (§36.4) not run.**
+
+### 36.1 What the user sees
+
+- **Admins (dashboard -> Users):**
+  - A red Suspended badge and a Suspended filter.
+  - On a user's page, **Suspend account**: a reason from a list, a private note, the listings and reservations it will close, then Suspend. Toast "Account suspended."
+  - A suspended user's page shows who suspended them, when and why, and **Restore account** (toast "Account restored.").
+  - Neither is offered for an admin or yourself.
+  - Both go into the Audit log.
+- **The suspended person:**
+  - After sign-in, or when the app comes back to the screen, only "Your account has been suspended", the reason, "If you think this is a mistake, email <address>" (the address opens the mail app) and Log out.
+  - No pop-ups.
+  - Older builds simply can't load anything.
+- **Others:**
+  - Someone with a reservation on their listing gets "Listing removed".
+  - A donor whose listing they had reserved gets "Reservation cancelled" / "<name>'s reservation of <listing> was cancelled. The quantity is available again."
+  - Messages to them are refused with "This person can't receive messages right now."
+  - Nobody is told about the suspension.
+- **Restore:** the account works again; removed listings and cancelled reservations stay as they are.
+
+### 36.2 What changed
+
+- **Database (`20261017`):**
+  - `users.suspended_at` and `users.suspension_reason`;
+  - `salusalo_caller_suspended()`, with `is_salusalo_firebase_jwt()` now also requiring "not suspended";
+  - `get_my_account_status()`, the only function that skips it;
+  - `admin_suspend_user`, `admin_restore_user` and the internal `admin_suspension_listings`;
+  - the `ACCOUNT_SUSPENDED` cancel reason and its donor alert;
+  - the `USER_SUSPENDED` report resolution;
+  - the audit actions `USER_SUSPENDED` and `USER_RESTORED` (target `USER`);
+  - `send_message`'s refusal;
+  - the `SUSPENDED` filter, and the suspension fields in the admin user JSON;
+  - after the first review (fix round 1): `get_donor_reservations()` and `is_reservation_recipient(uuid)` are re-created so they go through the gate too (they did not use `is_salusalo_firebase_jwt()` before), and the users-row lock in `admin_suspend_user` and `admin_restore_user` is `FOR NO KEY UPDATE`.
+
+  Check: `supabase/tests/admin_suspend_accounts_live_safety_check.sql` (18).
+- **App:**
+  - `model/Suspension.kt` (tested by `SuspensionTest`, 7);
+  - `UserRepository.getMyAccountStatus()` and `ProfileException.Suspended`;
+  - `MainActivity`: the `"suspended"` screen (`SuspendedScreen`), the check in `openAuthenticatedHome()` and when the app comes back to the screen, and the shade cleared. The support address opens the mail app with `"mailto:...".toUri()` (androidx.core), not `Uri.parse`, which would add a lint warning.
+- **Dashboard:** `data.js` (`suspendUser`, `restoreUser`, labels), `timeline.js`, `ui.js` (`confirm()` with a reason select), `pages/users.js`.
+
+### 36.3 Checks run (local)
+
+On the developer's PC on 2026-10-17, nothing against the live project:
+
+- **SQL dry run** (a local PostgreSQL with all 26 migrations applied in filename order):
+  - The new check `admin_suspend_accounts_live_safety_check.sql`: `SAFETY CHECK FINISHED: 18 passed, 0 failed, 0 skipped.` This is the result after fix round 1 (check 13 also covers `get_donor_reservations()` returning 0 rows and `is_reservation_recipient` false for a suspended caller).
+  - Proof that check 13 catches a missing gate: with the gate removed from `get_donor_reservations()` on a scratch database the check gave 17 passed, 1 failed (check 13); with the real file, 18/18. `is_reservation_recipient` was not separately tested that way.
+  - The earlier checks, identical before and after the migration: Phase 3 14 passed; Phase 5 part 1 3 passed and 24 skipped; Phase 5 maps 22 passed; admin dashboard 20 passed; admin announcements 14 passed; push notifications 10 passed; the anon grants check 3 PASS rows (34 functions). The Phase 4 check did not run ("no chat with messages was found": the local seed has no chat), before or after.
+  - The migration applied a second time without an error (only notices that columns already exist).
+- **App:** `gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline`: build successful, `testDebugUnitTest` 114 of 114 (107 before, plus the 7 in `SuspensionTest`), `lintDebug` 0 errors and 25 warnings (the same 25 as before); no Kotlin compiler warnings on a full recompile.
+- **Dashboard:** the three Node checks in `admin/tests/` (auth, data, timeline) print "all checks passed", and `node --check` is clean for every file in `admin/js` and `admin/js/pages`. The Suspend and Restore dialogs were not run in a browser, because the live admin functions are not applied yet.
+
+### 36.4 Phone test (two phones and the dashboard)
+
+Not run yet. The 13 steps (the spec's section 4.3):
+
+Phone 1 is A, the admin account, also used as a normal user. Phone 2 is B, the account to suspend. The dashboard is at https://salusalo.web.app, signed in as A. Every reservation uses the 2-hour pickup.
+
+**Setup**
+1. [Setup] Phone 2: B posts a free listing ("Suspend test B", 3 units, no per-person limit). Phone 1: A reserves 1 of it.
+2. [Setup] Phone 1: A posts a free listing ("Suspend test A", 3 units, no per-person limit). Phone 2: B reserves 1 of it.
+3. [Setup] Phone 1: A messages B about "Suspend test B" ("Before suspend"), then reports B with the chat's flag (any reason).
+
+**Suspend**
+4. [New] Dashboard: Users → B → Suspend account.
+   - The dialog says "This will remove 1 active listing and cancel 1 open reservation."
+   - Pick "Repeated no-shows at pickup", type the note "Suspend test", then Suspend.
+   - Expected: the toast "Account suspended.", B with the Suspended badge, and Show → Suspended listing B.
+5. [New] Phone 1 gets two pop-ups:
+   - "Listing removed" / "Suspend test B was removed by Salu-Salo, so your reservation was cancelled.";
+   - "Reservation cancelled" / "<B>'s reservation of Suspend test A was cancelled. The quantity is available again."
+
+   "Suspend test B" is gone from Home, and "Suspend test A" shows 3 available again.
+6. [New] Phone 2 (it was on Home): press the Home button, then open Salu-Salo again.
+   - Expected: "Your account has been suspended", "Reason: Repeated no-shows at pickup", and the email line.
+   - Tapping the address opens the mail app with it filled in.
+   - Phone 2 got no pop-up from steps 4–5.
+7. [New] Phone 2: Log out → Sign In. Sign in as B: the suspended screen again, not Home.
+
+**While suspended**
+8. [New] Phone 1: in the chat with B, send "After suspend". Expected: "This person can't receive messages right now."
+9. [New] Dashboard:
+   - Audit log: "Account suspended" for B with the note, and "Listing removed" for "Suspend test B".
+   - Reports → Resolved: A's report on B, "Account suspended".
+   - Reservations: B's reservation of "Suspend test A" ends "Cancelled: account suspended".
+
+**Restore**
+10. [New] Dashboard: B → Restore account → confirm. Expected: the toast "Account restored.", and the Audit log shows "Account restored".
+11. [New] Phone 2: press the Home button, then open Salu-Salo again.
+    - Expected: Home.
+    - Activity → My Listings → Closed: "Suspend test B" Removed.
+    - Alerts: "Your listing was removed" / "Salu-Salo removed Suspend test B: Account suspended".
+    - B reserves 1 of "Suspend test A".
+12. [New] Phone 1: A messages B ("After restore"). Phone 2: the pop-up "New message from <A>".
+
+**Regression**
+13. [Regression] Phone 1:
+    - A posts a listing and deletes it;
+    - the dashboard's Overview, Listings, Reports and Notifications pages load;
+    - A non-admin account signing in to the dashboard still gets "This account doesn't have admin access."
+
+**Clean-up:** remove "Suspend test A" and cancel B's reservation of it.
+
+**Left out:** an old app build while suspended; suspending while B is in the middle of an action; a suspended account receiving an announcement.
+
+### 36.5 Known limits
+
+- Someone suspended can sign up again with another email.
+- While Home is open, a suspended person's actions fail with the usual error texts until the app next comes back to the screen.
+- Their past reviews, ratings and old chats stay visible to others.
+- The Firebase account stays enabled; only Salu-Salo's server refuses it.
+- Only an admin's Restore ends a suspension.
+- Restore doesn't bring back removed listings or cancelled reservations.
+- Every admin can suspend and restore.
+- A suspension started while the person is in the middle of an action can miss what that action creates (a listing posted, a reservation or a phone token saved at the same moment); suspending again after a restore, or removing the listing, covers it.
