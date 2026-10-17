@@ -1123,9 +1123,9 @@ git commit -m "Suspend accounts: migration 20261017 (one lock in is_salusalo_fir
   - `suspend fun UserRepository.getMyAccountStatus(): AccountStatus?`;
   - `class ProfileException.Suspended(val reason: String?)`.
 
-- [ ] **Step 1: Get the support address**
+- [ ] **Step 1: The support address**
 
-The developer chose a separate support address (2026-10-17) but hasn't typed it yet. Ask: "Which support email address should the suspended screen show?" Use the exact answer as `SUPPORT_EMAIL` in Step 3. Don't continue Task 3 without it.
+The developer gave the support address on 2026-10-17: `aiiiiii12241@gmail.com`. Step 4 uses it as `SUPPORT_EMAIL`, exactly as written.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1203,7 +1203,7 @@ Expected: compilation FAILS with `Unresolved reference 'AccountStatus'` (and the
 
 - [ ] **Step 4: Write the model**
 
-Create `app/src/main/java/com/example/salusalo/model/Suspension.kt`. Put the developer's address from Step 1 in `SUPPORT_EMAIL`:
+Create `app/src/main/java/com/example/salusalo/model/Suspension.kt`:
 
 ```kotlin
 package com.example.salusalo.model
@@ -1211,7 +1211,7 @@ package com.example.salusalo.model
 import kotlinx.serialization.Serializable
 
 /** The appeal address on the suspended screen (§36), chosen by the developer. */
-const val SUPPORT_EMAIL = "THE ADDRESS FROM STEP 1"
+const val SUPPORT_EMAIL = "aiiiiii12241@gmail.com"
 
 /** get_my_account_status (§36): the one question a suspended account can still ask. */
 @Serializable
@@ -1240,8 +1240,6 @@ fun statusChange(onSuspendedScreen: Boolean, status: AccountStatus?): StatusChan
     else -> StatusChange.NONE
 }
 ```
-
-"THE ADDRESS FROM STEP 1" is replaced with the developer's answer before saving. Never commit that text.
 
 - [ ] **Step 5: Run the test to check that it passes**
 
