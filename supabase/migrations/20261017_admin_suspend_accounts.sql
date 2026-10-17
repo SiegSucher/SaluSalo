@@ -24,6 +24,27 @@ alter table public.users add constraint users_suspension_check check (
     or (suspended_at is not null
         and suspension_reason in ('NO_SHOWS', 'UNSAFE_FOOD', 'HARASSMENT', 'SPAM', 'OTHER')));
 
+-- Clients may insert their own users row, so a new profile always starts
+-- unsuspended, whatever the insert sends: the 20261002 function (email_verified
+-- false) plus the two suspension columns. Only admin_suspend_user and
+-- admin_restore_user change them afterwards. The trigger itself is unchanged.
+create or replace function public.users_start_unverified()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    new.email_verified := false;
+    new.suspended_at := null;
+    new.suspension_reason := null;
+    return new;
+end; $$;
+
+revoke all on function public.users_start_unverified() from public;
+revoke all on function public.users_start_unverified() from anon;
+revoke all on function public.users_start_unverified() from authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 2. The lock.
 -- ---------------------------------------------------------------------------

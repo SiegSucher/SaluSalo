@@ -8,11 +8,11 @@ window.Pages.audit = (function () {
 
   const ACTION_ICON = {
     'Approved verification': 'verified', 'Rejected verification': 'highlightOff', 'Verified account': 'verified',
-    'Suspended account': 'block', 'Restored account': 'restartAlt', 'Removed listing': 'delete',
+    'Suspended account': 'block', 'Restored account': 'restartAlt', 'Account suspended': 'block', 'Account restored': 'restartAlt', 'Removed listing': 'delete',
     'Dismissed report': 'doNotDisturbOn', 'Reviewed listing': 'taskAlt', 'Added note': 'editNote', 'Sent announcement': 'campaign',
     'Scheduled notification': 'schedule', 'Cancelled notification': 'block', 'Changed setting': 'settings'
   };
-  const DANGER = new Set(['Suspended account', 'Removed listing', 'Rejected verification']);
+  const DANGER = new Set(['Suspended account', 'Account suspended', 'Removed listing', 'Rejected verification']);
 
   function targetLink(a) {
     const href = { USER: '#/users/', LISTING: '#/listings/', REPORT: '#/reports/', NOTIFICATION: '#/notifications/', ANNOUNCEMENT: '#/notifications/', SETTING: '#/settings' }[a.targetType];

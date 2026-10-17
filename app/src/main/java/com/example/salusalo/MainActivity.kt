@@ -454,7 +454,9 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
 
     // §36: a suspension, or a restore, made while the app was away takes effect
     // when it comes back to the screen. No answer changes nothing.
-    var appWasStopped by remember { mutableStateOf(false) }
+    // Starts true: a fresh composition (a restore after process death, a
+    // configuration change) counts as coming back.
+    var appWasStopped by remember { mutableStateOf(true) }
     LifecycleStartEffect(profileRepository) {
         if (appWasStopped && firebaseAuth.currentUser != null && (screen == "home" || screen == "suspended")) {
             appScope.launch {
@@ -463,6 +465,7 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
                 if (firebaseAuth.currentUser == null || (screen != "home" && screen != "suspended")) return@launch
                 when (statusChange(onSuspendedScreen = screen == "suspended", status = status)) {
                     StatusChange.SHOW_SUSPENDED -> {
+                        setupPending = false
                         currentProfile = null
                         suspendedReason = status?.reason
                         screen = "suspended"
@@ -889,45 +892,51 @@ private fun StartupScreen() {
 @Composable
 private fun SuspendedScreen(reason: String?, onLogout: () -> Unit) {
     val context = LocalContext.current
-    Column(
+    // The Box centres it; a scrolling Column alone has no height to centre in.
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(SaluColors.Cream)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 32.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(SaluColors.Cream),
+        contentAlignment = Alignment.Center
     ) {
-        SaluLogo(size = 88.dp)
-        Spacer(Modifier.height(24.dp))
-        Text(
-            "Your account has been suspended",
-            style = SaluText.ScreenTitle,
-            color = SaluColors.DarkGreen,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "Reason: " + suspensionReasonLabel(reason),
-            style = SaluText.Body,
-            color = SaluColors.DarkGreen,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            "If you think this is a mistake, email",
-            style = SaluText.Supporting,
-            color = SaluColors.Gray,
-            textAlign = TextAlign.Center
-        )
-        TextButton(onClick = {
-            // No mail app: nothing happens; the address stays readable on screen.
-            runCatching { context.startActivity(Intent(Intent.ACTION_SENDTO, "mailto:$SUPPORT_EMAIL".toUri())) }
-        }) {
-            Text(SUPPORT_EMAIL, style = SaluText.Body, color = SaluColors.Green)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 32.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            SaluLogo(size = 88.dp)
+            Spacer(Modifier.height(24.dp))
+            Text(
+                "Your account has been suspended",
+                style = SaluText.ScreenTitle,
+                color = SaluColors.DarkGreen,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Reason: " + suspensionReasonLabel(reason),
+                style = SaluText.Body,
+                color = SaluColors.DarkGreen,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "If you think this is a mistake, email",
+                style = SaluText.Supporting,
+                color = SaluColors.Gray,
+                textAlign = TextAlign.Center
+            )
+            TextButton(onClick = {
+                // No mail app: nothing happens; the address stays readable on screen.
+                runCatching { context.startActivity(Intent(Intent.ACTION_SENDTO, "mailto:$SUPPORT_EMAIL".toUri())) }
+            }) {
+                Text(SUPPORT_EMAIL, style = SaluText.Body, color = SaluColors.Green)
+            }
+            Spacer(Modifier.height(24.dp))
+            SaluPrimaryButton(text = "Log out", onClick = onLogout)
         }
-        Spacer(Modifier.height(24.dp))
-        SaluPrimaryButton(text = "Log out", onClick = onLogout)
     }
 }
 

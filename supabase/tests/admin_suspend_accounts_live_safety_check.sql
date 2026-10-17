@@ -348,7 +348,7 @@ begin
   a_label := array_append(a_label, v_label); a_ok := array_append(a_ok, v_ok); a_note := array_append(a_note, v_note);
 
   -- 14
-  v_label := 'Suspended B cannot reserve or save a push token';
+  v_label := 'Suspended B cannot reserve or save a push token (both refused as Not authenticated)';
   v_ok := null; v_note := 'needs the suspension';
   if v_suspended then
     v_ok := true; v_note := '';
@@ -361,6 +361,7 @@ begin
     exception when others then
       perform set_config('role', 'postgres', true);
       v_note := 'reserve: ' || sqlerrm || '; ';
+      if sqlerrm <> 'Not authenticated' then v_ok := false; end if;
     end;
     begin
       perform set_config('request.jwt.claims', c_b, true);
@@ -371,6 +372,7 @@ begin
     exception when others then
       perform set_config('role', 'postgres', true);
       v_note := v_note || 'token: ' || sqlerrm;
+      if sqlerrm <> 'Not authenticated' then v_ok := false; end if;
     end;
   end if;
   a_label := array_append(a_label, v_label); a_ok := array_append(a_ok, v_ok); a_note := array_append(a_note, v_note);
@@ -394,7 +396,7 @@ begin
   a_label := array_append(a_label, v_label); a_ok := array_append(a_ok, v_ok); a_note := array_append(a_note, v_note);
 
   -- 16
-  v_label := 'Suspended B can still ask get_my_account_status (suspended, NO_SHOWS) but cannot send a message';
+  v_label := 'Suspended B can still ask get_my_account_status (suspended, NO_SHOWS) but cannot send a message (Not authenticated)';
   v_ok := null; v_note := 'needs the suspension';
   if v_suspended then
     v_ok := false;
@@ -418,6 +420,7 @@ begin
     exception when others then
       perform set_config('role', 'postgres', true);
       v_note := v_note || 'send: ' || sqlerrm;
+      if sqlerrm <> 'Not authenticated' then v_ok := false; end if;
     end;
   end if;
   a_label := array_append(a_label, v_label); a_ok := array_append(a_ok, v_ok); a_note := array_append(a_note, v_note);

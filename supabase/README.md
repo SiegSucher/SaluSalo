@@ -561,7 +561,8 @@ working for everyone who isn't suspended.
 2. Paste `tests/admin_suspend_accounts_live_safety_check.sql` → Run. It ends with an error on purpose;
    the text must say `SAFETY CHECK FINISHED: 18 passed, 0 failed, 0 skipped.`
 
-It adds `users.suspended_at` and `users.suspension_reason`, makes `is_salusalo_firebase_jwt()` refuse
+It adds `users.suspended_at` and `users.suspension_reason` (always empty on insert, through
+`users_start_unverified()`), makes `is_salusalo_firebase_jwt()` refuse
 a suspended account everywhere, adds `get_my_account_status()` (the only function that skips that),
 `admin_suspend_user()` and `admin_restore_user()`, the `ACCOUNT_SUSPENDED` cancel reason, the
 `USER_SUSPENDED` report resolution, and the audit actions `USER_SUSPENDED` and `USER_RESTORED`.
