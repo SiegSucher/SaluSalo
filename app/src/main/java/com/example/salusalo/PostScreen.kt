@@ -454,6 +454,23 @@ fun PostScreen(
                 }
 
                 FormSection(
+                    title = "Food information",
+                    subtitle = "Help people eat it safely",
+                    icon = Icons.Outlined.WarningAmber
+                ) {
+                    AllergenPicker(allergens) { allergens = it }
+                    PostField(
+                        label = "Storage notes (optional)",
+                        value = storage,
+                        onChange = { storage = it },
+                        example = "e.g., Keep refrigerated until pickup"
+                    )
+                    PostDateButton("Expiration", expiry, required = true) {
+                        chooseDateTime(expiry) { expiry = it }
+                    }
+                }
+
+                FormSection(
                     title = "Pickup",
                     subtitle = "Where and when people collect it",
                     icon = Icons.Outlined.LocationOn
@@ -490,23 +507,6 @@ fun PostScreen(
                         options = ListingHandover.entries.map { it.label },
                         onSelect = { distribution = it }
                     )
-                }
-
-                FormSection(
-                    title = "Food information",
-                    subtitle = "Help people eat it safely",
-                    icon = Icons.Outlined.WarningAmber
-                ) {
-                    AllergenPicker(allergens) { allergens = it }
-                    PostField(
-                        label = "Storage notes (optional)",
-                        value = storage,
-                        onChange = { storage = it },
-                        example = "e.g., Keep refrigerated until pickup"
-                    )
-                    PostDateButton("Expiration", expiry, required = true) {
-                        chooseDateTime(expiry) { expiry = it }
-                    }
                 }
 
                 SaluCard(
@@ -1040,6 +1040,19 @@ fun EditListingDialog(
                     )
                 }
 
+                FormSection(title = "Food information", icon = Icons.Outlined.WarningAmber) {
+                    AllergenPicker(allergens) { allergens = it }
+                    PostField(
+                        label = "Storage notes (optional)",
+                        value = storage,
+                        onChange = { storage = it },
+                        example = "e.g., Keep refrigerated until pickup"
+                    )
+                    PostDateButton("Expiration", expiry, required = true) {
+                        chooseDateTime(expiry) { expiry = it }
+                    }
+                }
+
                 FormSection(title = "Pickup", icon = Icons.Outlined.LocationOn) {
                     PostField(
                         label = "Pickup location / exact meeting point",
@@ -1074,19 +1087,6 @@ fun EditListingDialog(
                         options = ListingHandover.entries.map { it.label },
                         onSelect = { handover = it }
                     )
-                }
-
-                FormSection(title = "Food information", icon = Icons.Outlined.WarningAmber) {
-                    AllergenPicker(allergens) { allergens = it }
-                    PostField(
-                        label = "Storage notes (optional)",
-                        value = storage,
-                        onChange = { storage = it },
-                        example = "e.g., Keep refrigerated until pickup"
-                    )
-                    PostDateButton("Expiration", expiry, required = true) {
-                        chooseDateTime(expiry) { expiry = it }
-                    }
                 }
 
                 if (error.isNotBlank()) {
