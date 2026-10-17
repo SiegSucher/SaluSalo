@@ -38,6 +38,12 @@ import com.example.salusalo.model.NotificationType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.net.toUri
+import com.example.salusalo.model.SUPPORT_EMAIL
+import com.example.salusalo.model.StatusChange
+import com.example.salusalo.model.statusChange
+import com.example.salusalo.model.suspensionReasonLabel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.Instant
 import java.time.LocalTime
@@ -249,6 +255,8 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
     var canRetrySetup by rememberSaveable { mutableStateOf(false) }
     // True while the message offers to restore an earlier profile with this email.
     var canRelink by rememberSaveable { mutableStateOf(false) }
+    // The reason code on the suspended screen (§36); saved with the screen.
+    var suspendedReason by rememberSaveable { mutableStateOf<String?>(null) }
 
     fun logOut() {
         // Home is left before Firebase signs out, so the listener below doesn't
@@ -312,6 +320,11 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
                 // Before the first Supabase call: a new account's token gets the
                 // role claim Supabase requires (the set-firebase-role Edge Function).
                 profileRepository.ensureSupabaseRole()
+                // A suspended account sees only the suspended screen (§36). No answer
+                // (offline, or the migration not applied) carries on as before.
+                profileRepository.getMyAccountStatus()?.takeIf { it.suspended }?.let {
+                    throw ProfileException.Suspended(it.reason)
+                }
                 profileRepository.loadOrCreateCurrentProfile(displayNameOverride)
             }.onSuccess { profile ->
                 // An overlapping attempt may have failed first: its dialog is out of date.
@@ -337,8 +350,15 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
                         }
                 }
             }.onFailure { error ->
+                if (error is ProfileException.Suspended) {
+                    message = ""
+                    canRetrySetup = false
+                    canRelink = false
+                    currentProfile = null
+                    suspendedReason = error.reason
+                    screen = "suspended"
                 // Nothing to report when an overlapping attempt already reached Home.
-                if (currentProfile == null) {
+                } else if (currentProfile == null) {
                     // The user stays signed in to Firebase, so Sign In offers "Try again",
                     // or "Restore profile" when an earlier profile has this email.
                     screen = "signin"
@@ -430,6 +450,34 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
         if (firebaseAuth.currentUser != null && currentProfile == null) {
             openAuthenticatedHome(signUpName)
         }
+    }
+
+    // §36: a suspension, or a restore, made while the app was away takes effect
+    // when it comes back to the screen. No answer changes nothing.
+    var appWasStopped by remember { mutableStateOf(false) }
+    LifecycleStartEffect(profileRepository) {
+        if (appWasStopped && firebaseAuth.currentUser != null && (screen == "home" || screen == "suspended")) {
+            appScope.launch {
+                val status = profileRepository.getMyAccountStatus()
+                // Log out (or a sign-out) may have happened meanwhile.
+                if (firebaseAuth.currentUser == null || (screen != "home" && screen != "suspended")) return@launch
+                when (statusChange(onSuspendedScreen = screen == "suspended", status = status)) {
+                    StatusChange.SHOW_SUSPENDED -> {
+                        currentProfile = null
+                        suspendedReason = status?.reason
+                        screen = "suspended"
+                    }
+                    StatusChange.RESUME_SETUP -> openAuthenticatedHome()
+                    StatusChange.NONE -> Unit
+                }
+            }
+        }
+        appWasStopped = false
+        onStopOrDispose { appWasStopped = true }
+    }
+    // The suspended screen leaves no Salu-Salo pop-ups in the shade.
+    LaunchedEffect(screen) {
+        if (screen == "suspended") NotificationManagerCompat.from(context).cancelAll()
     }
 
     // Back on Create Account and Forgot password goes to Sign In. On Home, Sign In
@@ -529,6 +577,11 @@ private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
                             onPushTapHandled = onPushTapHandled
                         )
                     }
+
+                    "suspended" -> SuspendedScreen(
+                        reason = suspendedReason,
+                        onLogout = { logOut() }
+                    )
 
                     else -> SignInScreen(
                         mode = currentScreen,
@@ -826,6 +879,55 @@ private fun StartupScreen() {
         )
         Spacer(Modifier.height(12.dp))
         Text("Getting things ready…", style = SaluText.Meta, color = SaluColors.Gray)
+    }
+}
+
+/**
+ * All a suspended account sees after sign-in (§36): why, where to appeal, and Log out.
+ * The server refuses it everything else.
+ */
+@Composable
+private fun SuspendedScreen(reason: String?, onLogout: () -> Unit) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SaluColors.Cream)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 32.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        SaluLogo(size = 88.dp)
+        Spacer(Modifier.height(24.dp))
+        Text(
+            "Your account has been suspended",
+            style = SaluText.ScreenTitle,
+            color = SaluColors.DarkGreen,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Reason: " + suspensionReasonLabel(reason),
+            style = SaluText.Body,
+            color = SaluColors.DarkGreen,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "If you think this is a mistake, email",
+            style = SaluText.Supporting,
+            color = SaluColors.Gray,
+            textAlign = TextAlign.Center
+        )
+        TextButton(onClick = {
+            // No mail app: nothing happens; the address stays readable on screen.
+            runCatching { context.startActivity(Intent(Intent.ACTION_SENDTO, "mailto:$SUPPORT_EMAIL".toUri())) }
+        }) {
+            Text(SUPPORT_EMAIL, style = SaluText.Body, color = SaluColors.Green)
+        }
+        Spacer(Modifier.height(24.dp))
+        SaluPrimaryButton(text = "Log out", onClick = onLogout)
     }
 }
 
