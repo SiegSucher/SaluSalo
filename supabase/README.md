@@ -454,3 +454,100 @@ Run after `20261014_admin_announcements.sql`. It can run before or after install
 
 1. **Apply:** run this file alone ("Success. No rows returned").
 2. **Safety check:** run `tests/bugfix_keep_reported_listings_live_safety_check.sql` alone. It ends with "SAFETY CHECK FINISHED: 9 passed, 0 failed, 0 skipped." on purpose and undoes everything (four test listings, a report, a chat message and a reservation; no alert is kept). It fails if the recipient it picks already sent 10 reports today or 10 reservations in the last 10 minutes.
+
+## Push notifications (`send-push`, §35)
+
+Every new alert (a row in `notifications`) is also sent to the phones of its
+account: the trigger `notifications_push` (migration
+`20261016_push_notifications.sql`) calls the Edge Function `send-push`
+through `pg_net`, and `send-push` sends it with Firebase Cloud Messaging. The
+app saves each phone's FCM token with `register_my_push_token()`. Nothing here
+can make an alert, a message or a reservation fail: without the setup below,
+alerts simply aren't pushed.
+
+The function uses a **new** service account that can only send FCM messages
+(the `set-firebase-role` one keeps its two Auth permissions and nothing else).
+Its key, `FIREBASE_PUSH_KEY`, and the shared secret `PUSH_WEBHOOK_SECRET` must
+never be put in the app, this repo, the docs, a chat or a log.
+
+### One-time setup
+
+**A. API (Google Cloud console)**
+
+1. Open https://console.cloud.google.com/apis/library/fcm.googleapis.com?project=salusalo
+   and check that the box at the top left says **salusalo**. **Firebase Cloud
+   Messaging API** must say "API Enabled"; if not, click **Enable**.
+
+**B. Custom role**
+
+2. Open https://console.cloud.google.com/iam-admin/roles?project=salusalo →
+   **+ Create role**.
+3. Title `Salu-Salo push sender`, ID `salusaloPushSender`, Role launch stage
+   **General Availability**.
+4. **+ Add permissions** → **Filter permissions by role** → **Firebase Cloud
+   Messaging API Admin** → tick only `cloudmessaging.messages.create` → **Add**
+   → **Create**.
+
+**C. Service account and key**
+
+5. Open https://console.cloud.google.com/iam-admin/serviceaccounts?project=salusalo
+   → **+ Create service account**. Name `salusalo-push-sender`, description
+   `Sends phone notifications for the send-push Edge Function` → **Create and
+   continue**.
+6. **Select a role** → **Custom** → **Salu-Salo push sender** → **Continue** →
+   **Done**. Add no other role.
+7. Check that its email ends with `@salusalo.iam.gserviceaccount.com`. Click it
+   → **Keys** → **Add key** → **Create new key** → **JSON** → **Create**. The
+   browser downloads a `.json` file.
+
+**D. Supabase secrets**
+
+8. Supabase dashboard → the Salu-Salo project → **Edge Functions** →
+   **Secrets**:
+   - Name `FIREBASE_PUSH_KEY`; value: the whole downloaded file, from the
+     first `{` to the last `}` → **Save**. Then delete the downloaded file
+     (and empty the Recycle Bin).
+   - Name `PUSH_WEBHOOK_SECRET`; value: a long random password. Make one in
+     PowerShell with
+     `-join ((48..57)+(65..90)+(97..122) | Get-Random -Count 48 | % {[char]$_})`
+     and keep it in the clipboard for step 10 → **Save**.
+
+**E. Deploy with JWT verification off**
+
+9. **Edge Functions** → **Deploy a new function** → **Via Editor**. Set the
+   function's name to `send-push` **before the first deploy** (renaming it
+   later changes only its label, not its address). Replace all of the sample
+   code in `index.ts` with the whole of `functions/send-push/index.ts` from
+   this repo → **Deploy function**. In the Edge Functions list, the **URL**
+   column must end with `/functions/v1/send-push`; if not, delete the
+   function and deploy again. Then open it and, in its settings, turn **off**
+   the switch that verifies the JWT (as for `set-firebase-role`, step 12) →
+   save. With it on, the database's calls get 401 and nothing is sent.
+
+**F. Database (SQL Editor)**
+
+10. Run `migrations/20261016_push_notifications.sql`. Then, in a new query,
+    put the function's URL and the same password into Vault (replace both
+    values; nothing else):
+
+    ```sql
+    select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/send-push', 'push_function_url');
+    select vault.create_secret('<the PUSH_WEBHOOK_SECRET password>', 'push_webhook_secret');
+    ```
+
+    Clear that query's text afterwards and don't save it as a snippet. To
+    change a value later, use **Project Settings** → **Vault** (or
+    `vault.update_secret`).
+11. Run `tests/push_notifications_live_safety_check.sql`. Expected: an error
+    starting with `SAFETY CHECK FINISHED: 10 passed, 0 failed, 0 skipped`.
+
+### Checks
+
+- **Edge Functions** → `send-push` → **Logs**: one line per alert, like
+  `send-push: 1 sent, 0 failed`. `refused (secret)` means the Vault value and
+  `PUSH_WEBHOOK_SECRET` differ; `the FIREBASE_PUSH_KEY secret is missing or
+  invalid` means step 8's key; `access token failed with HTTP 400` or
+  `HTTP 403` on sends means step 4's permission or step 1's API.
+- No log line at all after an alert: check the Vault names in step 10
+  (`push_function_url`, `push_webhook_secret`) and that the app registered the
+  phone (`select count(*) from push_tokens;` in the SQL Editor).

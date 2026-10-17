@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
 /**
@@ -34,6 +35,11 @@ class NotificationRepository(
         postgrest.rpc("mark_notifications_read", buildJsonObject {
             if (ids != null) putJsonArray("p_ids") { ids.forEach { add(JsonPrimitive(it)) } }
         })
+    }
+
+    /** Saves this phone's FCM token for the signed-in account (§35), so its alerts are pushed here. */
+    suspend fun registerPushToken(token: String) {
+        postgrest.rpc("register_my_push_token", buildJsonObject { put("p_token", token) })
     }
 
     /** New alerts for this profile while the app is open; [onRejoined] after a lost connection. */

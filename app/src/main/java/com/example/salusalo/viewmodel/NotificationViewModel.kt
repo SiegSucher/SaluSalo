@@ -8,6 +8,8 @@ import com.example.salusalo.data.SupabaseClientProvider
 import com.example.salusalo.data.shortErrorText
 import com.example.salusalo.model.AppNotification
 import com.example.salusalo.model.NotificationPreferences
+import com.example.salusalo.pushRetryDelayMillis
+import com.google.firebase.messaging.FirebaseMessaging
 import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -22,6 +24,8 @@ import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.tasks.await
 import java.time.Instant
 
 class NotificationViewModel(application: Application) : AndroidViewModel(application) {
@@ -39,6 +43,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     val newAlerts = _newAlerts.asSharedFlow()
 
     private var sessionJob: Job? = null
+    private var pushTokenJob: Job? = null
     private var sessionProfileId: String? = null
 
     /**
@@ -51,6 +56,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         if (sessionJob?.isActive == true && sessionProfileId == profileId) return
         sessionJob?.cancel()
         sessionProfileId = profileId
+        registerPushToken()
         sessionJob = viewModelScope.launch {
             launch { load() }
             launch {
@@ -85,24 +91,52 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             .onFailure { if (it is CancellationException) throw it else if (!quiet) _message.value = errorText(it) }
     }
 
+    /**
+     * Saves this phone's push token for this account (§35), trying again until it
+     * works: right after an install Firebase may not have a token yet (§35.7), and
+     * the device may be offline or the migration not run yet. Quiet. Called when
+     * Home starts and whenever the app comes back; one attempt series at a time.
+     */
+    fun registerPushToken() {
+        if (pushTokenJob?.isActive == true) return
+        pushTokenJob = viewModelScope.launch {
+            var attempt = 0
+            while (true) {
+                val saved = runCatching {
+                    // getToken is deprecated in Firebase 25.1 in favour of an opt-in
+                    // registration API (off unless enabled in the manifest).
+                    @Suppress("DEPRECATION")
+                    val token = withTimeoutOrNull(30_000L) { FirebaseMessaging.getInstance().token.await() }
+                        ?: error("No push token yet")
+                    repository.registerPushToken(token)
+                }.onFailure { if (it is CancellationException) throw it }.isSuccess
+                if (saved) return@launch
+                delay(pushRetryDelayMillis(attempt++))
+            }
+        }
+    }
+
     /** Reloads the alerts, for example when the app comes back: Realtime misses alerts while it is in the background. */
     fun refresh(quiet: Boolean = false) { viewModelScope.launch { load(quiet) } }
 
+    // Alerts not loaded yet (a notification tapped as the app starts) are sent
+    // too; only those already shown as read are skipped. If the server doesn't
+    // save it (offline), they show as unread again at once, quietly.
     fun markRead(ids: List<String>) {
-        val unread = ids.filter { id -> _notifications.value.any { it.id == id && it.readAt == null } }
+        val unread = ids.filter { id -> _notifications.value.none { it.id == id && it.readAt != null } }
         if (unread.isEmpty()) return
-        markLocal { it.id in unread }
-        viewModelScope.launch { runCatching { repository.markRead(unread) } }
+        val markedAt = markLocal { it.id in unread }
+        viewModelScope.launch { runCatching { repository.markRead(unread) }.onFailure { undoMark(it, markedAt) } }
     }
 
     fun markAllRead() {
         if (_notifications.value.none { it.readAt == null }) return
-        markLocal { true }
-        viewModelScope.launch { runCatching { repository.markRead(null) } }
+        val markedAt = markLocal { true }
+        viewModelScope.launch { runCatching { repository.markRead(null) }.onFailure { undoMark(it, markedAt) } }
     }
 
     /** Mirrors mark_conversation_read, which already marked these alerts read on the server. */
-    fun markConversationReadLocally(conversationId: String) = markLocal { it.conversationId == conversationId }
+    fun markConversationReadLocally(conversationId: String) { markLocal { it.conversationId == conversationId } }
 
     fun loadPreferences() {
         viewModelScope.launch {
@@ -125,15 +159,25 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     fun clearSession() {
         sessionJob?.cancel()
         sessionJob = null
+        pushTokenJob?.cancel()
+        pushTokenJob = null
         sessionProfileId = null
         _notifications.value = emptyList()
         _preferences.value = null
         _message.value = null
     }
 
-    private fun markLocal(predicate: (AppNotification) -> Boolean) {
+    // Returns the read time it set, so a failed save can undo exactly these marks.
+    private fun markLocal(predicate: (AppNotification) -> Boolean): String {
         val now = Instant.now().toString()
         _notifications.update { list -> list.map { if (it.readAt == null && predicate(it)) it.copy(readAt = now) else it } }
+        return now
+    }
+
+    // Only alerts still carrying this mark: one a reload brought back read from the server stays read.
+    private fun undoMark(error: Throwable, markedAt: String) {
+        if (error is CancellationException) throw error
+        _notifications.update { list -> list.map { if (it.readAt == markedAt) it.copy(readAt = null) else it } }
     }
 
     // Only the server's short text: the exception's own message can include the URL and headers.

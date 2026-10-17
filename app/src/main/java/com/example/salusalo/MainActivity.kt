@@ -45,6 +45,13 @@ import com.example.salusalo.data.UserRepository
 import com.example.salusalo.data.clearGoogleCredentialState
 import com.example.salusalo.data.requestGoogleIdToken
 import android.content.Context
+import android.content.Intent
+import androidx.core.content.ContextCompat
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.os.Build
+import android.content.pm.PackageManager
+import android.Manifest
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.credentials.exceptions.GetCredentialCancellationException
@@ -102,7 +109,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -167,18 +173,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 class MainActivity : ComponentActivity() {
+    // A tapped phone notification waiting for Home (§35); Home consumes it once.
+    private var pushTap by mutableStateOf<PushTap?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // "Keep me signed in" unchecked: end the session when the app starts
-        // fresh (for example after being swiped away), but not on rotation or
-        // when Android restores the app, which pass a saved state.
-        if (savedInstanceState == null) {
-            val auth = FirebaseAuth.getInstance()
-            if (!keepSignedIn(this) && auth.currentUser != null) {
-                auth.signOut()
-            }
-        }
+        // Only on a fresh start: Android restoring the app, or reopening it from
+        // Recents, hands back the old intent.
+        if (isFreshTap(savedInstanceState != null, intent.flags)) pushTap = pushTapFrom(intent)
+
 
         enableEdgeToEdge(
             statusBarStyle = androidx.activity.SystemBarStyle.light(
@@ -193,9 +197,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SaluTheme {
-                SaluSaloApp()
+                SaluSaloApp(pushTap = pushTap, onPushTapHandled = { pushTap = null })
             }
         }
+    }
+
+    // A notification tapped while the app is open (single top: this activity is reused).
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        pushTapFrom(intent)?.let { pushTap = it }
     }
 }
 
@@ -205,22 +215,14 @@ private val ProfileSaver = Saver<UserProfile?, String>(
     restore = { saved -> runCatching { Json.decodeFromString(UserProfile.serializer(), saved) }.getOrNull() }
 )
 
-// Device-only "Keep me signed in" choice. It survives sign-out, so the next
-// fresh start can act on the choice made at the last sign-in. When it was never
-// saved (a session from an older build), the session is kept.
+// This phone's own settings; sign-out doesn't clear them. An account stays
+// signed in until Log out (§35; "Keep me signed in" is gone).
 private fun sessionPreferences(context: Context) =
     context.getSharedPreferences("salusalo_session", 0)
 
-private fun keepSignedIn(context: Context): Boolean =
-    sessionPreferences(context).getBoolean("keep_signed_in", true)
-
-private fun setKeepSignedIn(context: Context, keep: Boolean) {
-    sessionPreferences(context).edit().putBoolean("keep_signed_in", keep).apply()
-}
-
 // The welcome pages show only until this phone has seen them: Get Started,
-// "Sign in" on them, or any account reaching Home. A saved "Keep me signed in"
-// choice means someone signed in on an older build, so they count as seen too.
+// "Sign in" on them, or any account reaching Home. A "Keep me signed in" choice
+// saved by a build before §35 means someone signed in, so they count as seen too.
 private fun welcomeSeen(context: Context): Boolean =
     sessionPreferences(context).run { getBoolean("welcome_seen", false) || contains("keep_signed_in") }
 
@@ -229,7 +231,7 @@ private fun markWelcomeSeen(context: Context) {
 }
 
 @Composable
-private fun SaluSaloApp() {
+private fun SaluSaloApp(pushTap: PushTap?, onPushTapHandled: () -> Unit) {
     val context = LocalContext.current
     var screen by rememberSaveable { mutableStateOf(if (welcomeSeen(context)) "signin" else "welcome") }
     var message by rememberSaveable { mutableStateOf("") }
@@ -268,6 +270,9 @@ private fun SaluSaloApp() {
     // out then). Back to Sign In, saying why. A network failure never ends it.
     DisposableEffect(firebaseAuth) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
+            // Signed out (Log out, or the session ended): §35's push token and
+            // notifications go with the account.
+            if (auth.currentUser == null && authUid != null) forgetPushOnSignOut(context)
             authUid = auth.currentUser?.uid
             if (auth.currentUser == null && screen == "home") {
                 currentProfile = null
@@ -280,7 +285,7 @@ private fun SaluSaloApp() {
         onDispose { firebaseAuth.removeAuthStateListener(listener) }
     }
     // True while an account setup runs (after a sign-in, or Try again), and from a
-    // start with a saved session ("Keep me signed in") until its setup has finished:
+    // start with a saved session until its setup has finished:
     // the branded loading screen then shows instead of a form.
     var setupPending by remember { mutableStateOf(firebaseAuth.currentUser != null) }
     // Opening the app shows the loading screen for at least STARTUP_INTRO_MS, also
@@ -381,7 +386,7 @@ private fun SaluSaloApp() {
         }
     }
 
-    fun signInWithGoogle(keep: Boolean) {
+    fun signInWithGoogle() {
         isAuthenticating = true
         // Cleared first, so a setup started after a rotation uses no typed name.
         signUpName = null
@@ -391,7 +396,6 @@ private fun SaluSaloApp() {
                 firebaseAuth
                     .signInWithCredential(GoogleAuthProvider.getCredential(idToken, null))
                     .await()
-                setKeepSignedIn(context, keep)
                 isAuthenticating = false
                 // A new Google user's profile is created with the Google name and email.
                 openAuthenticatedHome()
@@ -520,7 +524,9 @@ private fun SaluSaloApp() {
                         HomeScreen(
                             onLogout = { logOut() },
                             currentProfile = profile,
-                            onProfileUpdated = { currentProfile = it }
+                            onProfileUpdated = { currentProfile = it },
+                            pushTap = pushTap,
+                            onPushTapHandled = onPushTapHandled
                         )
                     }
 
@@ -528,7 +534,7 @@ private fun SaluSaloApp() {
                         mode = currentScreen,
                         onNavigate = { screen = it },
                         isAuthenticating = isAuthenticating,
-                        onContinue = { email, password, confirmPassword, name, keep ->
+                        onContinue = { email, password, confirmPassword, name ->
                             val cleanEmail = email.trim()
 
                             when {
@@ -567,8 +573,6 @@ private fun SaluSaloApp() {
                                             .addOnCompleteListener { task ->
                                                 isAuthenticating = false
                                                 if (task.isSuccessful) {
-                                                    // A new account stays signed in.
-                                                    setKeepSignedIn(context, true)
                                                     task.result.user?.updateProfile(
                                                         userProfileChangeRequest {
                                                             displayName = name.trim()
@@ -605,7 +609,6 @@ private fun SaluSaloApp() {
                                             .addOnCompleteListener { task ->
                                                 isAuthenticating = false
                                                 if (task.isSuccessful) {
-                                                    setKeepSignedIn(context, keep)
                                                     openAuthenticatedHome()
                                                 } else {
                                                     message = authErrorMessage(
@@ -617,7 +620,7 @@ private fun SaluSaloApp() {
                                 }
                             }
                         },
-                        onGoogle = { keep -> signInWithGoogle(keep) }
+                        onGoogle = { signInWithGoogle() }
                     )
                 }
             }
@@ -1020,10 +1023,9 @@ private fun SignInScreen(
         email: String,
         password: String,
         confirmPassword: String,
-        name: String,
-        keepSignedIn: Boolean
+        name: String
     ) -> Unit,
-    onGoogle: (keepSignedIn: Boolean) -> Unit
+    onGoogle: () -> Unit
 ) {
     val creatingAccount = mode == "signup"
     val resettingPassword = mode == "forgot"
@@ -1034,9 +1036,6 @@ private fun SignInScreen(
     // Passwords are retained only while this screen remains open.
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-
-    // Starts unchecked: staying signed in is the user's choice at each sign-in.
-    var keepSignedIn by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -1149,39 +1148,8 @@ private fun SignInScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(SaluRadius.Small)
-                                    .toggleable(
-                                        value = keepSignedIn,
-                                        role = Role.Checkbox,
-                                        onValueChange = { keepSignedIn = it }
-                                    )
-                                    .heightIn(min = 48.dp)
-                                    .padding(end = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = keepSignedIn,
-                                    onCheckedChange = null,
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = SaluColors.Green,
-                                        uncheckedColor = SaluColors.Gray
-                                    )
-                                )
-
-                                Spacer(Modifier.width(8.dp))
-
-                                Text(
-                                    "Keep me signed in",
-                                    style = SaluText.Supporting,
-                                    color = SaluColors.DarkGreen
-                                )
-                            }
-
                             TextButton(
                                 onClick = { onNavigate("forgot") },
                                 contentPadding = PaddingValues(horizontal = 8.dp)
@@ -1206,7 +1174,7 @@ private fun SignInScreen(
                     },
                     loading = isAuthenticating,
                     onClick = {
-                        onContinue(email, password, confirmPassword, name, keepSignedIn)
+                        onContinue(email, password, confirmPassword, name)
                     }
                 )
 
@@ -1245,10 +1213,7 @@ private fun SignInScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    // A new account made on the Create Account tab stays signed in.
-                    GoogleButton(enabled = !isAuthenticating) {
-                        onGoogle(if (creatingAccount) true else keepSignedIn)
-                    }
+                    GoogleButton(enabled = !isAuthenticating) { onGoogle() }
 
                     Spacer(Modifier.height(16.dp))
 
@@ -1527,7 +1492,10 @@ private fun GoogleMark() {
 private fun HomeScreen(
     onLogout: () -> Unit,
     currentProfile: UserProfile?,
-    onProfileUpdated: (UserProfile) -> Unit
+    onProfileUpdated: (UserProfile) -> Unit,
+    // A tapped phone notification to open (§35), then onPushTapHandled.
+    pushTap: PushTap?,
+    onPushTapHandled: () -> Unit
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("All") }
@@ -1621,6 +1589,8 @@ private fun HomeScreen(
             wasStopped = false
             messageViewModel.loadConversations(quiet = true)
             notificationViewModel.refresh(quiet = true)
+            // Firebase may have a token only now, or a new one (§35.7).
+            notificationViewModel.registerPushToken()
             foodViewModel.refreshFeedIfStale()
             // The phone may have moved meanwhile; never asks for access here.
             if (PhoneLocation.hasPermission(context)) refreshPhonePosition(askIfNeeded = false)
@@ -1634,13 +1604,17 @@ private fun HomeScreen(
     LaunchedEffect(currentProfile?.id) { currentProfile?.id?.let { reservationViewModel.start(it) } }
     // A new alert plays the phone's notification sound while the app is on
     // screen, unless it is a message in the chat that is open. The switch is
-    // read when the alert arrives.
+    // read when the alert arrives. While the phone shows Salu-Salo's
+    // notifications and pushes arrive, the pop-up plays it instead (§35), so it
+    // doesn't sound twice; if pushes stop arriving, the app's own sound returns.
     val alertSound = remember { AlertSoundPlayer(context) }
     var appResumed by remember { mutableStateOf(false) }
     LifecycleResumeEffect(alertSound) {
         appResumed = true
+        AlertPresence.resumed = true
         onPauseOrDispose {
             appResumed = false
+            AlertPresence.resumed = false
             alertSound.stop()
         }
     }
@@ -1649,7 +1623,32 @@ private fun HomeScreen(
         notificationViewModel.newAlerts.collect { alert ->
             val inOpenChat = alert.type == NotificationType.MESSAGE &&
                     alert.conversationId != null && alert.conversationId == openChatId
-            if (appResumed && !inOpenChat && notificationSoundOn(context)) alertSound.play()
+            val popUpSounds = phoneNotificationsOn(context) &&
+                    pushesArriving(lastPushAt(context), System.currentTimeMillis())
+            if (appResumed && !inOpenChat && notificationSoundOn(context) && !popUpSounds) {
+                alertSound.play()
+            }
+        }
+    }
+    // The chat open on screen: its pushed messages don't pop up, and opening it
+    // clears its notification (§35).
+    DisposableEffect(activeChat?.id) {
+        val id = activeChat?.id
+        AlertPresence.openChatId = id
+        if (id != null) cancelChatNotification(context, id)
+        onDispose { AlertPresence.openChatId = null }
+    }
+    // Android 13+: asked once whether Salu-Salo may show notifications (§35).
+    // Turned off later, Profile → Notifications offers the phone's settings.
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !pushPermissionAsked(context)) {
+            markPushPermissionAsked(context)
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     }
     // Opening a chat marks its message alerts read on the server; mirror that
@@ -1660,6 +1659,47 @@ private fun HomeScreen(
                 notificationViewModel.markConversationReadLocally(id)
             }
         }
+    }
+    // The announcement the Alerts page should open (tapped there or on its notification).
+    var announcementToOpen by rememberSaveable { mutableStateOf<String?>(null) }
+    // Where an alert leads, for a tap on the Alerts page and on its phone notification alike.
+    fun openAlert(type: NotificationType, alertId: String, conversationId: String?, reservationId: String?) {
+        when (type) {
+            NotificationType.MESSAGE -> conversationId?.let { messageViewModel.openConversation(it) }
+            // History; Activity then opens the reservation (with Rate for a claimed one).
+            NotificationType.RESERVATION_CLAIMED, NotificationType.RESERVATION_REMOVED -> {
+                activityTab = "History"
+                activityFocus = reservationId
+                page = "activity"
+            }
+            NotificationType.ANNOUNCEMENT -> {
+                announcementToOpen = alertId
+                page = "alerts"
+            }
+            NotificationType.UNKNOWN -> Unit
+            // A new or cancelled reservation on one of this account's listings:
+            // My Listings; Activity then opens that listing's Manage reservations.
+            else -> {
+                activityTab = "My Listings"
+                activityFocus = reservationId
+                page = "activity"
+            }
+        }
+    }
+    // A tapped phone notification (§35), handled once Home is open.
+    LaunchedEffect(pushTap) {
+        val tap = pushTap ?: return@LaunchedEffect
+        onPushTapHandled()
+        // For another account (this phone signed in to someone else since): the app just opens.
+        if (tap.uid != FirebaseAuth.getInstance().currentUser?.uid) return@LaunchedEffect
+        // A chat and a listing's details are drawn over every page: close them, or
+        // the page the tap opens stays hidden behind them (a message opens its chat).
+        if (tap.type != NotificationType.MESSAGE) {
+            if (messageViewModel.active.value != null) messageViewModel.close()
+            foodViewModel.closeListing()
+        }
+        notificationViewModel.markRead(listOf(tap.alertId))
+        openAlert(tap.type, tap.alertId, tap.conversationId, tap.reservationId)
     }
 
     // Greeting follows the signed-in profile and the device's local time;
@@ -1898,25 +1938,9 @@ private fun HomeScreen(
                 when (shown) {
                     "alerts" -> AlertsScreen(
                         notificationViewModel = notificationViewModel,
-                        onOpenConversation = { id -> messageViewModel.openConversation(id) },
-                        onOpenListingReservation = { reservationId ->
-                            // My Listings; Activity then opens that listing's Manage reservations.
-                            activityTab = "My Listings"
-                            activityFocus = reservationId
-                            page = "activity"
-                        },
-                        onOpenClaimedReservation = { reservationId ->
-                            // History; Activity then opens the reservation, with Rate.
-                            activityTab = "History"
-                            activityFocus = reservationId
-                            page = "activity"
-                        },
-                        onOpenRemovedReservation = { reservationId ->
-                            // A reservation cancelled because its listing was removed.
-                            activityTab = "History"
-                            activityFocus = reservationId
-                            page = "activity"
-                        }
+                        onOpenAlert = { alert -> openAlert(alert.type, alert.id, alert.conversationId, alert.reservationId) },
+                        openAnnouncement = announcementToOpen,
+                        onAnnouncementOpened = { announcementToOpen = null }
                     )
 
                     "messages" -> MessagesScreen(
