@@ -44,6 +44,8 @@ declare
   v_bool     boolean;
   n          bigint;
   m          bigint;
+  k          bigint;
+  v_rr       boolean;
   v_label    text;
   v_ok       boolean;
   v_note     text;
@@ -325,7 +327,7 @@ begin
   a_label := array_append(a_label, v_label); a_ok := array_append(a_ok, v_ok); a_note := array_append(a_note, v_note);
 
   -- 13
-  v_label := 'Suspended B sees neither its own profile row nor any listing';
+  v_label := 'Suspended B sees neither its own profile row nor any listing, and gets nothing from get_donor_reservations or is_reservation_recipient';
   v_ok := null; v_note := 'needs the suspension';
   if v_suspended then
     begin
@@ -333,9 +335,11 @@ begin
       perform set_config('role', 'authenticated', true);
       select count(*) into n from public.users where id = v_b.id;
       select count(*) into m from public.food_posts;
+      select count(*) into k from public.get_donor_reservations();
+      v_rr := public.is_reservation_recipient(v_l3);
       perform set_config('role', 'postgres', true);
-      v_ok := n = 0 and m = 0;
-      v_note := format('%s profile row(s), %s listing(s)', n, m);
+      v_ok := n = 0 and m = 0 and k = 0 and v_rr is false;
+      v_note := format('%s profile row(s), %s listing(s), %s donor reservation(s), is_reservation_recipient = %s', n, m, k, v_rr);
     exception when others then
       perform set_config('role', 'postgres', true);
       v_ok := true; v_note := 'refused: ' || sqlerrm;

@@ -261,7 +261,7 @@ declare
     v_n integer;
     v_result jsonb;
 begin
-    select * into v_user from public.users u where u.id = p_user for update;
+    select * into v_user from public.users u where u.id = p_user for no key update;
     if not found then raise exception 'User not found'; end if;
     if v_user.id = v_admin.id then raise exception 'You can''t suspend your own account.'; end if;
     if v_user.role = 'ADMIN' then raise exception 'Admins can''t be suspended.'; end if;
@@ -327,7 +327,7 @@ begin
     if char_length(v_note) > 1000 then
         raise exception 'Keep the note under 1,000 characters.';
     end if;
-    select * into v_user from public.users u where u.id = p_user for update;
+    select * into v_user from public.users u where u.id = p_user for no key update;
     if not found then raise exception 'User not found'; end if;
     if v_user.suspended_at is null then raise exception 'This account isn''t suspended.'; end if;
     update public.users u set suspended_at = null, suspension_reason = null where u.id = p_user;
@@ -374,7 +374,53 @@ returns jsonb language sql stable security definer set search_path = public as $
 $$;
 
 -- ---------------------------------------------------------------------------
--- 7. Privileges.
+-- 7. DEFINER functions that read through current_salusalo_profile_id() need the
+-- gate themselves (it runs as the table owner there). The 20261011 and 20260924
+-- definitions, plus is_salusalo_firebase_jwt().
+-- ---------------------------------------------------------------------------
+
+create or replace function public.get_donor_reservations()
+returns table (
+    id uuid,
+    food_post_id uuid,
+    recipient_id uuid,
+    quantity integer,
+    status text,
+    created_at timestamptz,
+    updated_at timestamptz,
+    recipient_name text,
+    unit_price numeric,
+    cancel_reason text,
+    pickup_deadline timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as 'select r.id, r.food_post_id, r.recipient_id, r.quantity, r.status,
+           r.created_at, r.updated_at, u.name, r.unit_price, r.cancel_reason, r.pickup_deadline
+    from public.reservations r
+    join public.food_posts p on p.id = r.food_post_id
+    join public.users u on u.id = r.recipient_id
+    where public.is_salusalo_firebase_jwt() and p.donor_id = public.current_salusalo_profile_id()
+    order by r.created_at desc';
+revoke all on function public.get_donor_reservations() from public;
+revoke all on function public.get_donor_reservations() from anon;
+grant execute on function public.get_donor_reservations() to authenticated;
+
+create or replace function public.is_reservation_recipient(p_food_post_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as 'select public.is_salusalo_firebase_jwt() and exists (select 1 from public.reservations where food_post_id = p_food_post_id and recipient_id = public.current_salusalo_profile_id())';
+revoke all on function public.is_reservation_recipient(uuid) from public;
+revoke all on function public.is_reservation_recipient(uuid) from anon;
+grant execute on function public.is_reservation_recipient(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 8. Privileges.
 -- ---------------------------------------------------------------------------
 do $$
 declare f text;
