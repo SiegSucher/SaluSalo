@@ -498,8 +498,9 @@ window.UI = (function () {
 
   /* ---------- Confirmation dialog ---------- */
   /**
-   * confirm({ title, text, confirmLabel, tone: 'danger'|'primary', iconName, reason: { label,
-   * required, placeholder, hint }, action: async (reason) => {}, errorText: string | (err) => string })
+   * confirm({ title, text, confirmLabel, tone: 'danger'|'primary', iconName, choice: { label,
+   * placeholder, options: [[value, label]] }, reason: { label, required, placeholder, hint,
+   * maxLength }, action: async (reason, choice) => {}, errorText: string | (err) => string })
    * Resolves true once the action succeeded, false if cancelled.
    */
   function confirm(o) {
@@ -512,9 +513,19 @@ window.UI = (function () {
       let reasonEl = null;
       let reasonErr = null;
       const errorBox = h('div', { hidden: true });
+      let choiceEl = null;
+      let choiceErr = null;
+      if (o.choice) {
+        const cid = titleId + '-choice';
+        choiceEl = h('select', { class: 'select', id: cid },
+          [h('option', { value: '' }, o.choice.placeholder || 'Choose…')]
+            .concat(o.choice.options.map(([v, label]) => h('option', { value: v }, label))));
+        choiceErr = h('span', { class: 'field__error', id: cid + '-err', hidden: true }, 'Choose a reason.');
+        choiceEl.addEventListener('change', () => { choiceErr.hidden = true; choiceEl.classList.remove('is-invalid'); choiceEl.removeAttribute('aria-invalid'); });
+      }
       if (o.reason) {
         const rid = titleId + '-reason';
-        reasonEl = h('textarea', { class: 'textarea', id: rid, rows: '3', maxlength: '300', placeholder: o.reason.placeholder || '', 'aria-describedby': rid + '-hint' });
+        reasonEl = h('textarea', { class: 'textarea', id: rid, rows: '3', maxlength: String((o.reason && o.reason.maxLength) || 300), placeholder: o.reason.placeholder || '', 'aria-describedby': rid + '-hint' });
         reasonErr = h('span', { class: 'field__error', id: rid + '-err', hidden: true }, 'Write a short reason. It goes into the audit log.');
         reasonEl.addEventListener('input', () => { reasonErr.hidden = true; reasonEl.classList.remove('is-invalid'); reasonEl.removeAttribute('aria-invalid'); });
       }
@@ -524,6 +535,9 @@ window.UI = (function () {
         h('div', { class: 'dialog__icon' + (o.tone === 'primary' ? ' dialog__icon--green' : '') }, icon(o.iconName || (o.tone === 'primary' ? 'check' : 'warning'), 24)),
         h('h2', { class: 'dialog__title', id: titleId }, o.title),
         h('p', { class: 'dialog__text', id: textId }, o.text),
+        o.choice ? h('div', { class: 'field' },
+          h('label', { class: 'field__label', for: choiceEl.id }, o.choice.label),
+          choiceEl, choiceErr) : null,
         o.reason ? h('div', { class: 'field' },
           h('label', { class: 'field__label', for: reasonEl.id }, o.reason.label + (o.reason.required ? '' : ' (optional)')),
           reasonEl,
@@ -539,9 +553,18 @@ window.UI = (function () {
       pushLayer(layer);
       inert(true);
       requestAnimationFrame(() => { scrim.classList.add('is-visible'); dialog.classList.add('is-open'); });
-      setTimeout(() => (reasonEl || cancelBtn).focus(), 40);
+      setTimeout(() => (choiceEl || reasonEl || cancelBtn).focus(), 40);
 
       async function submit() {
+        const choice = choiceEl ? choiceEl.value : null;
+        if (choiceEl && !choice) {
+          choiceErr.hidden = false;
+          choiceEl.classList.add('is-invalid');
+          choiceEl.setAttribute('aria-invalid', 'true');
+          choiceEl.setAttribute('aria-describedby', choiceErr.id);
+          choiceEl.focus();
+          return;
+        }
         const reason = reasonEl ? reasonEl.value.trim() : '';
         if (o.reason && o.reason.required && !reason) {
           reasonErr.hidden = false;
@@ -554,7 +577,7 @@ window.UI = (function () {
         errorBox.hidden = true;
         clear(errorBox);
         try {
-          await busy([okBtn, cancelBtn], () => (o.action ? o.action(reason) : null));
+          await busy([okBtn, cancelBtn], () => (o.action ? o.action(reason, choice) : null));
           done(true);
         } catch (err) {
           console.warn(err);
