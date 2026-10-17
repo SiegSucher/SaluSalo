@@ -120,22 +120,23 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     fun refresh(quiet: Boolean = false) { viewModelScope.launch { load(quiet) } }
 
     // Alerts not loaded yet (a notification tapped as the app starts) are sent
-    // too; only those already shown as read are skipped.
+    // too; only those already shown as read are skipped. If the server doesn't
+    // save it (offline), they show as unread again at once, quietly.
     fun markRead(ids: List<String>) {
         val unread = ids.filter { id -> _notifications.value.none { it.id == id && it.readAt != null } }
         if (unread.isEmpty()) return
-        markLocal { it.id in unread }
-        viewModelScope.launch { runCatching { repository.markRead(unread) } }
+        val markedAt = markLocal { it.id in unread }
+        viewModelScope.launch { runCatching { repository.markRead(unread) }.onFailure { undoMark(it, markedAt) } }
     }
 
     fun markAllRead() {
         if (_notifications.value.none { it.readAt == null }) return
-        markLocal { true }
-        viewModelScope.launch { runCatching { repository.markRead(null) } }
+        val markedAt = markLocal { true }
+        viewModelScope.launch { runCatching { repository.markRead(null) }.onFailure { undoMark(it, markedAt) } }
     }
 
     /** Mirrors mark_conversation_read, which already marked these alerts read on the server. */
-    fun markConversationReadLocally(conversationId: String) = markLocal { it.conversationId == conversationId }
+    fun markConversationReadLocally(conversationId: String) { markLocal { it.conversationId == conversationId } }
 
     fun loadPreferences() {
         viewModelScope.launch {
@@ -166,9 +167,17 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         _message.value = null
     }
 
-    private fun markLocal(predicate: (AppNotification) -> Boolean) {
+    // Returns the read time it set, so a failed save can undo exactly these marks.
+    private fun markLocal(predicate: (AppNotification) -> Boolean): String {
         val now = Instant.now().toString()
         _notifications.update { list -> list.map { if (it.readAt == null && predicate(it)) it.copy(readAt = now) else it } }
+        return now
+    }
+
+    // Only alerts still carrying this mark: one a reload brought back read from the server stays read.
+    private fun undoMark(error: Throwable, markedAt: String) {
+        if (error is CancellationException) throw error
+        _notifications.update { list -> list.map { if (it.readAt == markedAt) it.copy(readAt = null) else it } }
     }
 
     // Only the server's short text: the exception's own message can include the URL and headers.
