@@ -1,5 +1,6 @@
 package com.example.salusalo.data
 
+import com.example.salusalo.model.AccountStatus
 import com.example.salusalo.model.NewUserProfile
 import com.example.salusalo.model.UserProfile
 import com.google.firebase.FirebaseTooManyRequestsException
@@ -198,6 +199,20 @@ class UserRepository(
         return supabase.postgrest.rpc("sync_my_email_verified").decodeAs()
     }
 
+    /**
+     * §36: whether this account is suspended, and why; the one call a suspended
+     * account can still make. Null when there's no answer (offline, or the
+     * migration not applied yet): the caller carries on, as the server still
+     * refuses a suspended account everything else. The error is never shown or logged.
+     */
+    suspend fun getMyAccountStatus(): AccountStatus? = try {
+        supabase.postgrest.rpc("get_my_account_status").decodeAs<AccountStatus>()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        null
+    }
+
     /** Sends Firebase's verification email to the signed-in account's address. */
     suspend fun sendVerificationEmail() {
         val user = firebaseAuth.currentUser ?: throw ProfileException.NotSignedIn
@@ -344,6 +359,8 @@ sealed class ProfileException(message: String) : Exception(message) {
     data object NotFound : ProfileException("No profile exists for this account.")
     data object RoleSetupFailed : ProfileException("The account's Supabase role could not be set up.")
     data object EmailInUse : ProfileException("An earlier profile uses this account's email address.")
+    /** §36: an admin suspended this account; [reason] is the code it shows. */
+    class Suspended(val reason: String?) : ProfileException("This account is suspended.")
 }
 
 fun profileErrorMessage(error: Throwable): String = when (error) {
