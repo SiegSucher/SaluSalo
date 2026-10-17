@@ -1,6 +1,6 @@
 /*
  * The dashboard's only way to its data: admin-only Supabase functions
- * (supabase/migrations/20261012_admin_dashboard.sql, 20261013 (Analytics) and 20261014 (announcements)). Each one refuses anyone who
+ * (supabase/migrations/20261012_admin_dashboard.sql, 20261013 (Analytics), 20261014 (announcements) and 20261017 (suspend accounts)). Each one refuses anyone who
  * isn't an admin; this page holds only the publishable key, so it can't get around
  * that. Times are epoch milliseconds. Photos are signed here for 1 hour and never logged.
  */
@@ -16,8 +16,13 @@ window.SaluData = (function () {
     sources: { LISTING: 'From the listing page', DONOR_PAGE: 'From the donor’s page', CHAT: 'From a chat' },
     handover: { MEET_AT_PICKUP_LOCATION: 'Meet at pickup location', COLLECT_FROM_PROVIDER: 'Collect from provider' },
     roles: { DONOR: 'Donor', RECIPIENT: 'Recipient', ADMIN: 'Admin' },
-    actions: { LISTING_REMOVED: 'Removed listing', REPORTS_DISMISSED: 'Dismissed report', LISTING_REVIEWED: 'Reviewed listing', REPORT_NOTE_ADDED: 'Added note', ANNOUNCEMENT_SENT: 'Sent announcement' },
-    audience: { ALL: 'Everyone', DONORS: 'Donors', RECIPIENTS: 'Recipients' }
+    actions: { LISTING_REMOVED: 'Removed listing', REPORTS_DISMISSED: 'Dismissed report', LISTING_REVIEWED: 'Reviewed listing', REPORT_NOTE_ADDED: 'Added note', ANNOUNCEMENT_SENT: 'Sent announcement', USER_SUSPENDED: 'Account suspended', USER_RESTORED: 'Account restored' },
+    audience: { ALL: 'Everyone', DONORS: 'Donors', RECIPIENTS: 'Recipients' },
+    /* Suspension reasons (model/Suspension.kt, migration 20261017); never rename a code. */
+    suspension: {
+      NO_SHOWS: 'Repeated no-shows at pickup', UNSAFE_FOOD: 'Unsafe or misleading food',
+      HARASSMENT: 'Harassment or abuse', SPAM: 'Spam or fake account', OTHER: 'Breaking the community rules'
+    }
   };
 
   class DataError extends Error {}
@@ -171,6 +176,18 @@ window.SaluData = (function () {
       return r;
     },
     addReportNote(id, note) { return rpc('admin_add_report_note', { p_report: id, p_note: note }); },
+
+    /** Suspend and restore (20261017). The count reload after either may fail without failing the action. */
+    async suspendUser(id, reason, note) {
+      const r = await rpc('admin_suspend_user', { p_user: id, p_reason: reason, p_note: note });
+      await refreshCountsAfterAction();
+      return r;
+    },
+    async restoreUser(id, note) {
+      const r = await rpc('admin_restore_user', { p_user: id, p_note: note || null });
+      await refreshCountsAfterAction();
+      return r;
+    },
 
     async audit(q) {
       const code = Object.keys(text.actions).find((k) => text.actions[k] === q.action) || 'ALL';

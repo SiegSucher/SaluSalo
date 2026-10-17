@@ -6,11 +6,12 @@
   const qty = (n, unit) => n + ' ' + (n === 1 ? SINGULAR[unit] || unit : unit);
   const when = (t) => new Date(t).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 
-  const CANCEL_TITLE = { LISTING_REMOVED: 'Cancelled: listing removed', DONOR_RELEASED: 'Released by the donor', PICKUP_EXPIRED: 'Expired' };
+  const CANCEL_TITLE = { LISTING_REMOVED: 'Cancelled: listing removed', DONOR_RELEASED: 'Released by the donor', PICKUP_EXPIRED: 'Expired', ACCOUNT_SUSPENDED: 'Cancelled: account suspended' };
   function cancelMeta(r) {
     if (r.cancelReason === 'LISTING_REMOVED') return 'Cancelled because the listing was removed; the recipient was alerted.';
     if (r.cancelReason === 'DONOR_RELEASED') return 'Released by ' + r.donor.name + '; the quantity went back to the listing.';
     if (r.cancelReason === 'PICKUP_EXPIRED') return 'Not picked up in time, so it expired by itself; the quantity went back to the listing.';
+    if (r.cancelReason === 'ACCOUNT_SUSPENDED') return 'Cancelled because the recipient’s account was suspended; the quantity went back to the listing.';
     return 'Cancelled by ' + r.recipient.name + ' in the app; the quantity went back to the listing.';
   }
 

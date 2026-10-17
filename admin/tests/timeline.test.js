@@ -19,6 +19,7 @@ for (const [reason, title, re] of [
   ['LISTING_REMOVED', 'Cancelled: listing removed', /listing was removed/],
   ['DONOR_RELEASED', 'Released by the donor', /Released by Ben/],
   ['PICKUP_EXPIRED', 'Expired', /Not picked up in time/],
+  ['ACCOUNT_SUSPENDED', 'Cancelled: account suspended', /account was suspended/],
   [null, 'Cancelled', /Cancelled by Ana in the app/]
 ]) {
   s = T.build(Object.assign({}, base, { status: 'CANCELLED', cancelReason: reason }), now);

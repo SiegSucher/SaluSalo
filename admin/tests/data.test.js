@@ -27,7 +27,9 @@ function load(answers) {
       admin_counts: () => (countsFail ? { data: null, error: { code: 'XX000', message: 'network' } } : { data: { openReports: 2 }, error: null }),
       admin_remove_listing: () => ({ data: { cancelled: 1, closedReports: 1 }, error: null }),
       admin_dismiss_listing_reports: () => ({ data: { dismissed: 1 }, error: null }),
-      admin_dismiss_report: () => ({ data: { dismissed: 1 }, error: null })
+      admin_dismiss_report: () => ({ data: { dismissed: 1 }, error: null }),
+      admin_suspend_user: (args) => ({ data: { removedListings: 1, cancelledReservations: 1, closedReports: 2, args }, error: null }),
+      admin_restore_user: (args) => ({ data: { restored: true, args }, error: null })
     });
     await t.data.start(t.sb, () => {});
     assert.strictEqual(t.data.counts().openReports, 2);
@@ -35,6 +37,14 @@ function load(answers) {
     assert.deepStrictEqual(await t.data.removeListing('l1', 'Spoiled'), { cancelled: 1, closedReports: 1 });
     assert.deepStrictEqual(await t.data.dismissListingReports('l1', null), { dismissed: 1 });
     assert.deepStrictEqual(await t.data.dismissReport('r1', null), { dismissed: 1 });
+    // Suspend and restore send exactly these arguments and also survive a failed count reload.
+    const sus = await t.data.suspendUser('u1', 'NO_SHOWS', 'Test note');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(sus.args)), { p_user: 'u1', p_reason: 'NO_SHOWS', p_note: 'Test note' }); // built inside the sandbox
+    assert.strictEqual(sus.removedListings, 1);
+    const res = await t.data.restoreUser('u1', '');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(res.args)), { p_user: 'u1', p_note: null });
+    assert.strictEqual(t.data.text.suspension.OTHER, 'Breaking the community rules');
+    assert.strictEqual(t.data.text.actions.USER_SUSPENDED, 'Account suspended');
   }
 
   // A refused action still fails, with the server's own short text.
@@ -42,10 +52,12 @@ function load(answers) {
     const t = load({
       admin_whoami: () => ({ data: { me: { id: 'a1', name: 'Ada', email: 'ada@example.com' }, admins: [] }, error: null }),
       admin_counts: () => ({ data: { openReports: 0 }, error: null }),
-      admin_remove_listing: () => ({ data: null, error: { code: 'P0001', message: 'This listing was already removed.' } })
+      admin_remove_listing: () => ({ data: null, error: { code: 'P0001', message: 'This listing was already removed.' } }),
+      admin_suspend_user: () => ({ data: null, error: { code: 'P0001', message: 'Admins can’t be suspended.' } })
     });
     await t.data.start(t.sb, () => {});
     await assert.rejects(t.data.removeListing('l1', 'Again'), (e) => e instanceof t.data.DataError && e.message === 'This listing was already removed.');
+    await assert.rejects(t.data.suspendUser('u2', 'SPAM', 'x'), (e) => e instanceof t.data.DataError && e.code === 'P0001');
   }
 
   // Losing admin access on any call signs the page out.
